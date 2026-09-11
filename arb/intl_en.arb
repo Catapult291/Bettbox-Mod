@@ -229,7 +229,8 @@
   "externalResources": "External Resources",
   "checking": "Checking...",
   "country": "Country",
-  "checkError": "Check Failed",
+  "checkError": "Check Failed",  "scriptRuleTip": "Overrides the global rules",
+
   "search": "Search",
   "replace": "Replace",
   "replaceAll": "Replace All",

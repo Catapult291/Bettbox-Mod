@@ -7,6 +7,7 @@ import 'package:bett_box/models/models.dart';
 import 'package:bett_box/pages/editor.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/state.dart';
+import 'package:bett_box/views/profiles/override_profile.dart';
 import 'package:bett_box/widgets/card.dart';
 import 'package:bett_box/widgets/dialog.dart';
 import 'package:bett_box/widgets/icon.dart';
@@ -117,6 +118,7 @@ class ScriptsView extends ConsumerStatefulWidget {
 }
 
 class _ScriptsViewState extends ConsumerState<ScriptsView> {
+  final Set<String> _selectedRules = <String>{};
   Future<void> _handleDelScript(String label) async {
     final res = await globalState.showMessage(
       message: TextSpan(
@@ -152,100 +154,295 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
     );
   }
 
+  Widget _buildAddedRulesSection(List<String> addedRules) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 8, right: 8),
+          child: FilledButtonTheme(
+            data: FilledButtonThemeData(
+              style: ButtonStyle(
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 8),
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            child: ListHeader(
+              title: appLocalizations.rule,
+              subTitle: appLocalizations.scriptRuleTip,
+              space: 8,
+              actions: [
+                FilledButton.tonal(
+                  onPressed: _handleAddRule,
+                  child: Text(appLocalizations.add),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: addedRules.isEmpty
+              ? SizedBox(
+                  height: 120,
+                  child: Center(
+                    child: Text(appLocalizations.noData),
+                  ),
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final rule in addedRules) _buildRuleRow(rule),
+                  ],
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRuleRow(String rule) {
+    final isSelected = _selectedRules.contains(rule);
+    final isEdit = _selectedRules.isNotEmpty;
+    void toggle() {
+      _toggleRuleSelection(rule);
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: CommonCard(
+        padding: EdgeInsets.zero,
+        radius: 18,
+        type: CommonCardType.filled,
+        isSelected: isSelected,
+        onLongPress: toggle,
+        onPressed: isEdit ? toggle : null,
+        child: ListTile(
+          minTileHeight: 0,
+          minVerticalPadding: 0,
+          titleTextStyle: context.textTheme.bodyMedium?.toJetBrainsMono,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
+          trailing: SizedBox(
+            width: 24,
+            height: 24,
+            child: CommonCheckBox(
+              value: isSelected,
+              isCircle: true,
+              onChanged: (_) {
+                toggle();
+              },
+            ),
+          ),
+          title: EmojiText(rule),
+        ),
+      ),
+    );
+  }
+
+  void _toggleRuleSelection(String value) {
+    setState(() {
+      if (!_selectedRules.add(value)) {
+        _selectedRules.remove(value);
+      }
+    });
+  }
+
+  void _clearRuleSelection() {
+    if (_selectedRules.isEmpty) return;
+    setState(_selectedRules.clear);
+  }
+
+  Future<void> _applyAfterRuleChange() async {
+    if (globalState.config.currentProfileId == null) return;
+    await globalState.appController.applyProfile(silence: true);
+  }
+
+  /// 规则目标取最终配置中的分组（脚本覆写时以脚本执行结果为准），
+  /// 保留订阅原有分组，便于添加覆盖全局规则的条目。
+  Future<ClashConfigSnippet?> _buildRuleSnippet() async {
+    final profileId = globalState.config.currentProfileId;
+    if (profileId == null) {
+      globalState.showMessage(
+        message: TextSpan(text: appLocalizations.nullProfileDesc),
+        cancelable: false,
+      );
+      return null;
+    }
+    try {
+      final rawConfig = await globalState.getProfileConfig(profileId);
+      final useScriptOverride =
+          globalState.config.currentProfile?.useScriptOverride ?? false;
+      final currentScript = ref.read(scriptStateProvider).currentScript;
+      if (useScriptOverride && currentScript != null) {
+        final result = await JavaScriptRuntimeManager.evaluateScript(
+          currentScript.content,
+          rawConfig,
+          customOptions: currentScript.customOptions,
+        );
+        return ClashConfigSnippet.fromJson(result);
+      }
+      return ClashConfigSnippet.fromJson(rawConfig);
+    } catch (e) {
+      commonPrint.log('Build rule snippet failed: $e');
+      globalState.showMessage(
+        message: TextSpan(
+          text: '${appLocalizations.profileParseErrorDesc}: $e',
+        ),
+        cancelable: false,
+      );
+      return null;
+    }
+  }
+
+  Future<void> _handleAddRule() async {
+    _clearRuleSelection();
+    final snippet = await _buildRuleSnippet();
+    if (snippet == null || !mounted) return;
+    final res = await globalState.showCommonDialog<Rule>(
+      child: AddRuleDialog(snippet: snippet),
+    );
+    if (res == null || !mounted) return;
+    ref.read(scriptStateProvider.notifier).addAddedRule(res.value);
+    await _applyAfterRuleChange();
+  }
+
+  Future<void> _handleEditSelectedRule() async {
+    if (_selectedRules.length != 1) return;
+    final oldValue = _selectedRules.first;
+    final snippet = await _buildRuleSnippet();
+    if (snippet == null || !mounted) return;
+    final res = await globalState.showCommonDialog<Rule>(
+      child: AddRuleDialog(snippet: snippet, rule: Rule.value(oldValue)),
+    );
+    if (res == null || !mounted) return;
+    _clearRuleSelection();
+    if (res.value == oldValue) return;
+    ref.read(scriptStateProvider.notifier).updateAddedRule(oldValue, res.value);
+    await _applyAfterRuleChange();
+  }
+
+  Future<void> _handleDeleteSelectedRules() async {
+    final selected = Set<String>.from(_selectedRules);
+    if (selected.isEmpty) return;
+    final res = await globalState.showMessage(
+      title: appLocalizations.tip,
+      message: TextSpan(
+        text: selected.length > 1
+            ? appLocalizations.deleteMultipTip(appLocalizations.rule)
+            : appLocalizations.deleteTip(appLocalizations.rule),
+      ),
+    );
+    if (res != true) return;
+    ref.read(scriptStateProvider.notifier).deleteAddedRules(selected);
+    _clearRuleSelection();
+    await _applyAfterRuleChange();
+  }
+
   Widget _buildContent() {
     return Consumer(
       builder: (_, ref, _) {
-        final vm2 = ref.watch(
+        final vm3 = ref.watch(
           scriptStateProvider.select(
-            (state) => VM2(a: state.currentId, b: state.scripts),
+            (state) =>
+                VM3(a: state.currentId, b: state.scripts, c: state.addedRules),
           ),
         );
-        final currentId = vm2.a;
-        final scripts = vm2.b;
-        if (scripts.isEmpty) {
+        final currentId = vm3.a;
+        final scripts = vm3.b;
+        final addedRules = vm3.c;
+        if (scripts.isEmpty && addedRules.isEmpty) {
           return NullStatus(
             label: appLocalizations.nullTip(appLocalizations.script),
           );
         }
         return CommonScrollBar(
           controller: null,
-          child: ListView.builder(
+          child: ListView(
             padding: kMaterialListPadding.copyWith(bottom: 16 + 64),
-            itemCount: scripts.length,
-            itemBuilder: (_, index) {
-              final script = scripts[index];
-              final isSelected = script.id == currentId;
-              return Container(
-                padding: kTabLabelPadding,
-                margin: EdgeInsets.symmetric(vertical: 6),
-                child: CommonCard(
-                  type: CommonCardType.filled,
-                  radius: 16,
-                  child: ListItem(
-                    padding: const EdgeInsets.only(left: 12, right: 12),
-                    title: EmojiText(script.label),
-                    leading: Switch(
-                      value: isSelected,
-                      onChanged: (value) {
-                        if (value) {
-                          ref.read(scriptStateProvider.notifier).setId(script.id);
-                        } else if (isSelected) {
-                          ref.read(scriptStateProvider.notifier).setId(script.id);
-                        }
-                      },
-                    ),
-                    trailing: CommonPopupBox(
-                      targetBuilder: (open) {
-                        return IconButton(
-                          onPressed: () {
-                            open();
-                          },
-                          tooltip: appLocalizations.more,
-                          icon: Icon(Icons.more_vert),
-                        );
-                      },
-                      popup: CommonPopupMenu(
-                        items: [
-                          PopupMenuItemData(
-                            icon: Icons.edit,
-                            label: appLocalizations.edit,
-                            onPressed: () {
-                              _handleToEditor(script: script);
-                            },
-                          ),
-                          if (script.isCompatibleWithBettbox)
-                            PopupMenuItemData(
-                              icon: Icons.tune,
-                              label: appLocalizations.custom,
-                              onPressed: () {
-                                _handleCustomOptions(script);
-                              },
-                            ),
-                          if (script.url != null && script.url!.isNotEmpty)
-                            PopupMenuItemData(
-                              icon: Icons.sync,
-                              label: appLocalizations.sync,
-                              onPressed: () {
-                                _handleSyncScript(script.id);
-                              },
-                            ),
-                          PopupMenuItemData(
-                            icon: Icons.delete,
-                            label: appLocalizations.delete,
-                            onPressed: () {
-                              _handleDelScript(script.label);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+            children: [
+              for (final script in scripts)
+                _buildScriptCard(script, script.id == currentId),
+              if (addedRules.isNotEmpty || scripts.isNotEmpty)
+                _buildAddedRulesSection(addedRules),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildScriptCard(Script script, bool isSelected) {
+    return Container(
+      padding: kTabLabelPadding,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      child: CommonCard(
+        type: CommonCardType.filled,
+        radius: 16,
+        child: ListItem(
+          padding: const EdgeInsets.only(left: 12, right: 12),
+          title: EmojiText(script.label),
+          leading: Switch(
+            value: isSelected,
+            onChanged: (value) {
+              if (value) {
+                ref.read(scriptStateProvider.notifier).setId(script.id);
+              } else if (isSelected) {
+                ref.read(scriptStateProvider.notifier).setId(script.id);
+              }
+            },
+          ),
+          trailing: CommonPopupBox(
+            targetBuilder: (open) {
+              return IconButton(
+                onPressed: () {
+                  open();
+                },
+                tooltip: appLocalizations.more,
+                icon: Icon(Icons.more_vert),
+              );
+            },
+            popup: CommonPopupMenu(
+              items: [
+                PopupMenuItemData(
+                  icon: Icons.edit,
+                  label: appLocalizations.edit,
+                  onPressed: () {
+                    _handleToEditor(script: script);
+                  },
+                ),
+                if (script.isCompatibleWithBettbox)
+                  PopupMenuItemData(
+                    icon: Icons.tune,
+                    label: appLocalizations.custom,
+                    onPressed: () {
+                      _handleCustomOptions(script);
+                    },
+                  ),
+                if (script.url != null && script.url!.isNotEmpty)
+                  PopupMenuItemData(
+                    icon: Icons.sync,
+                    label: appLocalizations.sync,
+                    onPressed: () {
+                      _handleSyncScript(script.id);
+                    },
+                  ),
+                PopupMenuItemData(
+                  icon: Icons.delete,
+                  label: appLocalizations.delete,
+                  onPressed: () {
+                    _handleDelScript(script.label);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -408,20 +605,40 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
 
   @override
   Widget build(BuildContext context) {
+    final editCount = _selectedRules.length;
     return CommonScaffold(
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          _handleImport();
-        },
-        child: Icon(Icons.add),
-      ),
+      floatingActionButton: editCount == 0
+          ? FloatingActionButton(
+              onPressed: () {
+                _handleImport();
+              },
+              child: const Icon(Icons.add),
+            )
+          : null,
       actions: [
-        IconButton(
-          onPressed: _handleShowScriptSettings,
-          tooltip: appLocalizations.settings,
-          icon: Icon(Icons.settings),
-        ),
+        if (editCount == 0)
+          IconButton(
+            onPressed: _handleShowScriptSettings,
+            tooltip: appLocalizations.settings,
+            icon: const Icon(Icons.settings),
+          ),
+        if (editCount == 1)
+          IconButton(
+            onPressed: _handleEditSelectedRule,
+            tooltip: appLocalizations.edit,
+            icon: const Icon(Icons.edit),
+          ),
+        if (editCount > 0)
+          IconButton(
+            onPressed: _handleDeleteSelectedRules,
+            tooltip: appLocalizations.delete,
+            icon: const Icon(Icons.delete),
+          ),
       ],
+      editState: AppBarEditState(
+        editCount: editCount,
+        onExit: _clearRuleSelection,
+      ),
       body: _buildContent(),
       title: appLocalizations.script,
     );

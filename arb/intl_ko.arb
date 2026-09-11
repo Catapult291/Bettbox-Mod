@@ -229,7 +229,8 @@
   "externalResources": "외부 리소스",
   "checking": "확인 중...",
   "country": "지역",
-  "checkError": "확인 실패",
+  "checkError": "확인 실패",  "scriptRuleTip": "전역 규칙을 덮어씁니다",
+
   "search": "검색",
   "replace": "바꾸기",
   "replaceAll": "모두 바꾸기",

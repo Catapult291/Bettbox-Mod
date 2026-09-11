@@ -432,12 +432,18 @@ _ScriptProps _$ScriptPropsFromJson(Map<String, dynamic> json) => _ScriptProps(
           ?.map((e) => Script.fromJson(e as Map<String, dynamic>))
           .toList() ??
       const [],
+  addedRules:
+      (json['added-rules'] as List<dynamic>?)
+          ?.cast<String>()
+          .toList() ??
+      const [],
 );
 
 Map<String, dynamic> _$ScriptPropsToJson(_ScriptProps instance) =>
     <String, dynamic>{
       'currentId': instance.currentId,
       'scripts': instance.scripts,
+      'added-rules': instance.addedRules,
     };
 
 _Config _$ConfigFromJson(Map<String, dynamic> json) => _Config(

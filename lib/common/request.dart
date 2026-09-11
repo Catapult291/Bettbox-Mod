@@ -200,12 +200,28 @@ class Request {
     return null;
   }
 
+  // 国外检测源（无需 token）：请求经本地代理端口出站时能反映真实出口 IP。
+  // 顺序即优先级：首源 api.ip.sb/geoip 为全字段 HTTPS JSON（省/市/ISP/ASN 齐全，
+  // 解析时归一化为 ip-api 风格键）；其后 Cloudflare 自有域名连通性最稳定（trace 文本）；
+  // 全部失败才轮到 ipify 与带 token 的 ipinfo。同域名的 ip.sb trace 已被 geoip 取代不再单列。
+  List<String> _getOverseasIpSources() {
+    return [
+      'https://api.ip.sb/geoip',
+      'https://www.cloudflare.com/cdn-cgi/trace',
+      'https://cp.cloudflare.com/cdn-cgi/trace',
+      'https://cloudflare.com/cdn-cgi/trace',
+      'https://api.ipify.org?format=json',
+      if (ipInfoToken.isNotEmpty)
+        'https://api.ipinfo.io/lite/me?token=$ipInfoToken',
+    ];
+  }
+
+  // 国内源：作为国外源全部失败时的回退（代理未连通 / 规则限制时展示真实网络）
   List<String> _getPrimaryIpSources() {
     final locale = Intl.getCurrentLocale().toLowerCase();
     final isZh = locale.startsWith('zh');
     return [
-      isZh ? 'http://ip-api.com/json/?lang=zh-CN' : 'http://ip-api.com/json',
-      'https://get.geojs.io/v1/ip/geo.json',
+      isZh ? 'https://api.myip.la/cn?json' : 'https://api.myip.la/en?json',
     ];
   }
 
@@ -213,130 +229,103 @@ class Request {
     'https://myip.ipip.net/json',
   ];
 
-  final List<String> _cloudflareIpInfoSources = [
-    'https://ip.sb/cdn-cgi/trace',
-    'https://api.ip.sb/cdn-cgi/trace',
-  ];
+  IpInfo? _tryParseIpInfo(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.startsWith('{')) {
+      final decoded = json.decode(trimmed);
+      if (decoded is Map<String, dynamic>) {
+        // api.ip.sb/geoip 等扁平 snake_case 全字段 JSON：归一化为 ip-api 风格键，
+        // 复用 IpInfo.fromJson 的 ip-api 分支做省/市/ISP/ASN 映射。
+        final cc = decoded['country_code']?.toString() ?? '';
+        if (cc.isNotEmpty &&
+            decoded['region'] is String &&
+            decoded['city'] is String) {
+          final rawAsn = decoded['asn']?.toString() ?? '';
+          final asn = rawAsn.isNotEmpty &&
+                  !rawAsn.toUpperCase().startsWith('AS')
+              ? 'AS$rawAsn'
+              : rawAsn;
+          return IpInfo.fromJson({
+            'ip': decoded['ip']?.toString() ?? '',
+            'countryCode': cc,
+            'country': decoded['country']?.toString(),
+            'regionName': decoded['region']?.toString(),
+            'city': decoded['city']?.toString(),
+            'isp': decoded['isp']?.toString(),
+            'org': decoded['organization']?.toString(),
+            'as': asn,
+          });
+        }
+        return IpInfo.fromJson(decoded);
+      }
+    } else {
+      return IpInfo.fromCloudflareTrace(trimmed);
+    }
+    return null;
+  }
 
-  final List<String> _cloudflareDomesticIpSources = [
-    'https://www.qualcomm.cn/cdn-cgi/trace',
-    'https://www.teamviewer.cn/cdn-cgi/trace',
-  ];
-
-  Future<Result<IpInfo?>> _checkIpFromSources(
-    List<String> sources,
+  // 依次探测各源，任一源成功即返回（成功即停，不做跨源合并），全部失败返回 null。
+  // 串行而非并行：不同源可能命中不同链路（代理出口 vs 国内直连）返回不同 IP，
+  // 并发合并会产生 IP 与国家错配的脏数据，故成功即返回首个可靠结果。
+  Future<IpInfo?> _probeIpSourcesSequential({
+    required List<String> sources,
     CancelToken? cancelToken,
-    Duration? timeout, {
+    Duration? timeout,
     void Function(IpInfo info)? onUpdate,
   }) async {
-    final effectiveTimeout = timeout ?? const Duration(seconds: 5);
-
-    final dio = Dio(
-      BaseOptions(
-        receiveTimeout: effectiveTimeout,
-        connectTimeout: effectiveTimeout,
-      ),
-    );
-    dio.httpClientAdapter = IOHttpClientAdapter(
-      createHttpClient: () {
-        final client = HttpClient();
-        client.autoUncompress = false;
-        return client;
-      },
+    if (sources.isEmpty) return null;
+    // 整体预算均摊到每个源，避免多源串行时累计超时过长
+    final budget = timeout ?? const Duration(seconds: 5);
+    final perSourceTimeout = Duration(
+      milliseconds: (budget.inMilliseconds / sources.length).ceil(),
     );
 
-    final Completer<Result<IpInfo?>> firstCompleter = Completer();
-    IpInfo? primaryInfo;
-    IpInfo? fallbackInfo;
-    int completedCount = 0;
-    Timer? cleanupTimer;
-
-    void cleanup() {
-      cleanupTimer?.cancel();
-      cleanupTimer = null;
-      dio.close(force: true);
-    }
-
-    cleanupTimer = Timer(effectiveTimeout, cleanup);
-    cancelToken?.whenCancel.then((_) => cleanup());
-
-    void checkAllFinished() {
-      completedCount++;
-      if (completedCount == sources.length) {
-        if (!firstCompleter.isCompleted) {
-          final res = primaryInfo ?? fallbackInfo;
-          if (res != null) onUpdate?.call(res);
-          firstCompleter.complete(Result.success(res));
-        }
-        cleanup();
-      }
-    }
-
-    for (int i = 0; i < sources.length; i++) {
-      final url = sources[i];
-      final isPrimary = i == 0;
-      dio
-          .get<Uint8List>(
+    for (final url in sources) {
+      if (cancelToken?.isCancelled ?? false) return null;
+      try {
+        final dio = Dio(
+          BaseOptions(
+            receiveTimeout: perSourceTimeout,
+            connectTimeout: perSourceTimeout,
+          ),
+        );
+        dio.httpClientAdapter = IOHttpClientAdapter(
+          createHttpClient: () {
+            final client = HttpClient();
+            client.autoUncompress = false;
+            return client;
+          },
+        );
+        try {
+          final res = await dio.get<Uint8List>(
             url,
             cancelToken: cancelToken,
             options: Options(responseType: ResponseType.bytes),
-          )
-          .then((res) {
-            if (res.statusCode == HttpStatus.ok && res.data != null) {
-              try {
-                final text = utf8.decode(
-                  _decompressIfNeeded(_bytesFromResponse(res), res.headers),
-                  allowMalformed: true,
-                ).trim();
-                IpInfo? ipInfo;
-                if (text.startsWith('{')) {
-                  final jsonMap = json.decode(text);
-                  if (jsonMap is Map<String, dynamic>) {
-                    if (url.contains('ip-api.com') && jsonMap['status'] != 'success') {
-                      ipInfo = null;
-                    } else {
-                      ipInfo = IpInfo.fromJson(jsonMap);
-                    }
-                  }
-                } else {
-                  ipInfo = IpInfo.fromCloudflareTrace(text);
-                }
-
-                if (ipInfo != null) {
-                  if (isPrimary) {
-                    primaryInfo = ipInfo;
-                    onUpdate?.call(ipInfo);
-                    if (!firstCompleter.isCompleted) {
-                      firstCompleter.complete(Result.success(ipInfo));
-                    }
-                  } else {
-                    fallbackInfo = ipInfo;
-                    if (sources.length == 1) {
-                      onUpdate?.call(ipInfo);
-                      if (!firstCompleter.isCompleted) {
-                        firstCompleter.complete(Result.success(ipInfo));
-                      }
-                    }
-                  }
-                }
-              } catch (_) {}
-            }
-            checkAllFinished();
-          })
-          .catchError((e) {
-            if (e is DioException && e.type == DioExceptionType.cancel) {
-              if (!firstCompleter.isCompleted) {
-                firstCompleter.complete(Result.error('cancelled'));
+          );
+          if (res.statusCode == HttpStatus.ok && res.data != null) {
+            final text = utf8.decode(
+              _decompressIfNeeded(_bytesFromResponse(res), res.headers),
+              allowMalformed: true,
+            );
+            try {
+              final ipInfo = _tryParseIpInfo(text);
+              if (ipInfo != null) {
+                onUpdate?.call(ipInfo);
+                return ipInfo;
               }
-            }
-            checkAllFinished();
-          });
+            } catch (_) {}
+          }
+        } finally {
+          dio.close(force: true);
+        }
+      } catch (e) {
+        if (e is DioException && e.type == DioExceptionType.cancel) {
+          return null;
+        }
+      }
     }
-
-    return await firstCompleter.future.timeout(
-      effectiveTimeout,
-      onTimeout: () => Result.success(primaryInfo ?? fallbackInfo),
-    );
+    return null;
   }
 
   Future<Result<IpInfo?>> checkIp({
@@ -344,12 +333,26 @@ class Request {
     Duration? timeout,
     void Function(IpInfo info)? onUpdate,
   }) async {
-    return _checkIpFromSources(
-      _getPrimaryIpSources(),
-      cancelToken,
-      timeout,
+    // 代理运行时优先使用国外源（api.ip.sb/geoip + Cloudflare trace）：这些域名在
+    // 常见规则集（含 GEOIP,CN,DIRECT / 国内域名规则）下都会走代理出站，能反映真实出口；
+    // api.myip.la 等国内源常被规则判 DIRECT，返回真实国内 IP 造成误判。
+    final ipInfo = await _probeIpSourcesSequential(
+      sources: _getOverseasIpSources(),
+      cancelToken: cancelToken,
+      timeout: timeout,
       onUpdate: onUpdate,
     );
+    if (ipInfo != null) {
+      return Result.success(ipInfo);
+    }
+    // 全部失败再回退国内源（代理未连通 / 规则限制时展示真实网络）
+    final fallback = await _probeIpSourcesSequential(
+      sources: _getPrimaryIpSources(),
+      cancelToken: cancelToken,
+      timeout: timeout,
+      onUpdate: onUpdate,
+    );
+    return Result.success(fallback);
   }
 
   Future<Result<IpInfo?>> checkIpDomestic({
@@ -357,27 +360,14 @@ class Request {
     Duration? timeout,
     void Function(IpInfo info)? onUpdate,
   }) async {
-    return _checkIpFromSources(
-      _domesticIpSources,
-      cancelToken,
-      timeout,
-      onUpdate: onUpdate,
+    return Result.success(
+      await _probeIpSourcesSequential(
+        sources: _domesticIpSources,
+        cancelToken: cancelToken,
+        timeout: timeout,
+        onUpdate: onUpdate,
+      ),
     );
-  }
-
-  // 备用 Cloudflare 探测接口
-  Future<Result<IpInfo?>> checkIpCloudflare({
-    CancelToken? cancelToken,
-    Duration? timeout,
-  }) async {
-    return _checkIpFromSources(_cloudflareIpInfoSources, cancelToken, timeout);
-  }
-
-  Future<Result<IpInfo?>> checkIpDomesticCloudflare({
-    CancelToken? cancelToken,
-    Duration? timeout,
-  }) async {
-    return _checkIpFromSources(_cloudflareDomesticIpSources, cancelToken, timeout);
   }
 
   static const _ipCacheKey = 'ip_detail_cache';

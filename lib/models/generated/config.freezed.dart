@@ -2437,7 +2437,7 @@ $TextScaleCopyWith<$Res> get textScale {
 /// @nodoc
 mixin _$ScriptProps {
 
- String? get currentId; List<Script> get scripts;
+ String? get currentId; List<Script> get scripts; List<String> get addedRules;
 /// Create a copy of ScriptProps
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -2450,16 +2450,16 @@ $ScriptPropsCopyWith<ScriptProps> get copyWith => _$ScriptPropsCopyWithImpl<Scri
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScriptProps&&(identical(other.currentId, currentId) || other.currentId == currentId)&&const DeepCollectionEquality().equals(other.scripts, scripts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ScriptProps&&(identical(other.currentId, currentId) || other.currentId == currentId)&&const DeepCollectionEquality().equals(other.scripts, scripts)&&const DeepCollectionEquality().equals(other.addedRules, addedRules));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,currentId,const DeepCollectionEquality().hash(scripts));
+int get hashCode => Object.hash(runtimeType,currentId,const DeepCollectionEquality().hash(scripts),const DeepCollectionEquality().hash(addedRules));
 
 @override
 String toString() {
-  return 'ScriptProps(currentId: $currentId, scripts: $scripts)';
+  return 'ScriptProps(currentId: $currentId, scripts: $scripts, addedRules: $addedRules)';
 }
 
 
@@ -2470,7 +2470,7 @@ abstract mixin class $ScriptPropsCopyWith<$Res>  {
   factory $ScriptPropsCopyWith(ScriptProps value, $Res Function(ScriptProps) _then) = _$ScriptPropsCopyWithImpl;
 @useResult
 $Res call({
- String? currentId, List<Script> scripts
+ String? currentId, List<Script> scripts, List<String> addedRules
 });
 
 
@@ -2487,11 +2487,12 @@ class _$ScriptPropsCopyWithImpl<$Res>
 
 /// Create a copy of ScriptProps
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? currentId = freezed,Object? scripts = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? currentId = freezed,Object? scripts = null,Object? addedRules = null,}) {
   return _then(_self.copyWith(
 currentId: freezed == currentId ? _self.currentId : currentId // ignore: cast_nullable_to_non_nullable
 as String?,scripts: null == scripts ? _self.scripts : scripts // ignore: cast_nullable_to_non_nullable
-as List<Script>,
+as List<Script>,addedRules: null == addedRules ? _self.addedRules : addedRules // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 
@@ -2576,10 +2577,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? currentId,  List<Script> scripts)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String? currentId,  List<Script> scripts,  List<String> addedRules)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ScriptProps() when $default != null:
-return $default(_that.currentId,_that.scripts);case _:
+return $default(_that.currentId,_that.scripts,_that.addedRules);case _:
   return orElse();
 
 }
@@ -2597,10 +2598,10 @@ return $default(_that.currentId,_that.scripts);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? currentId,  List<Script> scripts)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String? currentId,  List<Script> scripts,  List<String> addedRules)  $default,) {final _that = this;
 switch (_that) {
 case _ScriptProps():
-return $default(_that.currentId,_that.scripts);case _:
+return $default(_that.currentId,_that.scripts,_that.addedRules);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -2617,10 +2618,10 @@ return $default(_that.currentId,_that.scripts);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? currentId,  List<Script> scripts)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String? currentId,  List<Script> scripts,  List<String> addedRules)?  $default,) {final _that = this;
 switch (_that) {
 case _ScriptProps() when $default != null:
-return $default(_that.currentId,_that.scripts);case _:
+return $default(_that.currentId,_that.scripts,_that.addedRules);case _:
   return null;
 
 }
@@ -2632,7 +2633,7 @@ return $default(_that.currentId,_that.scripts);case _:
 @JsonSerializable()
 
 class _ScriptProps implements ScriptProps {
-  const _ScriptProps({this.currentId, final  List<Script> scripts = const []}): _scripts = scripts;
+  const _ScriptProps({this.currentId, final  List<Script> scripts = const [], final  List<String> addedRules = const []}): _scripts = scripts,_addedRules = addedRules;
   factory _ScriptProps.fromJson(Map<String, dynamic> json) => _$ScriptPropsFromJson(json);
 
 @override final  String? currentId;
@@ -2641,6 +2642,12 @@ class _ScriptProps implements ScriptProps {
   if (_scripts is EqualUnmodifiableListView) return _scripts;
   // ignore: implicit_dynamic_type
   return EqualUnmodifiableListView(_scripts);
+}
+ final  List<String> _addedRules;
+@override@JsonKey(name: 'added-rules') List<String> get addedRules {
+  if (_addedRules is EqualUnmodifiableListView) return _addedRules;
+  // ignore: implicit_dynamic_type
+  return EqualUnmodifiableListView(_addedRules);
 }
 
 
@@ -2657,16 +2664,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScriptProps&&(identical(other.currentId, currentId) || other.currentId == currentId)&&const DeepCollectionEquality().equals(other._scripts, _scripts));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ScriptProps&&(identical(other.currentId, currentId) || other.currentId == currentId)&&const DeepCollectionEquality().equals(other._scripts, _scripts)&&const DeepCollectionEquality().equals(other._addedRules, _addedRules));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,currentId,const DeepCollectionEquality().hash(_scripts));
+int get hashCode => Object.hash(runtimeType,currentId,const DeepCollectionEquality().hash(_scripts),const DeepCollectionEquality().hash(_addedRules));
 
 @override
 String toString() {
-  return 'ScriptProps(currentId: $currentId, scripts: $scripts)';
+  return 'ScriptProps(currentId: $currentId, scripts: $scripts, addedRules: $addedRules)';
 }
 
 
@@ -2677,7 +2684,7 @@ abstract mixin class _$ScriptPropsCopyWith<$Res> implements $ScriptPropsCopyWith
   factory _$ScriptPropsCopyWith(_ScriptProps value, $Res Function(_ScriptProps) _then) = __$ScriptPropsCopyWithImpl;
 @override @useResult
 $Res call({
- String? currentId, List<Script> scripts
+ String? currentId, List<Script> scripts, List<String> addedRules
 });
 
 
@@ -2694,11 +2701,12 @@ class __$ScriptPropsCopyWithImpl<$Res>
 
 /// Create a copy of ScriptProps
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? currentId = freezed,Object? scripts = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? currentId = freezed,Object? scripts = null,Object? addedRules = null,}) {
   return _then(_ScriptProps(
 currentId: freezed == currentId ? _self.currentId : currentId // ignore: cast_nullable_to_non_nullable
 as String?,scripts: null == scripts ? _self._scripts : scripts // ignore: cast_nullable_to_non_nullable
-as List<Script>,
+as List<Script>,addedRules: null == addedRules ? _self._addedRules : addedRules // ignore: cast_nullable_to_non_nullable
+as List<String>,
   ));
 }
 

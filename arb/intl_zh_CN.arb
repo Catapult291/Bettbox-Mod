@@ -229,7 +229,8 @@
   "externalResources": "外部资源",
   "checking": "检测中...",
   "country": "区域",
-  "checkError": "检测失败",
+  "checkError": "检测失败",  "scriptRuleTip": "覆盖全局规则",
+
   "search": "搜索",
   "replace": "替换",
   "replaceAll": "全部替换",

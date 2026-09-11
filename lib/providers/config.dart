@@ -329,6 +329,27 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
     state = state.copyWith(scripts: list, currentId: nextId);
   }
 
+  void addAddedRule(String value) {
+    state = state.copyWith(addedRules: [value, ...state.addedRules]);
+  }
+
+  void updateAddedRule(String oldValue, String newValue) {
+    state = state.copyWith(
+      addedRules: [
+        for (final rule in state.addedRules)
+          rule == oldValue ? newValue : rule,
+      ],
+    );
+  }
+
+  void deleteAddedRules(Set<String> values) {
+    state = state.copyWith(
+      addedRules: state.addedRules
+          .where((rule) => !values.contains(rule))
+          .toList(),
+    );
+  }
+
   bool isExits(String label) {
     return state.scripts.indexWhere((item) => item.label == label) != -1;
   }

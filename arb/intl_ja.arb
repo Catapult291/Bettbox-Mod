@@ -229,7 +229,8 @@
   "externalResources": "外部リソース",
   "checking": "確認中...",
   "country": "地域",
-  "checkError": "確認失敗",
+  "checkError": "確認失敗",  "scriptRuleTip": "グローバルルールを上書きします",
+
   "search": "検索",
   "replace": "置換",
   "replaceAll": "すべて置換",

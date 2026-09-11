@@ -5009,6 +5009,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Overrides the global rules`
+  String get scriptRuleTip {
+    return Intl.message(
+      'Overrides the global rules',
+      name: 'scriptRuleTip',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Mixed Port`
   String get mixedPort {
     return Intl.message('Mixed Port', name: 'mixedPort', desc: '', args: []);

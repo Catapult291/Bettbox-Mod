@@ -1063,7 +1063,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "script": MessageLookupByLibrary.simpleMessage("Скрипт"),
     "scriptDesc": MessageLookupByLibrary.simpleMessage(
       "Настройка глобального скрипта переопределения",
-    ),
+    ),    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("Переопределяет глобальные правила"),
+
     "search": MessageLookupByLibrary.simpleMessage("Поиск"),
     "seconds": MessageLookupByLibrary.simpleMessage("секунд"),
     "secretCopied": MessageLookupByLibrary.simpleMessage(

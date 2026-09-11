@@ -929,9 +929,11 @@ class GlobalState {
       rawConfig.remove('rule');
     }
 
+    final scriptOverride = targetProfile.useScriptOverride;
+    final addedRules = config.scriptProps.addedRules;
     final scriptActive =
-        config.scriptProps.currentScript != null &&
-        targetProfile.useScriptOverride;
+        (config.scriptProps.currentScript != null || addedRules.isNotEmpty) &&
+        scriptOverride;
 
     final overrideData = targetProfile.overrideData;
     if (overrideData.enable && !scriptActive) {
@@ -940,6 +942,13 @@ class GlobalState {
       } else {
         rules = [...overrideData.runningRule, ...rules];
       }
+    }
+
+    // UI-added rules act as a global override: once script override is
+    // enabled for the profile, prepend them so they take precedence over
+    // every rule of the effective config.
+    if (scriptOverride && addedRules.isNotEmpty) {
+      rules = [...addedRules, ...rules];
     }
 
     if (config.vpnProps.disableQuic) {

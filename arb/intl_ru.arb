@@ -229,7 +229,8 @@
   "externalResources": "Внешние ресурсы",
   "checking": "Проверка...",
   "country": "Регион",
-  "checkError": "Ошибка проверки",
+  "checkError": "Ошибка проверки",  "scriptRuleTip": "Переопределяет глобальные правила",
+
   "search": "Поиск",
   "replace": "Заменить",
   "replaceAll": "Заменить все",

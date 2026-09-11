@@ -337,6 +337,7 @@ abstract class ScriptProps with _$ScriptProps {
   const factory ScriptProps({
     String? currentId,
     @Default([]) List<Script> scripts,
+    @Default([]) @JsonKey(name: 'added-rules') List<String> addedRules,
   }) = _ScriptProps;
 
   factory ScriptProps.fromJson(Map<String, Object?> json) =>
@@ -344,6 +345,8 @@ abstract class ScriptProps with _$ScriptProps {
 }
 
 extension ScriptPropsExt on ScriptProps {
+  bool get hasAddedRules => addedRules.isNotEmpty;
+
   String? get realId {
     final index = scripts.indexWhere((script) => script.id == currentId);
     if (index != -1) {
@@ -443,6 +446,20 @@ abstract class Config with _$Config {
               profile['id'] = id.toString();
             }
           }
+        }
+      }
+    } catch (_) {}
+
+    // Migrate the removed dual-script role fields: while roles existed,
+    // currentId was no longer written by the UI, so any stored rule-role id
+    // is the intended active script. Promote it so existing custom-rule
+    // setups keep applying after the role feature revert.
+    try {
+      final scriptProps = json['scriptProps'];
+      if (scriptProps is Map) {
+        final ruleScriptId = scriptProps['rule-script-id'];
+        if (ruleScriptId is String) {
+          scriptProps['currentId'] = ruleScriptId;
         }
       }
     } catch (_) {}

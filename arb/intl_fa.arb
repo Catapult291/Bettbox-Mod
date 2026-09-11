@@ -229,7 +229,8 @@
   "externalResources": "منابع خارجی",
   "checking": "در حال بررسی...",
   "country": "منطقه",
-  "checkError": "بررسی ناموفق بود",
+  "checkError": "بررسی ناموفق بود",  "scriptRuleTip": "بازنویسی قوانین سراسری",
+
   "search": "جستجو",
   "replace": "جایگزینی",
   "replaceAll": "جایگزینی همه",

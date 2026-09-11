@@ -229,7 +229,8 @@
   "externalResources": "外部資源",
   "checking": "檢測中...",
   "country": "區域",
-  "checkError": "檢測失敗",
+  "checkError": "檢測失敗",  "scriptRuleTip": "覆寫全域規則",
+
   "search": "搜尋",
   "replace": "替換",
   "replaceAll": "全部替換",

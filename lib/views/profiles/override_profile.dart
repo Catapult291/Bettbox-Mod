@@ -565,17 +565,46 @@ class RuleContent extends ConsumerWidget {
   }
 }
 
-class AddRuleDialog extends StatefulWidget {
+/// 可作为规则目标的分组:与代理页保持一致,只列出最终配置里 GLOBAL 组引用的
+/// 顶层分组(代理页的展示范围由内核返回的 GLOBAL 成员决定),并按
+/// 「显示隐藏项」设置决定是否包含 hidden 分组。配置未显式定义 GLOBAL 时,
+/// 内核会自动生成包含全部分组的 GLOBAL,因此不做成员过滤。
+List<ProxyGroup> getRuleTargetGroups(
+  List<ProxyGroup> groups, {
+  required bool showHiddenItems,
+}) {
+  final globalIndex = groups.indexWhere(
+    (group) => group.name == GroupName.GLOBAL.name,
+  );
+  final topLevel = <ProxyGroup>[];
+  if (globalIndex == -1) {
+    topLevel.addAll(groups);
+  } else {
+    final groupsByName = {for (final group in groups) group.name: group};
+    for (final name in groups[globalIndex].proxies ?? const <String>[]) {
+      final group = groupsByName[name];
+      if (group != null) {
+        topLevel.add(group);
+      }
+    }
+  }
+  if (showHiddenItems) {
+    return topLevel;
+  }
+  return topLevel.where((group) => group.hidden != true).toList();
+}
+
+class AddRuleDialog extends ConsumerStatefulWidget {
   final ClashConfigSnippet snippet;
   final Rule? rule;
 
   const AddRuleDialog({super.key, required this.snippet, this.rule});
 
   @override
-  State<AddRuleDialog> createState() => _AddRuleDialogState();
+  ConsumerState<AddRuleDialog> createState() => _AddRuleDialogState();
 }
 
-class _AddRuleDialogState extends State<AddRuleDialog> {
+class _AddRuleDialogState extends ConsumerState<AddRuleDialog> {
   late RuleAction _ruleAction;
   final _ruleTargetController = TextEditingController();
   final _contentController = TextEditingController();
@@ -595,8 +624,17 @@ class _AddRuleDialogState extends State<AddRuleDialog> {
   }
 
   void _initState() {
+    // 与代理页 getVisibleGroups 保持一致:只列出顶层分组(GLOBAL 成员),
+    // 过滤 hidden 分组,「显示隐藏项」开启时不过滤。
+    final showHiddenItems = ref.read(
+      proxiesStyleSettingProvider.select((state) => state.showHiddenItems),
+    );
+    final targetGroups = getRuleTargetGroups(
+      widget.snippet.proxyGroups,
+      showHiddenItems: showHiddenItems,
+    );
     _targetItems = [
-      ...widget.snippet.proxyGroups.map(
+      ...targetGroups.map(
         (item) => DropdownMenuEntry<String>(value: item.name, label: item.name),
       ),
       ...RuleTarget.values.map(
