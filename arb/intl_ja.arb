@@ -147,6 +147,7 @@
   "autoUpdate": "自動更新",
   "followUpdate": "更新に追従",
   "updateSuccess": "更新しました",
+  "updateFailed": "更新に失敗しました",
   "autoUpdateInterval": "自動更新間隔（分）",
   "profileAutoUpdateIntervalNullValidationDesc": "更新間隔を入力してください",
   "profileAutoUpdateIntervalInvalidValidationDesc": "有効な時間を指定してください",

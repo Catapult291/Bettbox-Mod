@@ -147,6 +147,7 @@
   "autoUpdate": "Автообновление",
   "followUpdate": "Следовать обновлению",
   "updateSuccess": "Обновлено",
+  "updateFailed": "Не удалось обновить",
   "autoUpdateInterval": "Интервал автообновления (минуты)",
   "profileAutoUpdateIntervalNullValidationDesc": "Введите интервал автообновления",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Введите корректный формат интервала",

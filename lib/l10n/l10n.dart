@@ -1284,6 +1284,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Update Failed`
+  String get updateFailed {
+    return Intl.message(
+      'Update Failed',
+      name: 'updateFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Auto update interval (min)`
   String get autoUpdateInterval {
     return Intl.message(

@@ -147,6 +147,7 @@
   "autoUpdate": "بروزرسانی خودکار",
   "followUpdate": "پیروی از بروزرسانی",
   "updateSuccess": "بروزرسانی شد",
+  "updateFailed": "بروزرسانی ناموفق بود",
   "autoUpdateInterval": "فاصله بروزرسانی خودکار (دقیقه)",
   "profileAutoUpdateIntervalNullValidationDesc": "لطفاً فاصله زمانی را وارد کنید",
   "profileAutoUpdateIntervalInvalidValidationDesc": "لطفاً فرمت زمان معتبری وارد کنید",

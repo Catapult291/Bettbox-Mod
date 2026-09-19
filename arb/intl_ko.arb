@@ -147,6 +147,7 @@
   "autoUpdate": "자동 업데이트",
   "followUpdate": "업데이트 따르기",
   "updateSuccess": "업데이트 완료",
+  "updateFailed": "업데이트 실패",
   "autoUpdateInterval": "자동 업데이트 간격 (분)",
   "profileAutoUpdateIntervalNullValidationDesc": "업데이트 간격을 입력하세요",
   "profileAutoUpdateIntervalInvalidValidationDesc": "올바른 시간 형식을 입력하세요",

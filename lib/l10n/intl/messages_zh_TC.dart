@@ -888,6 +888,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("未命名"),
     "unpin": MessageLookupByLibrary.simpleMessage("取消置頂"),
     "update": MessageLookupByLibrary.simpleMessage("更新"),
+    "updateFailed": MessageLookupByLibrary.simpleMessage("更新失敗"),
     "updateSuccess": MessageLookupByLibrary.simpleMessage("成功更新"),
     "updateTime": MessageLookupByLibrary.simpleMessage("更新時間"),
     "upload": MessageLookupByLibrary.simpleMessage("上傳"),

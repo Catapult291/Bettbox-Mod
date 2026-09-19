@@ -147,6 +147,7 @@
   "autoUpdate": "Auto Update",
   "followUpdate": "Follow Update",
   "updateSuccess": "Update Successful",
+  "updateFailed": "Update Failed",
   "autoUpdateInterval": "Auto update interval (min)",
   "profileAutoUpdateIntervalNullValidationDesc": "Please enter update interval",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Please enter a valid interval",

@@ -41,6 +41,7 @@ class EditProfileViewState extends State<EditProfileView> {
   FocusNode? urlFocusNode;
   bool _obscureAgeSecretKey = true;
   bool _updateTipVisible = false;
+  bool _updateTipSuccess = true;
   Timer? _updateTipTimer;
   String? rawText;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
@@ -180,30 +181,38 @@ class EditProfileViewState extends State<EditProfileView> {
   }
 
   /// 手动更新当前配置：仅更新这一个配置，不受「跟随更新」开关影响。
+  /// 失败只弹「更新失败」提示，不弹全局错误弹框（原始错误写进日志）。
   Future<void> updateFromUrl() async {
     if (!_formKey.currentState!.validate()) return;
     final appController = globalState.appController;
-    await appController.safeRun(
-      () async {
-        final updated = await appController.updateProfile(
-          _buildProfileFromForm(),
-        );
-        if (!updated) return;
+    final loading = appController.ref.read(loadingProvider.notifier);
+    loading.value = true;
+    bool updated = false;
+    try {
+      updated = await appController.updateProfile(_buildProfileFromForm());
+      if (updated) {
         fileInfoNotifier.value = await _getFileInfo(
           await appPath.getProfilePath(widget.profile.id),
         );
-        _showUpdateTip();
-      },
-      needLoading: true,
-      title: appLocalizations.tip,
-      silence: false,
-    );
+      }
+    } on Object catch (e) {
+      commonPrint.log(e.formatErrorLog);
+      _showUpdateTip(success: false);
+      return;
+    } finally {
+      loading.value = false;
+    }
+    // updated 为 false 表示同一配置已有更新在途，静默跳过。
+    if (updated) {
+      _showUpdateTip();
+    }
   }
 
-  void _showUpdateTip() {
+  void _showUpdateTip({bool success = true}) {
     if (!mounted) return;
     _updateTipTimer?.cancel();
     setState(() {
+      _updateTipSuccess = success;
       _updateTipVisible = true;
     });
     _updateTipTimer = Timer(const Duration(milliseconds: 1600), () {
@@ -214,11 +223,13 @@ class EditProfileViewState extends State<EditProfileView> {
     });
   }
 
-  Widget _buildUpdateTip(BuildContext context) {
+  Widget _buildUpdateTip(BuildContext context, {required bool success}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: context.colorScheme.primary,
+        color: success
+            ? context.colorScheme.primary
+            : context.colorScheme.error,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -229,9 +240,11 @@ class EditProfileViewState extends State<EditProfileView> {
         ],
       ),
       child: Text(
-        appLocalizations.updateSuccess,
+        success ? appLocalizations.updateSuccess : appLocalizations.updateFailed,
         style: context.textTheme.bodyMedium?.copyWith(
-          color: context.colorScheme.onPrimary,
+          color: success
+              ? context.colorScheme.onPrimary
+              : context.colorScheme.onError,
           height: 1.0,
         ),
       ),
@@ -252,7 +265,7 @@ class EditProfileViewState extends State<EditProfileView> {
             maxWidth: double.infinity,
             minHeight: 0,
             maxHeight: double.infinity,
-            child: _buildUpdateTip(context),
+            child: _buildUpdateTip(context, success: _updateTipSuccess),
           ),
         ),
       ),

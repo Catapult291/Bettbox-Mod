@@ -147,6 +147,7 @@
   "autoUpdate": "自动更新",
   "followUpdate": "跟随更新",
   "updateSuccess": "成功更新",
+  "updateFailed": "更新失败",
   "autoUpdateInterval": "自动更新间隔（分钟）",
   "profileAutoUpdateIntervalNullValidationDesc": "请输入自动更新间隔时间",
   "profileAutoUpdateIntervalInvalidValidationDesc": "请输入有效间隔时间格式",
