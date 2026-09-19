@@ -514,7 +514,9 @@ class QuickSidebar extends StatelessWidget {
             width: width,
             child: Column(
               children: [
-                const SizedBox(height: 16),
+                // 第一个控件与页面标题栏同一水平高度：标题栏高 kToolbarHeight、标题垂直居中，
+                // 故上边距 = kToolbarHeight / 2 - 控件高 / 2（实测居中于标题行）。
+                const SizedBox(height: kToolbarHeight / 2 - quickControlSize / 2),
                 const QuickControls(showCaption: true),
               ],
             ),

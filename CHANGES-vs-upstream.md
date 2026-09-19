@@ -126,6 +126,8 @@
   （非移动布局）下始终显示，窗口拉窄到手机布局时与左侧栏一起消失。
 - 宽度对齐：`AppSidebarContainer` 改为 `ConsumerStatefulWidget`，用 `GlobalKey` 量出左栏实际宽度（含其 1px 右边框），
   post-frame 回写后传给 `QuickSidebar(width: 实测 - 1)`——左栏宽度随标签长度（语言）变化，写死会错位。
+- 与页面标题栏对齐：右栏第一个控件的中心与标题行（`kToolbarHeight` 垂直居中）齐平，上边距取
+  `kToolbarHeight / 2 - quickControlSize / 2`，实测两者中心相差 2px 以内（改前差 8px）。
 - 切换统一走 `appController.updateMode / updateSystemProxy / updateTun`，与托盘菜单、全局快捷键同一入口。
 - 该位置在 `MaterialApp.builder` 内、Navigator 之上，**没有 `Overlay`**，因此不能用 `Tooltip`；无障碍标签改用
   `Semantics`，悬停反馈靠 `Material`/`InkWell` 自带高亮。

@@ -9,6 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// 因此左右两条栏的宽度一致。
 const quickRailWidth = 72.0;
 
+/// 单个控件（图标方块）的边长。
+const quickControlSize = 44.0;
+
 /// 快捷控制：出站模式、系统代理、虚拟网卡。
 ///
 /// [showCaption] 为 true 时每个控件下方带一行小字标签（右侧栏用，右栏宽度有限，
@@ -215,8 +218,8 @@ class _QuickButton extends StatelessWidget {
         child: InkWell(
           onTap: onPressed,
           child: SizedBox(
-            width: 44,
-            height: 44,
+            width: quickControlSize,
+            height: quickControlSize,
             child: Icon(icon, size: 22, color: foreground),
           ),
         ),
