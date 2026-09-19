@@ -1280,6 +1280,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("Без имени"),
     "unpin": MessageLookupByLibrary.simpleMessage("Открепить"),
     "update": MessageLookupByLibrary.simpleMessage("Обновить"),
+    "updateSuccess": MessageLookupByLibrary.simpleMessage("Обновлено"),
     "updateTime": MessageLookupByLibrary.simpleMessage("Время обновления"),
     "upload": MessageLookupByLibrary.simpleMessage("Отправка"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),

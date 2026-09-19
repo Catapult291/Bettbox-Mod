@@ -480,12 +480,13 @@ class AppController {
     _ref.read(localIpProvider.notifier).value = await utils.getLocalIpAddress();
   }
 
-  Future<void> updateProfile(Profile profile, {bool validate = true}) async {
+  /// 返回是否真正执行了更新：同一配置已有更新在途时会跳过并返回 false。
+  Future<bool> updateProfile(Profile profile, {bool validate = true}) async {
     if (_updatingProfileIds.contains(profile.id)) {
       _ref
           .read(profilesProvider.notifier)
           .setProfile(profile.copyWith(isUpdating: false));
-      return;
+      return false;
     }
     _updatingProfileIds.add(profile.id);
     try {
@@ -496,6 +497,7 @@ class AppController {
       if (profile.id == _ref.read(currentProfileIdProvider)) {
         applyProfileDebounce(silence: true);
       }
+      return true;
     } finally {
       _updatingProfileIds.remove(profile.id);
     }

@@ -146,6 +146,7 @@
   "profileUrlInvalidValidationDesc": "Please enter a valid URL",
   "autoUpdate": "Auto Update",
   "followUpdate": "Follow Update",
+  "updateSuccess": "Update Successful",
   "autoUpdateInterval": "Auto update interval (min)",
   "profileAutoUpdateIntervalNullValidationDesc": "Please enter update interval",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Please enter a valid interval",

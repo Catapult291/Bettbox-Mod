@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -37,6 +38,8 @@ class EditProfileViewState extends State<EditProfileView> {
   late TextEditingController ageSecretKeyController;
   FocusNode? urlFocusNode;
   bool _obscureAgeSecretKey = true;
+  bool _updateTipVisible = false;
+  Timer? _updateTipTimer;
   String? rawText;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final fileInfoNotifier = ValueNotifier<FileInfo?>(null);
@@ -79,6 +82,7 @@ class EditProfileViewState extends State<EditProfileView> {
     autoUpdateDurationController.dispose();
     ageSecretKeyController.dispose();
     urlFocusNode?.dispose();
+    _updateTipTimer?.cancel();
     super.dispose();
   }
 
@@ -179,14 +183,49 @@ class EditProfileViewState extends State<EditProfileView> {
     final appController = globalState.appController;
     await appController.safeRun(
       () async {
-        await appController.updateProfile(_buildProfileFromForm());
+        final updated = await appController.updateProfile(
+          _buildProfileFromForm(),
+        );
+        if (!updated) return;
         fileInfoNotifier.value = await _getFileInfo(
           await appPath.getProfilePath(widget.profile.id),
         );
+        _showUpdateTip();
       },
       needLoading: true,
       title: appLocalizations.tip,
       silence: false,
+    );
+  }
+
+  void _showUpdateTip() {
+    if (!mounted) return;
+    _updateTipTimer?.cancel();
+    setState(() {
+      _updateTipVisible = true;
+    });
+    _updateTipTimer = Timer(const Duration(milliseconds: 1600), () {
+      if (!mounted) return;
+      setState(() {
+        _updateTipVisible = false;
+      });
+    });
+  }
+
+  Widget _buildUpdateTip(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: context.colorScheme.inverseSurface,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        appLocalizations.updateSuccess,
+        style: context.textTheme.bodyMedium?.copyWith(
+          color: context.colorScheme.onInverseSurface,
+          height: 1.0,
+        ),
+      ),
     );
   }
 
@@ -493,21 +532,37 @@ class EditProfileViewState extends State<EditProfileView> {
             icon: const Icon(Icons.save),
           ),
         ),
-        child: Form(
-          key: _formKey,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: ListView.separated(
-              padding: kMaterialListPadding.copyWith(bottom: 72),
-              itemBuilder: (_, index) {
-                return items[index];
-              },
-              separatorBuilder: (_, _) {
-                return const SizedBox(height: 24);
-              },
-              itemCount: items.length,
+        child: Stack(
+          children: [
+            Form(
+              key: _formKey,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: ListView.separated(
+                  padding: kMaterialListPadding.copyWith(bottom: 72),
+                  itemBuilder: (_, index) {
+                    return items[index];
+                  },
+                  separatorBuilder: (_, _) {
+                    return const SizedBox(height: 24);
+                  },
+                  itemCount: items.length,
+                ),
+              ),
             ),
-          ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 24,
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _updateTipVisible ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Center(child: _buildUpdateTip(context)),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

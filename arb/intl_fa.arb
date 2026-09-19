@@ -146,6 +146,7 @@
   "profileUrlInvalidValidationDesc": "لطفاً یک آدرس URL معتبر وارد کنید",
   "autoUpdate": "بروزرسانی خودکار",
   "followUpdate": "پیروی از بروزرسانی",
+  "updateSuccess": "بروزرسانی شد",
   "autoUpdateInterval": "فاصله بروزرسانی خودکار (دقیقه)",
   "profileAutoUpdateIntervalNullValidationDesc": "لطفاً فاصله زمانی را وارد کنید",
   "profileAutoUpdateIntervalInvalidValidationDesc": "لطفاً فرمت زمان معتبری وارد کنید",
