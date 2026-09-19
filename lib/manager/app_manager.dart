@@ -7,6 +7,7 @@ import 'package:bett_box/manager/window_manager.dart';
 import 'package:bett_box/plugins/app.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/state.dart';
+import 'package:bett_box/widgets/sidebar_quick_control.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -434,6 +435,7 @@ class AppSidebarContainer extends ConsumerWidget {
                         ),
                       ),
                     ),
+                    const SidebarQuickControl(),
                   ],
                 ),
               ),
