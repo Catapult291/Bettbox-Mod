@@ -194,6 +194,11 @@ class _WindowContainerState extends ConsumerState<WindowManager>
   }
 }
 
+/// 给窗口顶栏留出高度的内容容器。
+///
+/// 顶栏本身（色带 + 窗口按钮）由 `AppSidebarContainer` 渲染——它要横向跨过
+/// 「页面内容 + 右侧快捷栏」，色带与按钮才能一直延伸到窗口右边缘，所以不在这里画；
+/// 这一层只负责把内容整体下移一条色带的高度（macOS 常规桌面用系统标题栏，不下移也不画顶栏）。
 class WindowHeaderContainer extends StatelessWidget {
   final Widget child;
 
@@ -208,15 +213,10 @@ class WindowHeaderContainer extends StatelessWidget {
         if ((version <= 10 || !isMobileView) && system.isMacOS) {
           return child!;
         }
-        return Stack(
+        return Column(
           children: [
-            Column(
-              children: [
-                SizedBox(height: kHeaderHeight),
-                Expanded(flex: 1, child: child!),
-              ],
-            ),
-            const WindowHeader(),
+            SizedBox(height: kHeaderHeight),
+            Expanded(flex: 1, child: child!),
           ],
         );
       },
@@ -224,12 +224,6 @@ class WindowHeaderContainer extends StatelessWidget {
     );
   }
 }
-
-/// 窗口按钮组（图钉 / 最小化 / 最大化 / 关闭）距内容区右边缘的间距。
-///
-/// 原先贴在最右侧（`right: 0`），与右侧快捷栏的控件挤在同一个角上；留出这段间距后，
-/// 按钮组不再压着右栏边框，右边缘落在页面工具栏最右侧图标（如「⋮」）的右边线附近。
-const double windowActionsRightInset = 24;
 
 class WindowHeader extends ConsumerStatefulWidget {
   const WindowHeader({super.key});
@@ -369,6 +363,13 @@ class _WindowHeaderState extends ConsumerState<WindowHeader> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobileView = ref.watch(isMobileViewProvider);
+    final version = ref.watch(versionProvider);
+    // 与 `WindowHeaderContainer` 留白的那条判断保持一致：macOS 常规桌面用系统标题栏，
+    // 既不下移内容也不画自绘顶栏，所以这里整块不渲染。
+    if ((version <= 10 || !isMobileView) && system.isMacOS) {
+      return const SizedBox.shrink();
+    }
     return Material(
       child: Stack(
         alignment: AlignmentDirectional.center,
@@ -391,10 +392,8 @@ class _WindowHeaderState extends ConsumerState<WindowHeader> {
           if (system.isMacOS)
             const Text(appName)
           else ...[
-            Positioned(
-              right: windowActionsRightInset,
-              child: _buildActions(),
-            ),
+            // 顶栏已横跨到窗口右边缘（含右侧快捷栏），按钮组直接贴右边缘。
+            Positioned(right: 0, child: _buildActions()),
           ],
         ],
       ),

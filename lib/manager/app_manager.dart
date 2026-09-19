@@ -323,11 +323,61 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
     final navigationItems = navigationState.navigationItems;
     final isMobileView = navigationState.viewMode == ViewMode.mobile;
     if (isMobileView) {
-      return widget.child;
+      // 手机布局没有两条侧栏，顶栏色带铺满整宽。
+      if (!system.isDesktop) return widget.child;
+      return Stack(
+        children: [
+          widget.child,
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: kHeaderHeight,
+            child: const WindowHeader(),
+          ),
+        ],
+      );
     }
     final currentIndex = navigationState.currentIndex;
     final showLabel = ref.watch(appSettingProvider).showLabel;
     WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailMetrics());
+    final content = Expanded(
+      child: Stack(
+        children: [
+          // 页面内容：右侧让出快捷栏的宽度，页面自身的布局与只有内容区时完全一致。
+          Positioned.fill(
+            child: Padding(
+              padding: EdgeInsets.only(right: _railWidth),
+              child: ClipRect(
+                child: MediaQuery.removePadding(
+                  context: context,
+                  removeLeft: true,
+                  child: widget.child,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: QuickSidebar(
+              width: _railWidth - 1,
+              topOffset: _quickControlsTop,
+            ),
+          ),
+          // 顶栏（色带 + 窗口按钮）横跨「页面内容 + 右侧快捷栏」，色带因此一直延伸到窗口右边缘，
+          // 窗口按钮也落在该色带的右端。这一层在快捷栏之上，遮住它顶部的一条色带。
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: kHeaderHeight,
+            child: const WindowHeader(),
+          ),
+        ],
+      ),
+    );
     return Row(
       children: [
         Stack(
@@ -489,17 +539,7 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
             _buildLoading(),
           ],
         ),
-        Expanded(
-          flex: 1,
-          child: ClipRect(
-            child: MediaQuery.removePadding(
-              context: context,
-              removeLeft: true,
-              child: widget.child,
-            ),
-          ),
-        ),
-        QuickSidebar(width: _railWidth - 1, topOffset: _quickControlsTop),
+        content,
       ],
     );
   }

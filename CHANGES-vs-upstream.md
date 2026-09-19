@@ -130,8 +130,10 @@
   随平台（macOS 多 22px 的窗口按钮带）与标签长度变化，所以不写死：`AppSidebarContainer` 在第一个导航项的图标上挂
   `GlobalKey`，post-frame 量出它相对左栏顶部的中心偏移，减去控件半高后传给 `QuickSidebar(topOffset:)`；量不到时退回
   跟随页面标题栏的老位置（`kToolbarHeight / 2 - quickControlSize / 2`）。
-- 窗口按钮组（图钉 / 最小化 / 最大化 / 关闭）不再贴内容区右边缘：留 `windowActionsRightInset = 24` 的右边距
-  （`window_manager.dart`），按钮组不再压着右栏边框，关闭按钮的右边线与页面工具栏最右图标（如「⋮」）的右边线基本重合。
+- 窗口按钮组（图钉 / 最小化 / 最大化 / 关闭）落回窗口右边缘：自绘顶栏（色带 + 按钮）由 `AppSidebarContainer` 渲染，
+  横跨「页面内容 + 右侧快捷栏」，色带因此从左侧导航栏右边框一直延伸到**窗口右边缘**，按钮组贴在色带右端。
+  为此把右侧快捷栏从 `Row` 的直接子项改成内容区 `Stack` 里 `right: 0` 的一层，页面内容则加 `Padding(right: 左栏实测宽度)`
+  让出同样宽度——页面自身的布局与改动前逐像素一致；`WindowHeaderContainer` 只保留「给顶栏留高度」的留白。
 - 切换统一走 `appController.updateMode / updateSystemProxy / updateTun`，与托盘菜单、全局快捷键同一入口。
 - 该位置在 `MaterialApp.builder` 内、Navigator 之上，**没有 `Overlay`**，因此不能用 `Tooltip`；无障碍标签改用
   `Semantics`，悬停反馈靠 `Material`/`InkWell` 自带高亮。
@@ -141,10 +143,12 @@
 `flutter analyze lib test` 仅剩基线告警，`flutter test` 34/34。详见 `.grok/stage-log.md` 第 5 节（含未验证项：本机无法出
 Windows 包）。
 
-**Windows 桌面实测（同一节，后一版）**：出站模式方块中心 y=135.5px 与左栏「首页」图标中心 y=135.5px 完全重合（1365×930
-窗口）／137.5px 对 137.5px（1920×1140 最大化）；窗口按钮组关闭键右边缘距右栏边框 24px（改前为 0，贴边）。截图见
-`sidebar-preview/31-windows-rail-navitem-align-window.png` 与 `32-windows-rail-navitem-align-max.png`。左栏未受影响
-（图标/标签行的 y 坐标与改前逐行一致）。
+**Windows 桌面实测（同一节，后一版）**：出站模式方块中心与左栏「首页」图标中心逐像素重合（135.5 对 135.5，1365×930 窗口；
+137.5 对 137.5，1920×1140 最大化；扩展栏 `showLabel` 下 144.5 对 144.5），方块顶部都在 40px 顶栏色带之下；顶栏色带宽度实测
+= 从左侧导航栏右边框（含扩展栏时是其实际宽度）一直铺到窗口右边缘（右侧余量 0~1.3 逻辑px），关闭按钮墨迹距窗口右边缘
+约 13~15 逻辑px（按钮盒子贴边，与 Windows 标题栏按钮的观感一致）。手机布局（宽 467 逻辑px）下两条侧栏一起消失、色带铺满整宽、
+按钮组仍在右上角。截图：`sidebar-preview/31-windows-topbar-extend-window.png`（窗口）、`32-…-max.png`（最大化）、
+`33-…-laptop.png`（宽 800 的 laptop 布局）、`34-…-mobile.png`（手机布局）、`35-…-showlabel.png`（扩展左栏）。
 
 ---
 
