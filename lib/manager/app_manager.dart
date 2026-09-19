@@ -251,13 +251,34 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
   /// 左侧导航栏的实际宽度（含它的 1px 右边框）。`NavigationRail` 的宽度会随
   /// 导航项标签长度（不同语言）变化，右侧快捷栏要跟它对齐，所以运行时量一次。
   final GlobalKey _railKey = GlobalKey();
+
+  /// 左栏第一个导航项（首页）的图标，用来把右栏首个控件对齐到同一条水平线。
+  final GlobalKey _firstDestinationKey = GlobalKey();
+
   double _railWidth = quickRailWidth;
 
-  void _syncRailWidth() {
-    final width = _railKey.currentContext?.size?.width;
-    if (width == null || !mounted) return;
+  /// 右栏内容距右栏顶部的距离：首个控件（出站模式）与左栏「首页」的图标同高。
+  /// 左栏的图标受平台（macOS 多 22px 的窗口按钮带）与标签长度影响，量不到时
+  /// 先用与页面标题栏齐平的老位置兜底。
+  double _quickControlsTop = kToolbarHeight / 2 - quickControlSize / 2;
+
+  void _syncRailMetrics() {
+    if (!mounted) return;
+    final railBox = _railKey.currentContext?.findRenderObject() as RenderBox?;
+    if (railBox == null || !railBox.hasSize) return;
+    final width = railBox.size.width;
     if ((width - _railWidth).abs() > 0.5) {
       setState(() => _railWidth = width);
+    }
+    final iconBox =
+        _firstDestinationKey.currentContext?.findRenderObject() as RenderBox?;
+    if (iconBox == null || !iconBox.hasSize) return;
+    final railTop = railBox.localToGlobal(Offset.zero).dy;
+    final iconCenterY =
+        iconBox.localToGlobal(iconBox.size.center(Offset.zero)).dy - railTop;
+    final top = iconCenterY - quickControlSize / 2;
+    if ((top - _quickControlsTop).abs() > 0.5) {
+      setState(() => _quickControlsTop = top);
     }
   }
 
@@ -306,7 +327,7 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
     }
     final currentIndex = navigationState.currentIndex;
     final showLabel = ref.watch(appSettingProvider).showLabel;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailWidth());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailMetrics());
     return Row(
       children: [
         Stack(
@@ -412,16 +433,21 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
                                                   .colorScheme
                                                   .onSurfaceVariant,
                                             ),
-                                        destinations: navigationItems
-                                            .map(
-                                              (e) => NavigationRailDestination(
-                                                icon: e.icon,
-                                                label: Text(
-                                                  e.label.localizedName,
-                                                ),
+                                        destinations: [
+                                          for (final (index, item)
+                                              in navigationItems.indexed)
+                                            NavigationRailDestination(
+                                              icon: index == 0
+                                                  ? KeyedSubtree(
+                                                      key: _firstDestinationKey,
+                                                      child: item.icon,
+                                                    )
+                                                  : item.icon,
+                                              label: Text(
+                                                item.label.localizedName,
                                               ),
-                                            )
-                                            .toList(),
+                                            ),
+                                        ],
                                         onDestinationSelected: (index) {
                                           final label =
                                               navigationItems[index].label;
@@ -473,7 +499,7 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
             ),
           ),
         ),
-        QuickSidebar(width: _railWidth - 1),
+        QuickSidebar(width: _railWidth - 1, topOffset: _quickControlsTop),
       ],
     );
   }
@@ -487,7 +513,10 @@ class QuickSidebar extends StatelessWidget {
   /// 内层内容宽度。外层容器还有 1px 左边框，调用方减掉后左右两条栏总宽一致。
   final double width;
 
-  const QuickSidebar({super.key, required this.width});
+  /// 内容距栏顶部的距离，由左栏实测得出（首个控件与左栏首个导航项同高）。
+  final double topOffset;
+
+  const QuickSidebar({super.key, required this.width, required this.topOffset});
 
   @override
   Widget build(BuildContext context) {
@@ -514,9 +543,9 @@ class QuickSidebar extends StatelessWidget {
             width: width,
             child: Column(
               children: [
-                // 第一个控件与页面标题栏同一水平高度：标题栏高 kToolbarHeight、标题垂直居中，
-                // 故上边距 = kToolbarHeight / 2 - 控件高 / 2（实测居中于标题行）。
-                const SizedBox(height: kToolbarHeight / 2 - quickControlSize / 2),
+                // 首个控件与左栏首个导航项（首页）的图标同高：上边距由左栏实测得到，
+                // 左栏图标的位置随平台（macOS 的窗口按钮带）与标签长度变化，写死会错位。
+                SizedBox(height: topOffset),
                 const QuickControls(showCaption: true),
               ],
             ),

@@ -225,6 +225,12 @@ class WindowHeaderContainer extends StatelessWidget {
   }
 }
 
+/// 窗口按钮组（图钉 / 最小化 / 最大化 / 关闭）距内容区右边缘的间距。
+///
+/// 原先贴在最右侧（`right: 0`），与右侧快捷栏的控件挤在同一个角上；留出这段间距后，
+/// 按钮组不再压着右栏边框，右边缘落在页面工具栏最右侧图标（如「⋮」）的右边线附近。
+const double windowActionsRightInset = 24;
+
 class WindowHeader extends ConsumerStatefulWidget {
   const WindowHeader({super.key});
 
@@ -385,7 +391,10 @@ class _WindowHeaderState extends ConsumerState<WindowHeader> {
           if (system.isMacOS)
             const Text(appName)
           else ...[
-            Positioned(right: 0, child: _buildActions()),
+            Positioned(
+              right: windowActionsRightInset,
+              child: _buildActions(),
+            ),
           ],
         ],
       ),

@@ -126,8 +126,12 @@
   （非移动布局）下始终显示，窗口拉窄到手机布局时与左侧栏一起消失。
 - 宽度对齐：`AppSidebarContainer` 改为 `ConsumerStatefulWidget`，用 `GlobalKey` 量出左栏实际宽度（含其 1px 右边框），
   post-frame 回写后传给 `QuickSidebar(width: 实测 - 1)`——左栏宽度随标签长度（语言）变化，写死会错位。
-- 与页面标题栏对齐：右栏第一个控件的中心与标题行（`kToolbarHeight` 垂直居中）齐平，上边距取
-  `kToolbarHeight / 2 - quickControlSize / 2`，实测两者中心相差 2px 以内（改前差 8px）。
+- 与左侧导航项对齐：右栏第一个控件（出站模式方块）的中心与左栏第一个导航项（首页）的图标中心齐平。左栏图标的纵向位置
+  随平台（macOS 多 22px 的窗口按钮带）与标签长度变化，所以不写死：`AppSidebarContainer` 在第一个导航项的图标上挂
+  `GlobalKey`，post-frame 量出它相对左栏顶部的中心偏移，减去控件半高后传给 `QuickSidebar(topOffset:)`；量不到时退回
+  跟随页面标题栏的老位置（`kToolbarHeight / 2 - quickControlSize / 2`）。
+- 窗口按钮组（图钉 / 最小化 / 最大化 / 关闭）不再贴内容区右边缘：留 `windowActionsRightInset = 24` 的右边距
+  （`window_manager.dart`），按钮组不再压着右栏边框，关闭按钮的右边线与页面工具栏最右图标（如「⋮」）的右边线基本重合。
 - 切换统一走 `appController.updateMode / updateSystemProxy / updateTun`，与托盘菜单、全局快捷键同一入口。
 - 该位置在 `MaterialApp.builder` 内、Navigator 之上，**没有 `Overlay`**，因此不能用 `Tooltip`；无障碍标签改用
   `Semantics`，悬停反馈靠 `Material`/`InkWell` 自带高亮。
@@ -136,6 +140,11 @@
 任意页面常驻、点模式方块后底色与模式名、首页「出站模式」滑块同步变化；像素级实测左右两栏等宽（中英文下均为 81px）。
 `flutter analyze lib test` 仅剩基线告警，`flutter test` 34/34。详见 `.grok/stage-log.md` 第 5 节（含未验证项：本机无法出
 Windows 包）。
+
+**Windows 桌面实测（同一节，后一版）**：出站模式方块中心 y=135.5px 与左栏「首页」图标中心 y=135.5px 完全重合（1365×930
+窗口）／137.5px 对 137.5px（1920×1140 最大化）；窗口按钮组关闭键右边缘距右栏边框 24px（改前为 0，贴边）。截图见
+`sidebar-preview/31-windows-rail-navitem-align-window.png` 与 `32-windows-rail-navitem-align-max.png`。左栏未受影响
+（图标/标签行的 y 坐标与改前逐行一致）。
 
 ---
 
