@@ -496,6 +496,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "امکان جستجو و تطبیق پردازش‌ها",
     ),
+    "followUpdate": MessageLookupByLibrary.simpleMessage("پیروی از بروزرسانی"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("فونت"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("نگاشت اجباری DNS"),
     "forceDnsMappingDesc": MessageLookupByLibrary.simpleMessage(
@@ -1058,8 +1059,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "script": MessageLookupByLibrary.simpleMessage("اسکریپت"),
     "scriptDesc": MessageLookupByLibrary.simpleMessage(
       "تنظیمات اسکریپت اورراید سراسری",
-    ),    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("بازنویسی قوانین سراسری"),
-
+    ),
+    "scriptRuleTip": MessageLookupByLibrary.simpleMessage(
+      "بازنویسی قوانین سراسری",
+    ),
     "search": MessageLookupByLibrary.simpleMessage("جستجو"),
     "seconds": MessageLookupByLibrary.simpleMessage("ثانیه"),
     "secretCopied": MessageLookupByLibrary.simpleMessage(

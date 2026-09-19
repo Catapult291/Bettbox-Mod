@@ -23,6 +23,16 @@ class ProfilesView extends ConsumerStatefulWidget {
   ConsumerState<ProfilesView> createState() => _ProfilesViewState();
 }
 
+/// 配置页右上角「全部同步」要更新的配置：跳过本地文件与关闭「跟随更新」的配置。
+/// 关闭该开关的配置只能在它自己的编辑页用右上角的更新按钮手动更新。
+List<Profile> getSyncAllTargets(Iterable<Profile> profiles) {
+  return profiles
+      .where(
+        (profile) => profile.type == ProfileType.url && profile.followUpdate,
+      )
+      .toList();
+}
+
 class _ProfilesViewState extends ConsumerState<ProfilesView> {
   Function? applyConfigDebounce;
 
@@ -42,10 +52,9 @@ class _ProfilesViewState extends ConsumerState<ProfilesView> {
   }
 
   Future<void> _updateProfiles() async {
-    final profiles = globalState.config.profiles;
+    final profiles = getSyncAllTargets(globalState.config.profiles);
     final messages = <String>[];
     final updateProfiles = profiles.map<Future>((profile) async {
-      if (profile.type == ProfileType.file) return;
       globalState.appController.setProfile(profile.copyWith(isUpdating: true));
       try {
         await globalState.appController.updateProfile(profile);
@@ -284,6 +293,14 @@ class ProfileItem extends StatelessWidget {
         return AdaptiveSheetScaffold(
           type: type,
           actions: [
+            if (profile.type == ProfileType.url)
+              IconButton(
+                icon: const Icon(Icons.sync),
+                tooltip: appLocalizations.sync,
+                onPressed: () {
+                  editKey.currentState?.updateFromUrl();
+                },
+              ),
             IconButton(
               icon: const Icon(Icons.security),
               tooltip: appLocalizations.ageKeyGenerateTitle,

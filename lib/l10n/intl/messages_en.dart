@@ -502,6 +502,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "Enable process matching",
     ),
+    "followUpdate": MessageLookupByLibrary.simpleMessage("Follow Update"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("Font"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage(
       "Force DNS Mapping",
@@ -1032,8 +1033,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "script": MessageLookupByLibrary.simpleMessage("Script"),
     "scriptDesc": MessageLookupByLibrary.simpleMessage(
       "Global override script config",
-    ),    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("Overrides the global rules"),
-
+    ),
+    "scriptRuleTip": MessageLookupByLibrary.simpleMessage(
+      "Overrides the global rules",
+    ),
     "search": MessageLookupByLibrary.simpleMessage("Search"),
     "seconds": MessageLookupByLibrary.simpleMessage("Seconds"),
     "secretCopied": MessageLookupByLibrary.simpleMessage(

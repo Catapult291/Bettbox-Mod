@@ -1264,6 +1264,16 @@ class AppLocalizations {
     return Intl.message('Auto Update', name: 'autoUpdate', desc: '', args: []);
   }
 
+  /// `Follow Update`
+  String get followUpdate {
+    return Intl.message(
+      'Follow Update',
+      name: 'followUpdate',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Auto update interval (min)`
   String get autoUpdateInterval {
     return Intl.message(
@@ -1932,6 +1942,16 @@ class AppLocalizations {
   /// `Check Failed`
   String get checkError {
     return Intl.message('Check Failed', name: 'checkError', desc: '', args: []);
+  }
+
+  /// `Overrides the global rules`
+  String get scriptRuleTip {
+    return Intl.message(
+      'Overrides the global rules',
+      name: 'scriptRuleTip',
+      desc: '',
+      args: [],
+    );
   }
 
   /// `Search`
@@ -5004,16 +5024,6 @@ class AppLocalizations {
     return Intl.message(
       'Inactive in script mode',
       name: 'overrideInvalidTip',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Overrides the global rules`
-  String get scriptRuleTip {
-    return Intl.message(
-      'Overrides the global rules',
-      name: 'scriptRuleTip',
       desc: '',
       args: [],
     );

@@ -145,6 +145,7 @@
   "profileUrlNullValidationDesc": "프로필 URL을 입력하세요",
   "profileUrlInvalidValidationDesc": "유효한 URL을 입력하세요",
   "autoUpdate": "자동 업데이트",
+  "followUpdate": "업데이트 따르기",
   "autoUpdateInterval": "자동 업데이트 간격 (분)",
   "profileAutoUpdateIntervalNullValidationDesc": "업데이트 간격을 입력하세요",
   "profileAutoUpdateIntervalInvalidValidationDesc": "올바른 시간 형식을 입력하세요",

@@ -39,6 +39,7 @@ _Profile _$ProfileFromJson(Map<String, dynamic> json) => _Profile(
           json['subscriptionInfo'] as Map<String, dynamic>,
         ),
   autoUpdate: json['autoUpdate'] as bool? ?? true,
+  followUpdate: json['follow-update'] as bool? ?? true,
   selectedMap:
       (json['selectedMap'] as Map<String, dynamic>?)?.map(
         (k, e) => MapEntry(k, e as String),
@@ -68,6 +69,7 @@ Map<String, dynamic> _$ProfileToJson(_Profile instance) => <String, dynamic>{
   'autoUpdateDuration': instance.autoUpdateDuration.inMicroseconds,
   'subscriptionInfo': instance.subscriptionInfo,
   'autoUpdate': instance.autoUpdate,
+  'follow-update': instance.followUpdate,
   'selectedMap': instance.selectedMap,
   'unfoldSet': instance.unfoldSet.toList(),
   'overrideData': instance.overrideData,

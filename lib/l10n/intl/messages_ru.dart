@@ -517,6 +517,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "Включить определение процессов",
     ),
+    "followUpdate": MessageLookupByLibrary.simpleMessage(
+      "Следовать обновлению",
+    ),
     "fontFamily": MessageLookupByLibrary.simpleMessage("Шрифт"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage(
       "Принудительное DNS-отображение",
@@ -1063,8 +1066,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "script": MessageLookupByLibrary.simpleMessage("Скрипт"),
     "scriptDesc": MessageLookupByLibrary.simpleMessage(
       "Настройка глобального скрипта переопределения",
-    ),    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("Переопределяет глобальные правила"),
-
+    ),
+    "scriptRuleTip": MessageLookupByLibrary.simpleMessage(
+      "Переопределяет глобальные правила",
+    ),
     "search": MessageLookupByLibrary.simpleMessage("Поиск"),
     "seconds": MessageLookupByLibrary.simpleMessage("секунд"),
     "secretCopied": MessageLookupByLibrary.simpleMessage(

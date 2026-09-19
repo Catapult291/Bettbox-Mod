@@ -145,6 +145,7 @@
   "profileUrlNullValidationDesc": "設定URLを入力してください",
   "profileUrlInvalidValidationDesc": "有効なURLを入力してください",
   "autoUpdate": "自動更新",
+  "followUpdate": "更新に追従",
   "autoUpdateInterval": "自動更新間隔（分）",
   "profileAutoUpdateIntervalNullValidationDesc": "更新間隔を入力してください",
   "profileAutoUpdateIntervalInvalidValidationDesc": "有効な時間を指定してください",

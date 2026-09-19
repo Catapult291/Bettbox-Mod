@@ -145,6 +145,7 @@
   "profileUrlNullValidationDesc": "Введите URL профиля",
   "profileUrlInvalidValidationDesc": "Введите корректный URL профиля",
   "autoUpdate": "Автообновление",
+  "followUpdate": "Следовать обновлению",
   "autoUpdateInterval": "Интервал автообновления (минуты)",
   "profileAutoUpdateIntervalNullValidationDesc": "Введите интервал автообновления",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Введите корректный формат интервала",

@@ -363,6 +363,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "開啟後可以匹配尋找處理程序",
     ),
+    "followUpdate": MessageLookupByLibrary.simpleMessage("跟隨更新"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("字體"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("強制 DNS 映射"),
     "forceDnsMappingDesc": MessageLookupByLibrary.simpleMessage(
@@ -741,8 +742,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "saveChanges": MessageLookupByLibrary.simpleMessage("是否儲存更改？"),
     "saveTip": MessageLookupByLibrary.simpleMessage("確定要儲存嗎？"),
     "script": MessageLookupByLibrary.simpleMessage("指令碼"),
-    "scriptDesc": MessageLookupByLibrary.simpleMessage("配置全局覆寫腳本"),    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("覆寫全域規則"),
-
+    "scriptDesc": MessageLookupByLibrary.simpleMessage("配置全局覆寫腳本"),
+    "scriptRuleTip": MessageLookupByLibrary.simpleMessage("覆寫全域規則"),
     "search": MessageLookupByLibrary.simpleMessage("搜尋"),
     "seconds": MessageLookupByLibrary.simpleMessage("秒"),
     "secretCopied": MessageLookupByLibrary.simpleMessage("密碼已複製到剪貼簿"),

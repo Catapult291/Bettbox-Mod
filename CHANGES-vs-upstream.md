@@ -74,7 +74,28 @@
 
 ---
 
-## 4. 其他
+## 4. 配置「跟随更新」开关与编辑页单配置更新
+
+**文件**：`lib/models/profile.dart`（含生成文件 `lib/models/generated/profile.freezed.dart`、`profile.g.dart`）、
+`lib/views/profiles/edit_profile.dart`、`lib/views/profiles/profiles.dart`、`arb/intl_*.arb`、`lib/l10n/*`
+**测试**：`test/models/profile_follow_update_test.dart`、`test/views/profiles/sync_all_targets_test.dart`
+
+**需求**：配置页右上角的「全部同步」要能排除部分配置；被排除的配置只能在自己的编辑页里手动更新。
+
+**改动**：
+
+- 数据层：`Profile` 新增 `followUpdate`（JSON 键 `follow-update`，默认 **开启**）。默认开启保证老配置升级后
+  仍是原来的「全部同步」行为。
+- UI（编辑页）：`自动更新` 下方新增「跟随更新」开关，与 URL / 自动更新等一起随保存写入。
+- UI（编辑页）：右上角新增更新按钮（仅订阅型配置出现），点击后按当前表单内容更新这一个配置——
+  不受「跟随更新」开关影响，也不必先保存退出。
+- UI（配置页）：右上角「全部同步」改为只更新订阅型且开启「跟随更新」的配置（`getSyncAllTargets`）；
+  「自动更新」（定时/启动补更）与卡片菜单里的单条「同步」不受该开关影响。
+- 多语言：7 个 `arb` 与对应的 `lib/l10n/intl/messages_*.dart`、`lib/l10n/l10n.dart` 新增 `followUpdate`。
+
+---
+
+## 5. 其他
 
 - `analysis_options.yaml`：analyzer 排除 `build/**`、`android/**`、`windows/**`、`macos/**`、`linux/**`，
   避免 `flutter analyze` 被平台侧生成代码与构建产物淹没。

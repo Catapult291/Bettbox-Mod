@@ -145,6 +145,7 @@
   "profileUrlNullValidationDesc": "Please enter a profile URL",
   "profileUrlInvalidValidationDesc": "Please enter a valid URL",
   "autoUpdate": "Auto Update",
+  "followUpdate": "Follow Update",
   "autoUpdateInterval": "Auto update interval (min)",
   "profileAutoUpdateIntervalNullValidationDesc": "Please enter update interval",
   "profileAutoUpdateIntervalInvalidValidationDesc": "Please enter a valid interval",

@@ -33,6 +33,7 @@ class EditProfileViewState extends State<EditProfileView> {
   late TextEditingController urlController;
   late TextEditingController autoUpdateDurationController;
   late bool autoUpdate;
+  late bool followUpdate;
   late TextEditingController ageSecretKeyController;
   FocusNode? urlFocusNode;
   bool _obscureAgeSecretKey = true;
@@ -49,6 +50,7 @@ class EditProfileViewState extends State<EditProfileView> {
     labelController = TextEditingController(text: widget.profile.label);
     urlController = TextEditingController(text: widget.profile.url);
     autoUpdate = widget.isNew ? false : widget.profile.autoUpdate;
+    followUpdate = widget.isNew ? true : widget.profile.followUpdate;
     autoUpdateDurationController = TextEditingController(
       text: widget.profile.autoUpdateDuration.inMinutes.toString(),
     );
@@ -83,19 +85,7 @@ class EditProfileViewState extends State<EditProfileView> {
   Future<void> _handleConfirm() async {
     if (!_formKey.currentState!.validate()) return;
     final appController = globalState.appController;
-    Profile profile = this.profile.copyWith(
-      url: urlController.text,
-      label: labelController.text.trim().isEmpty
-          ? null
-          : labelController.text.trim(),
-      ageSecretKey: ageSecretKeyController.text.trim().isEmpty
-          ? null
-          : ageSecretKeyController.text.trim(),
-      autoUpdate: autoUpdate,
-      autoUpdateDuration: Duration(
-        minutes: int.parse(autoUpdateDurationController.text),
-      ),
-    );
+    Profile profile = _buildProfileFromForm();
     if (widget.isNew) {
       final ref = appController.ref;
       ref.read(loadingProvider.notifier).value = true;
@@ -164,10 +154,53 @@ class EditProfileViewState extends State<EditProfileView> {
     }
   }
 
+  Profile _buildProfileFromForm() {
+    return profile.copyWith(
+      url: urlController.text,
+      label: labelController.text.trim().isEmpty
+          ? null
+          : labelController.text.trim(),
+      ageSecretKey: ageSecretKeyController.text.trim().isEmpty
+          ? null
+          : ageSecretKeyController.text.trim(),
+      autoUpdate: autoUpdate,
+      followUpdate: followUpdate,
+      autoUpdateDuration: Duration(
+        minutes:
+            int.tryParse(autoUpdateDurationController.text) ??
+            profile.autoUpdateDuration.inMinutes,
+      ),
+    );
+  }
+
+  /// 手动更新当前配置：仅更新这一个配置，不受「跟随更新」开关影响。
+  Future<void> updateFromUrl() async {
+    if (!_formKey.currentState!.validate()) return;
+    final appController = globalState.appController;
+    await appController.safeRun(
+      () async {
+        await appController.updateProfile(_buildProfileFromForm());
+        fileInfoNotifier.value = await _getFileInfo(
+          await appPath.getProfilePath(widget.profile.id),
+        );
+      },
+      needLoading: true,
+      title: appLocalizations.tip,
+      silence: false,
+    );
+  }
+
   void _setAutoUpdate(bool value) {
     if (autoUpdate == value) return;
     setState(() {
       autoUpdate = value;
+    });
+  }
+
+  void _setFollowUpdate(bool value) {
+    if (followUpdate == value) return;
+    setState(() {
+      followUpdate = value;
     });
   }
 
@@ -394,6 +427,13 @@ class EditProfileViewState extends State<EditProfileView> {
               },
             ),
           ),
+        ListItem.switchItem(
+          title: Text(appLocalizations.followUpdate),
+          delegate: SwitchDelegate<bool>(
+            value: followUpdate,
+            onChanged: _setFollowUpdate,
+          ),
+        ),
       ],
       if (!widget.isNew)
         ValueListenableBuilder<FileInfo?>(

@@ -145,6 +145,7 @@
   "profileUrlNullValidationDesc": "請輸入設定 URL",
   "profileUrlInvalidValidationDesc": "請輸入有效設定 URL",
   "autoUpdate": "自動更新",
+  "followUpdate": "跟隨更新",
   "autoUpdateInterval": "自動更新間隔（分鐘）",
   "profileAutoUpdateIntervalNullValidationDesc": "請輸入自動更新間隔時間",
   "profileAutoUpdateIntervalInvalidValidationDesc": "請輸入有效間隔時間格式",
