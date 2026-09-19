@@ -105,35 +105,42 @@
 
 ---
 
-## 6. 其他
+## 5. 右侧快捷控制栏（出站模式 / 系统代理 / 虚拟网卡）
 
-- `analysis_options.yaml`：analyzer 排除 `build/**`、`android/**`、`windows/**`、`macos/**`、`linux/**`，
-  避免 `flutter analyze` 被平台侧生成代码与构建产物淹没。
+**文件**：`lib/widgets/quick_controls.dart`（新增）、`lib/manager/app_manager.dart`、`lib/widgets/widgets.dart`
 
----
-
-## 5. 桌面侧栏常驻快捷控制（出站模式 / 系统代理 / 虚拟网卡）
-
-**文件**：`lib/widgets/sidebar_quick_control.dart`（新增）、`lib/manager/app_manager.dart`、`lib/widgets/widgets.dart`
-
-**需求**：不想为了切换「出站模式 / 系统代理 / 虚拟网卡」先回到首页。
+**需求**：不想为了切换「出站模式 / 系统代理 / 虚拟网卡」先回到首页；三项控件放左侧导航栏放不下（窄栏容不下带文字的三项）。
 
 **改动**：
 
-- 新增 `SidebarQuickControl`，挂在桌面侧栏 `AppSidebarContainer` 导航项下方（收起态）：出站模式是 44×44 圆角按钮，
-  背景色随当前模式变化（与首页 `OutboundModeV2` 同一套语义色：规则 `secondaryContainer`、全局
+- 新增 `QuickSidebar`（`app_manager.dart`）与 `QuickControls`（`lib/widgets/quick_controls.dart`）：页面**右侧**常驻一条
+  与左侧导航栏**等宽**的快捷栏，自上而下是出站模式 / 系统代理 / 虚拟网卡，每个控件下方带一行四字小字标签
+  （`labelSmall`；英文标签允许折两行）。出站模式方块下再补一行当前模式名，避免只靠底色记状态。
+- 出站模式是 44×44 圆角方块，
+  底色随当前模式变化（与首页 `OutboundModeV2` 同一套语义色：规则 `secondaryContainer`、全局
   `darken3PrimaryContainer`、直连 `tertiaryContainer`），点击按枚举顺序循环切换；其下是系统代理、虚拟网卡两个同规格
  开关，开启态用 `primary` 20%（浅色）/ 26%（深色）底色 + `primary` 图标，与导航栏选中项同款。
 - 核心未启动（`runTimeProvider == null`）时两个开关禁用并降到 38% 不透明度，与托盘菜单「核心运行时才给这两个开关」
   的口径一致；出站模式始终可切（改的是配置）。
-- 系统代理 / 虚拟网卡仅在桌面显示，与首页 `DashboardWidget` 的 `desktopPlatforms` 限定一致。
+- 系统代理 / 虚拟网卡仅在桌面渲染，与首页 `DashboardWidget` 的 `desktopPlatforms` 限定一致；右侧栏本身在桌面布局
+  （非移动布局）下始终显示，窗口拉窄到手机布局时与左侧栏一起消失。
+- 宽度对齐：`AppSidebarContainer` 改为 `ConsumerStatefulWidget`，用 `GlobalKey` 量出左栏实际宽度（含其 1px 右边框），
+  post-frame 回写后传给 `QuickSidebar(width: 实测 - 1)`——左栏宽度随标签长度（语言）变化，写死会错位。
 - 切换统一走 `appController.updateMode / updateSystemProxy / updateTun`，与托盘菜单、全局快捷键同一入口。
 - 该位置在 `MaterialApp.builder` 内、Navigator 之上，**没有 `Overlay`**，因此不能用 `Tooltip`；无障碍标签改用
   `Semantics`，悬停反馈靠 `Material`/`InkWell` 自带高亮。
 
-**验证**：Android x86_64 模拟器宽屏布局（`wm size 1600x900` + `wm density 160`）实测模式循环三态、与首页「出站模式」双向
-状态同步、按钮落位与尺寸；桌面专属两项经临时验证构建确认排版与禁用态。`flutter analyze lib test` 仅剩基线告警，
-`flutter test` 34/34。详见 `.grok/stage-log.md` 第 5 节（含未验证项：本机无法出 Windows 包）。
+**验证**：Android x86_64 模拟器宽屏布局（`wm size 1600x900` + `wm density 160`）实测：右栏三行（中文四字标签一行排下）、
+任意页面常驻、点模式方块后底色与模式名、首页「出站模式」滑块同步变化；像素级实测左右两栏等宽（中英文下均为 81px）。
+`flutter analyze lib test` 仅剩基线告警，`flutter test` 34/34。详见 `.grok/stage-log.md` 第 5 节（含未验证项：本机无法出
+Windows 包）。
+
+---
+
+## 6. 其他
+
+- `analysis_options.yaml`：analyzer 排除 `build/**`、`android/**`、`windows/**`、`macos/**`、`linux/**`，
+  避免 `flutter analyze` 被平台侧生成代码与构建产物淹没。
 
 ---
 

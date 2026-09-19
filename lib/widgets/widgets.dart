@@ -21,7 +21,7 @@ export 'scaffold.dart';
 export 'setting.dart';
 export 'sheet.dart';
 export 'side_sheet.dart';
-export 'sidebar_quick_control.dart';
+export 'quick_controls.dart';
 export 'subscription_info_view.dart';
 export 'text.dart';
 export 'super_grid.dart';

@@ -7,7 +7,7 @@ import 'package:bett_box/manager/window_manager.dart';
 import 'package:bett_box/plugins/app.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/state.dart';
-import 'package:bett_box/widgets/sidebar_quick_control.dart';
+import 'package:bett_box/widgets/quick_controls.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -237,10 +237,29 @@ class AppEnvManager extends StatelessWidget {
   }
 }
 
-class AppSidebarContainer extends ConsumerWidget {
+class AppSidebarContainer extends ConsumerStatefulWidget {
   final Widget child;
 
   const AppSidebarContainer({super.key, required this.child});
+
+  @override
+  ConsumerState<AppSidebarContainer> createState() =>
+      _AppSidebarContainerState();
+}
+
+class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
+  /// 左侧导航栏的实际宽度（含它的 1px 右边框）。`NavigationRail` 的宽度会随
+  /// 导航项标签长度（不同语言）变化，右侧快捷栏要跟它对齐，所以运行时量一次。
+  final GlobalKey _railKey = GlobalKey();
+  double _railWidth = quickRailWidth;
+
+  void _syncRailWidth() {
+    final width = _railKey.currentContext?.size?.width;
+    if (width == null || !mounted) return;
+    if ((width - _railWidth).abs() > 0.5) {
+      setState(() => _railWidth = width);
+    }
+  }
 
   Widget _buildLoading() {
     return Consumer(
@@ -278,18 +297,20 @@ class AppSidebarContainer extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final navigationState = ref.watch(navigationStateProvider);
     final navigationItems = navigationState.navigationItems;
     final isMobileView = navigationState.viewMode == ViewMode.mobile;
     if (isMobileView) {
-      return child;
+      return widget.child;
     }
     final currentIndex = navigationState.currentIndex;
     final showLabel = ref.watch(appSettingProvider).showLabel;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailWidth());
     return Row(
       children: [
         Stack(
+          key: _railKey,
           alignment: Alignment.topRight,
           children: [
             _buildBackground(
@@ -435,7 +456,6 @@ class AppSidebarContainer extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    const SidebarQuickControl(),
                   ],
                 ),
               ),
@@ -449,11 +469,58 @@ class AppSidebarContainer extends ConsumerWidget {
             child: MediaQuery.removePadding(
               context: context,
               removeLeft: true,
-              child: child,
+              child: widget.child,
             ),
           ),
         ),
+        QuickSidebar(width: _railWidth - 1),
       ],
+    );
+  }
+}
+
+/// 右侧快捷控制栏：宽度与左侧导航栏一致，承载出站模式 / 系统代理 / 虚拟网卡。
+///
+/// 与左侧栏同样只在桌面布局（非移动布局）下渲染，切换动作与托盘菜单、
+/// 全局快捷键共用 `AppController` 的入口。
+class QuickSidebar extends StatelessWidget {
+  /// 内层内容宽度。外层容器还有 1px 左边框，调用方减掉后左右两条栏总宽一致。
+  final double width;
+
+  const QuickSidebar({super.key, required this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = context.colorScheme.brightness == Brightness.light;
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colorScheme.surfaceContainerHigh,
+        border: Border(
+          left: BorderSide(
+            color: context.colorScheme.outlineVariant.withValues(
+              alpha: isLight ? 0.6 : 0.45,
+            ),
+          ),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: SafeArea(
+          left: false,
+          top: true,
+          right: true,
+          bottom: false,
+          child: SizedBox(
+            width: width,
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
+                const QuickControls(showCaption: true),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
