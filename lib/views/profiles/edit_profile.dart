@@ -251,8 +251,8 @@ class EditProfileViewState extends State<EditProfileView> {
     );
   }
 
-  /// 更新成功提示占位：与列表分隔同高，提示本身溢出该槽位、纵向居中于
-  /// 「跟随更新」与「配置」两行之间的留白带，因此出现与消失都不会推动列表。
+  /// 更新提示占位（成功/失败共用）：与列表分隔同高，提示本身溢出该槽位、
+  /// 纵向居中于「跟随更新」与「配置」两行之间的留白带，出现与消失都不推动列表。
   Widget _buildUpdateTipSlot(BuildContext context) {
     return SizedBox(
       height: _listGapHeight,
