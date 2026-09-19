@@ -42,6 +42,7 @@ class EditProfileViewState extends State<EditProfileView> {
   bool _obscureAgeSecretKey = true;
   bool _updateTipVisible = false;
   bool _updateTipSuccess = true;
+  String? _updateTipReason;
   Timer? _updateTipTimer;
   String? rawText;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
@@ -197,7 +198,7 @@ class EditProfileViewState extends State<EditProfileView> {
       }
     } on Object catch (e) {
       commonPrint.log(e.formatErrorLog);
-      _showUpdateTip(success: false);
+      _showUpdateTip(success: false, reason: _updateErrorReason(e));
       return;
     } finally {
       loading.value = false;
@@ -208,11 +209,23 @@ class EditProfileViewState extends State<EditProfileView> {
     }
   }
 
-  void _showUpdateTip({bool success = true}) {
+  /// 失败提示里的简短原因：HTTP 错误只报状态码，其它错误压成一行。
+  String _updateErrorReason(Object e) {
+    final statusCode = RegExp(
+      r'status code of (\d+)',
+    ).firstMatch(e.toString())?.group(1);
+    if (statusCode != null) {
+      return 'HTTP $statusCode';
+    }
+    return e.formatError.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  void _showUpdateTip({bool success = true, String? reason}) {
     if (!mounted) return;
     _updateTipTimer?.cancel();
     setState(() {
       _updateTipSuccess = success;
+      _updateTipReason = success ? null : reason;
       _updateTipVisible = true;
     });
     _updateTipTimer = Timer(const Duration(milliseconds: 1600), () {
@@ -224,29 +237,47 @@ class EditProfileViewState extends State<EditProfileView> {
   }
 
   Widget _buildUpdateTip(BuildContext context, {required bool success}) {
+    final colorScheme = context.colorScheme;
+    final reason = success ? null : _updateTipReason;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: success
-            ? context.colorScheme.primary
-            : context.colorScheme.error,
+        color: success ? colorScheme.primary : colorScheme.error,
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: context.colorScheme.shadow.withValues(alpha: 0.2),
+            color: colorScheme.shadow.withValues(alpha: 0.2),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Text(
-        success ? appLocalizations.updateSuccess : appLocalizations.updateFailed,
-        style: context.textTheme.bodyMedium?.copyWith(
-          color: success
-              ? context.colorScheme.onPrimary
-              : context.colorScheme.onError,
-          height: 1.0,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            success
+                ? appLocalizations.updateSuccess
+                : appLocalizations.updateFailed,
+            style: context.textTheme.bodyMedium?.copyWith(
+              color: success ? colorScheme.onPrimary : colorScheme.onError,
+              height: 1.0,
+            ),
+          ),
+          if (reason != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              reason,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onError.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -256,18 +287,22 @@ class EditProfileViewState extends State<EditProfileView> {
   Widget _buildUpdateTipSlot(BuildContext context) {
     return SizedBox(
       height: _listGapHeight,
-      child: IgnorePointer(
-        child: AnimatedOpacity(
-          opacity: _updateTipVisible ? 1 : 0,
-          duration: const Duration(milliseconds: 200),
-          child: OverflowBox(
-            minWidth: 0,
-            maxWidth: double.infinity,
-            minHeight: 0,
-            maxHeight: double.infinity,
-            child: _buildUpdateTip(context, success: _updateTipSuccess),
-          ),
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: _updateTipVisible ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: OverflowBox(
+                minWidth: 0,
+                maxWidth: constraints.maxWidth * 0.86,
+                minHeight: 0,
+                maxHeight: double.infinity,
+                child: _buildUpdateTip(context, success: _updateTipSuccess),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

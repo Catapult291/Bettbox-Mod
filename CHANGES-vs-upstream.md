@@ -94,7 +94,8 @@
   水平居中于该留白带，底色取主题色彩（成功 `primary`/`onPrimary`，失败 `error`/`onError`），随「主题色彩」
   设置与明暗模式变化。
 - UI（编辑页）：更新失败不再走全局错误弹框（原来是标题为「提示」、正文为「配置导入失败…」的对话框），
-  只弹上述 `updateFailed` 提示；原始错误仍写进应用日志（`commonPrint.log` → 日志页），便于排查。
+  只弹上述 `updateFailed` 提示；提示第二行附一句简短原因（HTTP 错误只报状态码，如 `HTTP 404`；其它错误取
+  原始错误文本，压成一行、最多两行超出省略），原始错误仍写进应用日志（`commonPrint.log` → 日志页）。
 - `AppController.updateProfile` 改为返回 `bool`（同一配置已有更新在途时返回 false），使上面的成功提示
   只在真正完成更新时出现。
 - UI（配置页）：右上角「全部同步」改为只更新订阅型且开启「跟随更新」的配置（`getSyncAllTargets`）；
