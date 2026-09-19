@@ -30,6 +30,8 @@ class EditProfileView extends StatefulWidget {
 }
 
 class EditProfileViewState extends State<EditProfileView> {
+  static const double _listGapHeight = 24;
+
   late TextEditingController labelController;
   late TextEditingController urlController;
   late TextEditingController autoUpdateDurationController;
@@ -216,14 +218,42 @@ class EditProfileViewState extends State<EditProfileView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: context.colorScheme.inverseSurface,
+        color: context.colorScheme.primary,
         borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: context.colorScheme.shadow.withValues(alpha: 0.2),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Text(
         appLocalizations.updateSuccess,
         style: context.textTheme.bodyMedium?.copyWith(
-          color: context.colorScheme.onInverseSurface,
+          color: context.colorScheme.onPrimary,
           height: 1.0,
+        ),
+      ),
+    );
+  }
+
+  /// 更新成功提示占位：与列表分隔同高，提示本身溢出该槽位、纵向居中于
+  /// 「跟随更新」与「配置」两行之间的留白带，因此出现与消失都不会推动列表。
+  Widget _buildUpdateTipSlot(BuildContext context) {
+    return SizedBox(
+      height: _listGapHeight,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: _updateTipVisible ? 1 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: OverflowBox(
+            minWidth: 0,
+            maxWidth: double.infinity,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: _buildUpdateTip(context),
+          ),
         ),
       ),
     );
@@ -512,6 +542,20 @@ class EditProfileViewState extends State<EditProfileView> {
           },
         ),
     ];
+    // 更新成功提示放在「跟随更新」与「配置」之间（仅这两行相邻时存在该槽位）。
+    final tipGapIndex = widget.isNew ? -1 : items.length - 2;
+    final children = <Widget>[];
+    for (var i = 0; i < items.length; i++) {
+      children.add(items[i]);
+      if (i == items.length - 1) {
+        break;
+      }
+      children.add(
+        i == tipGapIndex
+            ? _buildUpdateTipSlot(context)
+            : const SizedBox(height: _listGapHeight),
+      );
+    }
     return CommonPopScope(
       onPop: () {
         if (dismissTvInputFocus()) {
@@ -532,37 +576,18 @@ class EditProfileViewState extends State<EditProfileView> {
             icon: const Icon(Icons.save),
           ),
         ),
-        child: Stack(
-          children: [
-            Form(
-              key: _formKey,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: ListView.separated(
-                  padding: kMaterialListPadding.copyWith(bottom: 72),
-                  itemBuilder: (_, index) {
-                    return items[index];
-                  },
-                  separatorBuilder: (_, _) {
-                    return const SizedBox(height: 24);
-                  },
-                  itemCount: items.length,
-                ),
-              ),
+        child: Form(
+          key: _formKey,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: ListView.builder(
+              padding: kMaterialListPadding.copyWith(bottom: 72),
+              itemBuilder: (_, index) {
+                return children[index];
+              },
+              itemCount: children.length,
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 24,
-              child: IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: _updateTipVisible ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Center(child: _buildUpdateTip(context)),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
