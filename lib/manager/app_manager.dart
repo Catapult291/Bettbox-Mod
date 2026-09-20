@@ -257,7 +257,7 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
 
   double _railWidth = quickRailWidth;
 
-  /// 右栏内容距右栏顶部的距离：首个控件（出站模式）与左栏「首页」的图标同高。
+  /// 右栏内容距右栏顶部的距离：首个控件（总开关）与左栏「首页」的图标同高。
   /// 左栏的图标受平台（macOS 多 22px 的窗口按钮带）与标签长度影响，量不到时
   /// 先用与页面标题栏齐平的老位置兜底。
   double _quickControlsTop = kToolbarHeight / 2 - quickControlSize / 2;
@@ -340,14 +340,19 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
     }
     final currentIndex = navigationState.currentIndex;
     final showLabel = ref.watch(appSettingProvider).showLabel;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailMetrics());
+    // 右侧快捷栏是桌面专属：平板尺寸的 Android 设备也会走到这里（非移动布局），
+    // 不按平台过滤的话移动端会多出一条栏。
+    final showQuickRail = system.isDesktop;
+    if (showQuickRail) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _syncRailMetrics());
+    }
     final content = Expanded(
       child: Stack(
         children: [
           // 页面内容：右侧让出快捷栏的宽度，页面自身的布局与只有内容区时完全一致。
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.only(right: _railWidth),
+              padding: EdgeInsets.only(right: showQuickRail ? _railWidth : 0),
               child: ClipRect(
                 child: MediaQuery.removePadding(
                   context: context,
@@ -357,15 +362,16 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
               ),
             ),
           ),
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: QuickSidebar(
-              width: _railWidth - 1,
-              topOffset: _quickControlsTop,
+          if (showQuickRail)
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              child: QuickSidebar(
+                width: _railWidth - 1,
+                topOffset: _quickControlsTop,
+              ),
             ),
-          ),
           // 顶栏（色带 + 窗口按钮）横跨「页面内容 + 右侧快捷栏」，色带因此一直延伸到窗口右边缘，
           // 窗口按钮也落在该色带的右端。这一层在快捷栏之上，遮住它顶部的一条色带。
           Positioned(
@@ -545,10 +551,11 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
   }
 }
 
-/// 右侧快捷控制栏：宽度与左侧导航栏一致，承载出站模式 / 系统代理 / 虚拟网卡。
+/// 右侧快捷控制栏：宽度与左侧导航栏一致，承载总开关 / 系统代理 / 虚拟网卡 / 出站模式。
 ///
-/// 与左侧栏同样只在桌面布局（非移动布局）下渲染，切换动作与托盘菜单、
-/// 全局快捷键共用 `AppController` 的入口。
+/// 只在桌面平台（Windows / macOS / Linux）的桌面布局（非移动布局）下渲染——
+/// 平板尺寸的 Android 设备同样是非移动布局，但那里不该出现这条栏。
+/// 切换动作与托盘菜单、全局快捷键共用 `AppController` 的入口。
 class QuickSidebar extends StatelessWidget {
   /// 内层内容宽度。外层容器还有 1px 左边框，调用方减掉后左右两条栏总宽一致。
   final double width;
@@ -581,13 +588,17 @@ class QuickSidebar extends StatelessWidget {
           bottom: false,
           child: SizedBox(
             width: width,
-            child: Column(
-              children: [
-                // 首个控件与左栏首个导航项（首页）的图标同高：上边距由左栏实测得到，
-                // 左栏图标的位置随平台（macOS 的窗口按钮带）与标签长度变化，写死会错位。
-                SizedBox(height: topOffset),
-                const QuickControls(showCaption: true),
-              ],
+            // 四个控件加标签在最小窗口高度（400 逻辑px）下已接近贴底（英文标签折行时更高），
+            // 宁可滚动也不要溢出。内容不超高时滚动视图与原来的 Column 无差别。
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  // 首个控件与左栏首个导航项（首页）的图标同高：上边距由左栏实测得到，
+                  // 左栏图标的位置随平台（macOS 的窗口按钮带）与标签长度变化，写死会错位。
+                  SizedBox(height: topOffset),
+                  const QuickControls(showCaption: true),
+                ],
+              ),
             ),
           ),
         ),
