@@ -17,36 +17,42 @@ class AddProfileView extends StatelessWidget {
     globalState.appController.addProfileFormFile();
   }
 
-  Future<void> _handleAddProfileFormURL(String url, {String? ageSecretKey}) async {
+  Future<void> _handleAddProfileFormURL(
+    String url, {
+    String? ageSecretKey,
+    BuildContext? replaceContext,
+  }) async {
     final editKey = GlobalKey<EditProfileViewState>();
     final profile = Profile.normal(
       url: url,
       ageSecretKey: ageSecretKey,
     );
-    showExtend(
-      context,
-      builder: (_, type) {
-        return AdaptiveSheetScaffold(
-          type: type,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.security),
-              tooltip: appLocalizations.ageKeyGenerateTitle,
-              onPressed: () {
-                editKey.currentState?.showAgeKeyGenerator();
-              },
-            ),
-          ],
-          body: EditProfileView(
-            key: editKey,
-            profile: profile,
-            context: context,
-            isNew: true,
+    Widget builder(BuildContext builderContext, SheetType type) {
+      return AdaptiveSheetScaffold(
+        type: type,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.security),
+            tooltip: appLocalizations.ageKeyGenerateTitle,
+            onPressed: () {
+              editKey.currentState?.showAgeKeyGenerator();
+            },
           ),
-          title: appLocalizations.importFromURL,
-        );
-      },
-    );
+        ],
+        body: EditProfileView(
+          key: editKey,
+          profile: profile,
+          context: context,
+          isNew: true,
+        ),
+        title: appLocalizations.importFromURL,
+      );
+    }
+    if (replaceContext != null) {
+      showExtend(replaceContext, builder: builder, replace: true);
+    } else {
+      showExtend(context, builder: builder);
+    }
   }
 
   Future<void> _handleAddProfileFromClipboard() async {
@@ -85,12 +91,18 @@ class AddProfileView extends StatelessWidget {
       globalState.appController.addProfileFormQrCode();
       return;
     }
-    final url = await BaseNavigator.push(context, const ScanPage());
-    if (url != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handleAddProfileFormURL(url);
-      });
+    await BaseNavigator.push(context, ScanPage(onRecognized: _toImportAfterScan));
+  }
+
+  /// 扫码识别成功：直接换成「从 URL 导入」页，不先退回本页。
+  /// 横屏 / 宽窗口下导入页是侧边 sheet（没有可替换的整页），这时先关掉扫码页。
+  void _toImportAfterScan(BuildContext scanContext, String url) {
+    if (globalState.appState.viewMode == ViewMode.mobile) {
+      _handleAddProfileFormURL(url, replaceContext: scanContext);
+      return;
     }
+    Navigator.of(scanContext).pop();
+    _handleAddProfileFormURL(url);
   }
 
   Future<void> _toAdd() async {

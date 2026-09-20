@@ -81,10 +81,13 @@ Future<T?> showExtend<T>(
   BuildContext context, {
   required SheetBuilder builder,
   ExtendProps props = const ExtendProps(),
+  bool replace = false,
 }) {
   final isMobile = globalState.appState.viewMode == ViewMode.mobile;
   return switch (isMobile || props.forceFull) {
-    true => BaseNavigator.push(context, builder(context, SheetType.page)),
+    true => replace
+        ? BaseNavigator.replaceWith<T>(context, builder(context, SheetType.page))
+        : BaseNavigator.push<T>(context, builder(context, SheetType.page)),
     false => showModalSideSheet<T>(
       useSafeArea: props.useSafeArea,
       context: context,

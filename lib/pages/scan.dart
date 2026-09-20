@@ -9,7 +9,11 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class ScanPage extends StatefulWidget {
-  const ScanPage({super.key});
+  /// 识别成功后的去处，由调用方决定（如用导入页替换本页）。
+  /// 不传则带上 URL 退出本页、回到上一页。
+  final void Function(BuildContext context, String url)? onRecognized;
+
+  const ScanPage({super.key, this.onRecognized});
 
   @override
   State<ScanPage> createState() => _ScanPageState();
@@ -23,8 +27,13 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   );
 
   StreamSubscription<Object?>? _subscription;
+  bool _handled = false;
+  bool _success = false;
   bool _permissionDenied = false;
   bool _permissionChecking = false;
+
+  /// 识别成功后的停顿：让「已识别」有个可见的落点，再退出扫码页。
+  static const Duration _successHold = Duration(milliseconds: 500);
 
   @override
   void initState() {
@@ -38,12 +47,32 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
   }
 
   void _handleBarcode(BarcodeCapture barcodeCapture) {
-    final barcode = barcodeCapture.barcodes.first;
-    if (barcode.type == BarcodeType.url) {
-      Navigator.pop<String>(context, barcode.rawValue);
-    } else {
+    if (_handled || barcodeCapture.barcodes.isEmpty) return;
+    final rawValue = barcodeCapture.barcodes.first.rawValue?.trim();
+    if (rawValue == null || rawValue.isEmpty) return;
+    _handled = true;
+    // 部分平台（如 Apple Vision）不会把二维码内容标成 url 类型，按内容判断更可靠
+    if (!rawValue.toLowerCase().isUrl) {
       Navigator.pop(context);
+      return;
     }
+    unawaited(_finishWithUrl(rawValue));
+  }
+
+  Future<void> _finishWithUrl(String url) async {
+    setState(() {
+      _success = true;
+    });
+    await Future.delayed(_successHold);
+    if (!mounted) return;
+    final onRecognized = widget.onRecognized;
+    if (onRecognized != null) {
+      onRecognized(context, url);
+      return;
+    }
+    // 这段停顿里用户可能已经自己关掉了扫码页，别再多退一层
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    Navigator.pop<String>(context, url);
   }
 
   @override
@@ -142,6 +171,7 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
           ),
           if (!_permissionDenied)
             CustomPaint(painter: ScannerOverlay(scanWindow: scanWindow)),
+          if (_success) _buildSuccessView(sideLength),
           AppBar(
             backgroundColor: Colors.transparent,
             automaticallyImplyLeading: false,
@@ -216,6 +246,36 @@ class _ScanPageState extends State<ScanPage> with WidgetsBindingObserver {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  /// 识别成功的提示：在扫码框范围内弹出一个对勾
+  Widget _buildSuccessView(double sideLength) {
+    return IgnorePointer(
+      child: Center(
+        child: SizedBox(
+          width: sideLength,
+          height: sideLength,
+          child: Center(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.7, end: 1),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutBack,
+              builder: (context, value, child) =>
+                  Transform.scale(scale: value, child: child),
+              child: Container(
+                width: 88,
+                height: 88,
+                decoration: const BoxDecoration(
+                  color: Color(0xE64CAF50),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, size: 52, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
