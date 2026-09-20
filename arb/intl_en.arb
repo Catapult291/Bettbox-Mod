@@ -522,7 +522,7 @@
   "pleaseInputAdminPassword": "Please enter the admin password",
   "copyEnvVar": "Copy Environment Variable",
   "memoryInfo": "Memory",
-  "memoryInfoDesc": "The current memory information value displayed is the dynamic stack memory usage of the core during runtime, not the complete APP memory statistics, for reference only.",
+  "memoryInfoDesc": "App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.",
   "cancel": "Cancel",
   "fileIsUpdate": "File modified. Save changes?",
   "profileHasUpdate": "Profile modified. Disable auto-update?",

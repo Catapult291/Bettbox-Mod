@@ -31,6 +31,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 桌面端二维码导入 | Windows / Linux 上用纯 Dart（`zxing2` + `image`）解码二维码图片，修复上游在桌面端选图必失败（`MissingPluginException`）的问题；Android / iOS / macOS 仍优先走原生识别（`lib/common/qr_reader.dart`、`lib/common/picker.dart`） |
 | 扫码成功后的转场 | 识别成功后先显示对勾停留 500ms，再用 `pushReplacement` 直接换成「从 URL 导入」页，不再闪回「添加配置」页（`lib/pages/scan.dart`、`lib/common/navigator.dart`） |
 | 开发体验 | `analysis_options.yaml` 排除构建产物与平台目录，`flutter analyze` 只报应用代码问题 |
+| 内存占用调整 | 首页「内存信息」同时显示「应用内存」（本应用 RSS）与「内核内存」；provider 的全节点列表不再进常驻单例，只在构组时随 isolate 瞬时使用；连接页快照在窗口隐藏/后台时释放；脚本引擎补上 30s / 256MB 执行上下界（`lib/clash/core.dart`、`lib/views/dashboard/widgets/memory_info.dart` 等） |
 
 > 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），
 > 本仓库直接采用上游实现，不再单列。

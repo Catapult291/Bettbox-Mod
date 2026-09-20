@@ -219,6 +219,14 @@ abstract class ExternalProvider with _$ExternalProvider {
       _$ExternalProviderFromJson(json);
 }
 
+extension ExternalProviderExt on ExternalProvider {
+  /// 只保留元数据的副本。`proxies` 是该 provider 的全节点原始字段列表
+  /// （每个节点十余个字段），是数据层里最大的一块；它只在构建分组时瞬时需要，
+  /// 不应该随 provider 列表进常驻状态。
+  ExternalProvider get withoutProxies =>
+      proxies == null ? this : copyWith(proxies: null);
+}
+
 @freezed
 abstract class Action with _$Action {
   const factory Action({

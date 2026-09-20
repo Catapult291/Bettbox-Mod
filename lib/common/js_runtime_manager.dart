@@ -39,6 +39,11 @@ class _ScriptOptionsCache {
 }
 
 class JavaScriptRuntimeManager {
+  /// 脚本执行的上界。正常配置脚本远达不到这两个值，它们只用来挡住
+  /// 失控脚本（死循环 / 无限增长）把整个进程的内存和 CPU 拖爆。
+  static const int scriptTimeoutMs = 30000;
+  static const int scriptMemoryLimitBytes = 256 * 1024 * 1024;
+
   static Future<Map<String, dynamic>> evaluateScript(
     String scriptContent,
     Map<String, dynamic> config, {
@@ -68,7 +73,10 @@ class JavaScriptRuntimeManager {
       final recached = _ScriptOptionsCache.get(scriptContent);
       if (recached != null) return recached;
 
-      final engine = IsolateQjs();
+      final engine = IsolateQjs(
+        timeout: scriptTimeoutMs,
+        memoryLimit: scriptMemoryLimitBytes,
+      );
       try {
         final res = await engine.evaluate('''
           var console = {
@@ -136,7 +144,10 @@ class JavaScriptRuntimeManager {
   }) async {
     var attempt = 0;
     while (true) {
-      final engine = IsolateQjs();
+      final engine = IsolateQjs(
+        timeout: scriptTimeoutMs,
+        memoryLimit: scriptMemoryLimitBytes,
+      );
       try {
         final configJs = json.encode(config);
         final customJs = customOptions != null && customOptions.isNotEmpty

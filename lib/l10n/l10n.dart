@@ -4309,10 +4309,10 @@ class AppLocalizations {
     return Intl.message('Memory', name: 'memoryInfo', desc: '', args: []);
   }
 
-  /// `The current memory information value displayed is the dynamic stack memory usage of the core during runtime, not the complete APP memory statistics, for reference only.`
+  /// `App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.`
   String get memoryInfoDesc {
     return Intl.message(
-      'The current memory information value displayed is the dynamic stack memory usage of the core during runtime, not the complete APP memory statistics, for reference only.',
+      'App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.',
       name: 'memoryInfoDesc',
       desc: '',
       args: [],

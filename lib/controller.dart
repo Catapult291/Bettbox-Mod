@@ -654,9 +654,13 @@ class AppController {
     unawaited(clashCore.requestGc());
     final configured = await _setupCoreConfig();
     if (!configured) return;
-    final providers = await clashCore.getExternalProviders();
-    _ref.read(providersProvider.notifier).value = providers;
-    await updateGroups(preloadedProviders: providers);
+    // provider 的全节点列表只在构组时用：取一次原文，元数据进常驻状态，
+    // 原文直接转交构组，构完即释放。
+    final providersRawContent = await clashCore.getExternalProvidersRawContent();
+    _ref
+        .read(providersProvider.notifier)
+        .value = await clashCore.parseExternalProvidersMeta(providersRawContent);
+    await updateGroups(preloadedProvidersRawContent: providersRawContent);
   }
 
   Future<void> applyProfile({bool silence = false}) {
@@ -786,9 +790,9 @@ class AppController {
     }
   }
 
-  Future<void> updateGroups({List<ExternalProvider>? preloadedProviders}) {
+  Future<void> updateGroups({String? preloadedProvidersRawContent}) {
     return _coreLifecycleLock.synchronized(
-      () => _updateGroups(preloadedProviders: preloadedProviders),
+      () => _updateGroups(preloadedProvidersRawContent: preloadedProvidersRawContent),
     );
   }
 
@@ -800,14 +804,14 @@ class AppController {
   ];
 
   Future<List<Group>> _retryGetProxiesGroups(
-    List<ExternalProvider>? preloadedProviders,
+    String? preloadedProvidersRawContent,
   ) async {
     for (var attempt = 0; attempt < _kGroupRetryDelays.length; attempt++) {
       if (attempt > 0) {
         await Future.delayed(_kGroupRetryDelays[attempt]);
       }
       final groups = await clashCore.getProxiesGroups(
-        preloadedProviders: preloadedProviders,
+        providersRawContent: preloadedProvidersRawContent,
       );
       if (groups.isNotEmpty) return groups;
     }
@@ -844,7 +848,7 @@ class AppController {
   }
 
   Future<void> _updateGroups({
-    List<ExternalProvider>? preloadedProviders,
+    String? preloadedProvidersRawContent,
   }) async {
     if (_isUpdatingGroups) {
       commonPrint.log('updateGroups already in progress, skipping');
@@ -856,7 +860,9 @@ class AppController {
     try {
       final currentGroups = _ref.read(groupsProvider);
 
-      final newGroups = await _retryGetProxiesGroups(preloadedProviders);
+      final newGroups = await _retryGetProxiesGroups(
+        preloadedProvidersRawContent,
+      );
 
       if (newGroups.isEmpty) {
         _handleUpdateGroupsError(

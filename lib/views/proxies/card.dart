@@ -34,13 +34,20 @@ final proxyIconProvider = Provider.family<String, String>((ref, proxyName) {
 
 class ProxyCard extends StatelessWidget {
   static final _emojiRegex = emojiRegex();
+  // 节点名字带表情与否是纯展示判断，缓存只为了省正则开销；
+  // 大订阅下节点名数量可达数千，故设上界并在超出时整体丢弃。
+  static const _emojiMatchCacheMaxEntries = 512;
   static final Map<String, bool> _emojiMatchCache = {};
 
   static bool _hasEmoji(String name) {
-    return _emojiMatchCache.putIfAbsent(
-      name,
-      () => _emojiRegex.hasMatch(name),
-    );
+    final cached = _emojiMatchCache[name];
+    if (cached != null) return cached;
+    final result = _emojiRegex.hasMatch(name);
+    if (_emojiMatchCache.length >= _emojiMatchCacheMaxEntries) {
+      _emojiMatchCache.clear();
+    }
+    _emojiMatchCache[name] = result;
+    return result;
   }
 
   final String groupName;

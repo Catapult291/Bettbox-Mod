@@ -93,6 +93,7 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
     if (!shouldRun) {
       _timer?.cancel();
       _timer = null;
+      await _releaseSnapshotIfUnseen();
       return;
     }
     if (_timer != null) {
@@ -106,6 +107,19 @@ class _ConnectionsViewState extends ConsumerState<ConnectionsView>
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       unawaited(_updateConnections());
     });
+  }
+
+  /// 窗口隐藏或处于后台模式时连接表不会被看到，此时释放快照。
+  /// 快照随连接数增长（大流量场景可达数千条），留着只是白占内存；
+  /// 窗口恢复时页面本来就会重新拉取。
+  Future<void> _releaseSnapshotIfUnseen() async {
+    if (!mounted) return;
+    final unseen =
+        globalState.backgroundMode.value ||
+        (system.isDesktop && await window?.isVisible == false);
+    if (!unseen || !mounted) return;
+    if (ref.read(connectionsProvider).isEmpty) return;
+    ref.read(connectionsProvider.notifier).state = [];
   }
 
   Future<void> _updateConnections() async {

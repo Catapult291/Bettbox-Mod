@@ -660,7 +660,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("بزرگ کردن"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("اطلاعات حافظه"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "مقادیر حافظه نشان داده شده صرفاً مربوط به حافظه دینامیک هسته بوده و تمام حافظه برنامه نیست (جهت اطلاع).",
+      "«برنامه» حافظه‌ای است که خود این برنامه مصرف می‌کند (RSS، شامل موتور Flutter، رابط کاربری و حافظه نهان داده‌ها). «هسته» حافظه پویای فرآیند هسته پروکسی در زمان اجراست. هیچ‌کدام آمار کامل حافظه نیستند و فقط جنبه اطلاعی دارند.",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("تست پیام"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage(

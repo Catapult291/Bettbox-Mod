@@ -522,7 +522,7 @@
   "pleaseInputAdminPassword": "관리자 비밀번호를 입력하세요",
   "copyEnvVar": "환경 변수 복사",
   "memoryInfo": "메모리 정보",
-  "memoryInfoDesc": "표시되는 메모리 값은 코어 동적 힙 점유량이며, 전체 앱 메모리 통계가 아닙니다 (참고용).",
+  "memoryInfoDesc": "「앱」은 이 앱 자체가 사용하는 메모리(RSS, Flutter 엔진·UI·메모리 내 데이터 캐시 포함)이고, 「코어」는 프록시 코어 프로세스의 실행 시 힙 사용량입니다. 둘 다 완전한 메모리 통계가 아니며 참고용입니다.",
   "cancel": "취소",
   "fileIsUpdate": "파일이 수정되었습니다. 저장하시겠습니까?",
   "profileHasUpdate": "프로필이 수정되었습니다. 자동 업데이트를 끄시겠습니까?",

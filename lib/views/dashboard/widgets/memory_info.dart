@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bett_box/clash/clash.dart';
 import 'package:bett_box/common/common.dart';
@@ -19,6 +20,11 @@ class _MemoryInfoState extends State<MemoryInfo> {
   // Cache last memory value to avoid showing 0 on rebuild
   static TrafficValue _lastMemoryValue = TrafficValue(value: 0);
   TrafficValue _memoryValue = _lastMemoryValue;
+
+  /// 本应用自身的内存（RSS）。内核内存由 [clashCore.getMemory] 单列，
+  /// 两者含义不同故分开显示。
+  static TrafficValue _lastAppMemoryValue = TrafficValue(value: 0);
+  TrafficValue _appMemoryValue = _lastAppMemoryValue;
   Timer? _initTimer;
   bool _isUpdating = false;
 
@@ -60,6 +66,7 @@ class _MemoryInfoState extends State<MemoryInfo> {
 
     try {
       final memoryValue = await clashCore.getMemory();
+      final appMemoryValue = ProcessInfo.currentRss;
       // Update only if valid (non-zero)
       if (memoryValue > 0) {
         final adjustedValue = memoryValue;
@@ -68,6 +75,10 @@ class _MemoryInfoState extends State<MemoryInfo> {
           setState(() {
             _memoryValue = TrafficValue(value: adjustedValue);
             _lastMemoryValue = _memoryValue; // Cache latest valid value
+            if (appMemoryValue > 0) {
+              _appMemoryValue = TrafficValue(value: appMemoryValue);
+              _lastAppMemoryValue = _appMemoryValue;
+            }
           });
         }
       }
@@ -182,23 +193,30 @@ class _MemoryInfoState extends State<MemoryInfo> {
                 children: [
                   SizedBox(
                     height: globalState.measure.bodyMediumHeight + 2,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.start,
-                      children: [
-                        Text(
-                          _memoryValue.showValue,
-                          style: context.textTheme.bodyMedium?.toLight.adjustSize(
-                            1,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${appLocalizations.app} ${_appMemoryValue.shortShow}',
+                            style: context.textTheme.bodyMedium
+                                ?.toLight
+                                .adjustSize(1),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _memoryValue.showUnit,
-                          style: context.textTheme.bodyMedium?.toLight.adjustSize(
-                            1,
+                          const SizedBox(width: 6),
+                          Text(
+                            '·',
+                            style: context.textTheme.labelMedium?.toLight,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Text(
+                            '${appLocalizations.core} ${_memoryValue.shortShow}',
+                            style: context.textTheme.labelMedium?.toLight,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

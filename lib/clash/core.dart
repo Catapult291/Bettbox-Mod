@@ -91,61 +91,82 @@ class ClashCore {
     return await clashInterface.setupConfig(setupParams);
   }
 
-  Future<List<Group>> getProxiesGroups({
-    List<ExternalProvider>? preloadedProviders,
-  }) async {
+  /// [providersRawContent] 是 provider 列表的原始 JSON 原文（见
+  /// [getExternalProvidersRawContent]）。传进来只为了避免同一份数据取两次。
+  ///
+  /// provider 的全节点列表体积最大，这里把它当作构组的临时输入：原文送进
+  /// isolate 内解码，主 isolate 不物化它，isolate 结束即随之释放，
+  /// 不会被任何常驻状态持有。
+  Future<List<Group>> getProxiesGroups({String? providersRawContent}) async {
     final proxies = await clashInterface.getProxies();
     if (proxies.isEmpty) return [];
 
-    final providers = preloadedProviders ?? await getExternalProviders();
+    final rawContent =
+        providersRawContent ?? await getExternalProvidersRawContent();
 
-    return Isolate.run<List<Group>>(() {
-      final allProxies = Map<String, dynamic>.from(proxies);
-      for (final provider in providers) {
-        if (provider.proxies != null) {
-          for (final proxy in provider.proxies!) {
-            if (proxy is Map) {
-              final proxyMap = Map<String, dynamic>.from(proxy);
-              final name = proxyMap['name'];
-              if (name != null) {
-                allProxies[name] = proxyMap;
-                final suffix = '[${provider.name}]';
-                if (!name.endsWith(suffix)) {
-                  allProxies['$name$suffix'] = proxyMap;
-                }
+    return Isolate.run<List<Group>>(
+      () => buildProxiesGroups(proxies, rawContent),
+    );
+  }
+
+  /// 由内核代理表 + provider 原文构建分组（含把 provider 节点并入代理表）。
+  ///
+  /// 单独抽出来是为了能直接测：provider 节点合并是这条链路上最容易出错的
+  /// 一步（漏并会让分组里少节点），而它原先埋在 `Isolate.run` 的闭包里。
+  static List<Group> buildProxiesGroups(
+    Map proxies,
+    String rawProvidersContent,
+  ) {
+    final providers = rawProvidersContent.isEmpty
+        ? const <ExternalProvider>[]
+        : (json.decode(rawProvidersContent) as List<dynamic>)
+              .map((item) => ExternalProvider.fromJson(item))
+              .toList();
+    final allProxies = Map<String, dynamic>.from(proxies);
+    for (final provider in providers) {
+      if (provider.proxies != null) {
+        for (final proxy in provider.proxies!) {
+          if (proxy is Map) {
+            final proxyMap = Map<String, dynamic>.from(proxy);
+            final name = proxyMap['name'];
+            if (name != null) {
+              allProxies[name] = proxyMap;
+              final suffix = '[${provider.name}]';
+              if (!name.endsWith(suffix)) {
+                allProxies['$name$suffix'] = proxyMap;
               }
             }
           }
         }
       }
+    }
 
-      final globalProxy = allProxies[UsedProxy.GLOBAL.name];
-      if (globalProxy == null) return [];
+    final globalProxy = allProxies[UsedProxy.GLOBAL.name];
+    if (globalProxy == null) return [];
 
-      final allList = globalProxy['all'] as List?;
-      if (allList == null) return [];
+    final allList = globalProxy['all'] as List?;
+    if (allList == null) return [];
 
-      final groupNames = [
-        UsedProxy.GLOBAL.name,
-        ...allList.where((e) {
-          final proxy = allProxies[e] as Map<String, dynamic>?;
-          return GroupTypeExtension.valueList.contains(proxy?['type']);
-        }),
-      ];
-      final groupsRaw = groupNames.map((groupName) {
-        final proxyData = allProxies[groupName] as Map?;
-        if (proxyData == null) return null;
-        final group = Map<String, dynamic>.from(
-          proxyData.cast<String, dynamic>(),
-        );
-        group['all'] = ((group['all'] ?? []) as List)
-            .map((name) => allProxies[name])
-            .whereType<Map<String, dynamic>>()
-            .toList();
-        return group;
-      }).whereType<Map<String, dynamic>>().toList();
-      return groupsRaw.map((e) => Group.fromJson(e)).toList();
-    });
+    final groupNames = [
+      UsedProxy.GLOBAL.name,
+      ...allList.where((e) {
+        final proxy = allProxies[e] as Map<String, dynamic>?;
+        return GroupTypeExtension.valueList.contains(proxy?['type']);
+      }),
+    ];
+    final groupsRaw = groupNames.map((groupName) {
+      final proxyData = allProxies[groupName] as Map?;
+      if (proxyData == null) return null;
+      final group = Map<String, dynamic>.from(
+        proxyData.cast<String, dynamic>(),
+      );
+      group['all'] = ((group['all'] ?? []) as List)
+          .map((name) => allProxies[name])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      return group;
+    }).whereType<Map<String, dynamic>>().toList();
+    return groupsRaw.map((e) => Group.fromJson(e)).toList();
   }
 
   FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) async {
@@ -187,24 +208,40 @@ class ClashCore {
     clashInterface.resetConnections();
   }
 
+  /// provider 列表的原始 JSON 原文。取原文是为了让调用方既能拿到元数据，
+  /// 又能把同一份原文转交给 [getProxiesGroups] 构组，避免取两次。
+  Future<String> getExternalProvidersRawContent() async {
+    return await clashInterface.getExternalProviders();
+  }
+
+  /// 只回传 provider 的元数据（名字/类型/条目数/订阅信息/更新时间），
+  /// 不含全节点列表 —— 后者只在 [getProxiesGroups] 里瞬时使用。
   Future<List<ExternalProvider>> getExternalProviders() async {
-    final externalProvidersRawString = await clashInterface
-        .getExternalProviders();
-    if (externalProvidersRawString.isEmpty) {
-      return [];
-    }
+    final rawContent = await getExternalProvidersRawContent();
+    return parseExternalProvidersMeta(rawContent);
+  }
+
+  Future<List<ExternalProvider>> parseExternalProvidersMeta(
+    String rawContent,
+  ) async {
+    if (rawContent.isEmpty) return [];
     try {
-      return Isolate.run<List<ExternalProvider>>(() {
-        final externalProviders =
-            (json.decode(externalProvidersRawString) as List<dynamic>)
-                .map((item) => ExternalProvider.fromJson(item))
-                .toList();
-        return externalProviders;
-      });
+      return await Isolate.run<List<ExternalProvider>>(
+        () => parseExternalProvidersMetaSync(rawContent),
+      );
     } catch (e) {
       commonPrint.log('Failed to parse external providers: $e');
       return [];
     }
+  }
+
+  /// [parseExternalProvidersMeta] 的同步实现，单独暴露以便直接测试。
+  static List<ExternalProvider> parseExternalProvidersMetaSync(
+    String rawContent,
+  ) {
+    return (json.decode(rawContent) as List<dynamic>)
+        .map((item) => ExternalProvider.fromJson(item).withoutProxies)
+        .toList();
   }
 
   Future<ExternalProvider?> getExternalProvider(
@@ -217,7 +254,9 @@ class ClashCore {
       return null;
     }
     try {
-      return ExternalProvider.fromJson(json.decode(externalProvidersRawString));
+      return ExternalProvider.fromJson(
+        json.decode(externalProvidersRawString),
+      ).withoutProxies;
     } catch (e) {
       commonPrint.log('Failed to parse external provider: $e');
       return null;

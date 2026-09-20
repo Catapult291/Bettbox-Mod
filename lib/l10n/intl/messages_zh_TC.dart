@@ -473,7 +473,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("最大化"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("記憶體資訊"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "目前記憶體資訊數值顯示為核心運作時的動態堆疊記憶體佔用，非完整 App 記憶體統計，僅供參考。",
+      "「應用」顯示本應用程式自身佔用的記憶體（RSS，含 Flutter 引擎、介面與記憶體中的資料快取）；「內核」顯示代理核心程序運作時的堆疊記憶體。兩者均非完整的記憶體統計，僅供參考。",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("訊息測試"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage("這是一條訊息。"),

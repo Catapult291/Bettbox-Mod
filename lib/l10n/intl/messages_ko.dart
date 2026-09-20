@@ -533,7 +533,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("최대화"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("메모리 정보"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "표시되는 메모리 값은 코어 동적 힙 점유량이며, 전체 앱 메모리 통계가 아닙니다 (참고용).",
+      "「앱」은 이 앱 자체가 사용하는 메모리(RSS, Flutter 엔진·UI·메모리 내 데이터 캐시 포함)이고, 「코어」는 프록시 코어 프로세스의 실행 시 힙 사용량입니다. 둘 다 완전한 메모리 통계가 아니며 참고용입니다.",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("메시지 테스트"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage("테스트 메시지입니다."),

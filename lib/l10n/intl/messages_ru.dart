@@ -681,7 +681,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("Развернуть"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("Память"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "Текущее значение памяти — это динамическое потребление стека ядра во время выполнения, а не полная статистика памяти приложения, только для справки.",
+      "«Приложение» — память, используемая самим приложением (RSS, включая движок Flutter, интерфейс и кэш данных в памяти). «Ядро» — динамическая куча процесса ядра прокси во время работы. Ни одно из значений не является полной статистикой памяти, оба справочные.",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("Тест сообщения"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage(
