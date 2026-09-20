@@ -25,6 +25,11 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 首页 IP 检测来源重构 | 「国外 HTTPS 源优先（`api.ip.sb/geoip`、Cloudflare `/cdn-cgi/trace`、`ipify`、可选 `ipinfo`），全部失败再回退国内源」；串行探测、成功即停，不再跨源合并结果，避免出现“IP 与国家错配”的脏数据（`lib/common/request.dart`） |
 | 脚本页「规则」区块 | 脚本页可直接添加自定义规则，按「覆盖全局规则」语义插入到配置规则最前面，支持编辑与多选删除，改动后自动重载当前配置（`lib/views/profiles/scripts.dart` 等） |
 | 规则目标分组过滤 | 覆写页添加规则时的目标分组与代理页保持一致：只列顶层分组（GLOBAL 的成员），并按「显示隐藏项」开关决定是否展示隐藏分组（`lib/views/profiles/override_profile.dart`） |
+| 配置更新控制 | 新增「跟随更新」开关（默认开，升上来的老配置行为不变）：配置页「全部同步」只更新订阅型且开启该开关的配置；编辑页右上角可单独更新当前配置，成功/失败以小提示反馈，不再弹全局错误对话框（`lib/models/profile.dart`、`lib/views/profiles/edit_profile.dart` 等） |
+| 右侧快捷控制栏（仅桌面） | 桌面端右侧新增常驻栏：总开关 / 系统代理 / 虚拟网卡 / 出站模式，与左侧导航栏等宽、首个控件与左栏「首页」图标同高，切换动作与托盘菜单共用同一入口；Android 端不渲染（`lib/widgets/quick_controls.dart`、`lib/manager/app_manager.dart`） |
+| 从 URL 导入自动取名 | 不填名称时按 `profile-title` 响应头 → `content-disposition` 文件名 → URL 末段 → 主机名的优先级取名（兼容 base64 与百分号编码），不再回落到时间戳 id（`lib/common/utils.dart`、`lib/models/profile.dart`） |
+| 桌面端二维码导入 | Windows / Linux 上用纯 Dart（`zxing2` + `image`）解码二维码图片，修复上游在桌面端选图必失败（`MissingPluginException`）的问题；Android / iOS / macOS 仍优先走原生识别（`lib/common/qr_reader.dart`、`lib/common/picker.dart`） |
+| 扫码成功后的转场 | 识别成功后先显示对勾停留 500ms，再用 `pushReplacement` 直接换成「从 URL 导入」页，不再闪回「添加配置」页（`lib/pages/scan.dart`、`lib/common/navigator.dart`） |
 | 开发体验 | `analysis_options.yaml` 排除构建产物与平台目录，`flutter analyze` 只报应用代码问题 |
 
 > 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），

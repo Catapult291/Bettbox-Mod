@@ -77,3 +77,14 @@ app.*.map.json
 # FVM Version Cache
 .fvm/
 .fvmrc
+# 本地散件：构建产物归档、验证截图、本机辅助脚本（都不入库）
+/archive/
+/tools/
+
+# 交付用的构建产物落在工作区根，方便取用，不入库
+/Bettbox-*.apk
+/Bettbox-*.zip
+/Bettbox-*-windows-*/
+
+# 截图工具在本机留下的图片（可能含订阅链接等隐私内容），不入库
+/PixPin_*.png
