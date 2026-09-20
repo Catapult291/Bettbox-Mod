@@ -700,5 +700,6 @@
   "networkErrorRetryLater": "網路異常，請稍後再試",
   "tunVirtualAddress": "TUN 虛擬網卡位址",
   "installTime": "安裝時間",
-  "updateTime": "更新時間"
+  "updateTime": "更新時間",
+  "autoGetNameTip": "留空則自動取得名稱"
 }

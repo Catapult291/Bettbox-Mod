@@ -128,6 +128,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "ノード切り替え時に既存接続を自動切断",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage("空欄の場合は名前を自動取得します"),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("自動起動"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage("OS起動時にアプリを自動開始"),
     "autoRun": MessageLookupByLibrary.simpleMessage("自動接続"),

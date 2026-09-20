@@ -5703,6 +5703,16 @@ class AppLocalizations {
   String get updateTime {
     return Intl.message('Update Time', name: 'updateTime', desc: '', args: []);
   }
+
+  /// `Leave blank to get the name automatically`
+  String get autoGetNameTip {
+    return Intl.message(
+      'Leave blank to get the name automatically',
+      name: 'autoGetNameTip',
+      desc: '',
+      args: [],
+    );
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

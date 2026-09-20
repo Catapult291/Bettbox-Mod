@@ -162,6 +162,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "Закрывать соединения при смене узла",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage(
+      "Оставьте пустым — имя определится автоматически",
+    ),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("Автозапуск"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage(
       "Запуск при старте системы",

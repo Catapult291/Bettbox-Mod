@@ -443,6 +443,7 @@ class EditProfileViewState extends State<EditProfileView> {
           decoration: InputDecoration(
             border: const OutlineInputBorder(),
             labelText: appLocalizations.name,
+            hintText: widget.isNew ? appLocalizations.autoGetNameTip : null,
           ),
           validator: (String? value) {
             if (!widget.isNew && (value == null || value.isEmpty)) {

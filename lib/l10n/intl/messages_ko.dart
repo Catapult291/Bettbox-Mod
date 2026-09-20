@@ -132,6 +132,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "노드 변경 시 기존 연결 자동 끊기",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage(
+      "비워 두면 이름을 자동으로 가져옵니다",
+    ),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("자동 시작"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage("시스템 부팅 시 앱 자동 시작"),
     "autoRun": MessageLookupByLibrary.simpleMessage("자동 연결"),

@@ -120,6 +120,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "切換節點後自動關閉連線",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage("留空則自動取得名稱"),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("開機啟動"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage("跟隨系統自動啟動"),
     "autoRun": MessageLookupByLibrary.simpleMessage("自動連線"),

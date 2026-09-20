@@ -153,6 +153,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "قطع خودکار اتصالات هنگام تغییر نود",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage(
+      "خالی بگذارید تا نام به‌طور خودکار دریافت شود",
+    ),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("شروع خودکار"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage(
       "اجرای خودکار هنگام روشن شدن سیستم",

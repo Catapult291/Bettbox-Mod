@@ -700,5 +700,6 @@
   "networkErrorRetryLater": "خطای شبکه، لطفاً بعداً دوباره امتحان کنید",
   "tunVirtualAddress": "آدرس کارت شبکه مجازی TUN",
   "installTime": "زمان نصب",
-  "updateTime": "زمان به‌روزرسانی"
+  "updateTime": "زمان به‌روزرسانی",
+  "autoGetNameTip": "خالی بگذارید تا نام به‌طور خودکار دریافت شود"
 }

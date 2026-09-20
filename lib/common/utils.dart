@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -380,6 +381,82 @@ class Utils {
     );
     if (fileNameKey.isEmpty) return null;
     return parameters[fileNameKey];
+  }
+
+  static const _profileTitleBase64Prefix = 'base64:';
+
+  /// 订阅名解析优先级：`profile-title` 响应头 → `content-disposition` 文件名 →
+  /// URL 末段路径。都取不到时返回 null，由调用方兜底（配置 id）。
+  String? getProfileName({
+    String? profileTitle,
+    String? disposition,
+    String? url,
+  }) {
+    return getProfileNameForTitle(profileTitle) ??
+        getFileNameForDisposition(disposition) ??
+        getProfileNameForUrl(url);
+  }
+
+  /// 订阅名（`profile-title` 响应头）：`base64:` 前缀按 base64（UTF-8）解码，
+  /// 其余按百分号编码解码；解不出内容时返回 null。
+  String? getProfileNameForTitle(String? title) {
+    final value = title?.trim() ?? '';
+    if (value.isEmpty) return null;
+    String? decoded;
+    if (value.startsWith(_profileTitleBase64Prefix)) {
+      try {
+        final raw = base64.normalize(
+          value.substring(_profileTitleBase64Prefix.length).trim(),
+        );
+        decoded = utf8.decode(base64.decode(raw), allowMalformed: true);
+      } catch (_) {
+        return null;
+      }
+    } else if (value.contains('%')) {
+      try {
+        decoded = Uri.decodeComponent(value);
+      } catch (_) {
+        return null;
+      }
+    }
+    final name = (decoded ?? value).trim();
+    return name.isEmpty ? null : name;
+  }
+
+  /// URL 推导的订阅名：取末段路径（已去查询、已百分号解码），末段为空时退回主机名。
+  /// 例：`https://sub.example.com/api/v1/client/subscribe?token=x` → `subscribe`，
+  /// `https://sub.example.com/` → `sub.example.com`。
+  String? getProfileNameForUrl(String? url) {
+    final value = url?.trim() ?? '';
+    if (value.isEmpty) return null;
+    String? segment;
+    String? host;
+    try {
+      final uri = Uri.parse(value);
+      host = uri.host;
+      final segments = uri.pathSegments
+          .where((item) => item.trim().isNotEmpty)
+          .toList();
+      if (segments.isNotEmpty) {
+        segment = segments.last;
+      }
+    } catch (_) {
+      // 非法百分号转义等：退回字符串切分（去 scheme、查询与片段）
+      final parts = value
+          .replaceFirst(RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://'), '')
+          .split(RegExp(r'[?#]'))
+          .first
+          .split('/')
+          .where((item) => item.trim().isNotEmpty)
+          .toList();
+      if (parts.length > 1) {
+        segment = parts.last;
+      } else if (parts.isNotEmpty) {
+        host = parts.first;
+      }
+    }
+    final name = (segment ?? host ?? '').trim();
+    return name.isEmpty ? null : name;
   }
 
   FlutterView getScreen() {

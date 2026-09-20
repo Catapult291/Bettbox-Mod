@@ -184,13 +184,22 @@ extension ProfileExtension on Profile {
     return (await file.lastModified()).microsecondsSinceEpoch;
   }
 
+  /// 名称来源优先级：用户填写的名称 → `profile-title` 响应头 → `content-disposition`
+  /// 文件名 → URL 末段路径 → 配置 id。用户不填名称导入订阅时由此自动取名。
   Future<Profile> update({bool validate = true}) async {
     final response = await request.getFileResponseForUrl(url);
-    final disposition = response.headers['content-disposition']?.firstOrNull;
-    final userinfo = response.headers['subscription-userinfo']?.firstOrNull;
+    final headers = response.headers;
+    final name = utils.getProfileName(
+      profileTitle: headers['profile-title']?.firstOrNull,
+      disposition: headers['content-disposition']?.firstOrNull,
+      url: url,
+    );
+    final currentLabel = label?.trim() ?? '';
     return await copyWith(
-      label: label ?? utils.getFileNameForDisposition(disposition) ?? id,
-      subscriptionInfo: SubscriptionInfo.formHString(userinfo),
+      label: currentLabel.isEmpty ? (name ?? id) : currentLabel,
+      subscriptionInfo: SubscriptionInfo.formHString(
+        headers['subscription-userinfo']?.firstOrNull,
+      ),
     ).saveFile(response.data, validate: validate);
   }
 

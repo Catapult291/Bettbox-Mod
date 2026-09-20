@@ -159,6 +159,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "autoCloseConnectionsDesc": MessageLookupByLibrary.simpleMessage(
       "Close connections when switching nodes",
     ),
+    "autoGetNameTip": MessageLookupByLibrary.simpleMessage(
+      "Leave blank to get the name automatically",
+    ),
     "autoLaunch": MessageLookupByLibrary.simpleMessage("Auto Launch"),
     "autoLaunchDesc": MessageLookupByLibrary.simpleMessage(
       "Launch on system startup",
