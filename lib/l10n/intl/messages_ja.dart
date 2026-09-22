@@ -236,7 +236,11 @@ class MessageLookup extends MessageLookupByLibrary {
     "copySuccess": MessageLookupByLibrary.simpleMessage("コピー成功"),
     "core": MessageLookupByLibrary.simpleMessage("カーネル"),
     "coreConnected": MessageLookupByLibrary.simpleMessage("接続済み"),
+    "coreExited": MessageLookupByLibrary.simpleMessage("コアが終了しました"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("カーネル情報"),
+    "coreStateResynced": MessageLookupByLibrary.simpleMessage(
+      "コアは実行中です。スイッチの状態を同期しました",
+    ),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("一時停止中"),
     "country": MessageLookupByLibrary.simpleMessage("地域"),
     "countryOrRegion": MessageLookupByLibrary.simpleMessage("国 / 地域"),

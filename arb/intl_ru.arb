@@ -45,6 +45,8 @@
   "serviceRunning": "Служба запущена",
   "coreConnected": "Подключено",
   "coreSuspended": "Приостановлено",
+  "coreStateResynced": "Ядро всё ещё работает — состояние переключателя синхронизировано",
+  "coreExited": "Ядро завершило работу",
   "invalidIpFormat": "Неверный формат IP или CIDR",
   "tooManyRules": "Максимум 5 правил",
   "dozeSuspend": "Поддержка Doze",

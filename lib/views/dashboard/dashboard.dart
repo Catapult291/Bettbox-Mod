@@ -503,7 +503,14 @@ class _DashboardStartSwitchState extends ConsumerState<_DashboardStartSwitch> {
     });
 
     try {
-      await globalState.appController.updateStatus(newState);
+      await globalState.appController
+          .updateStatus(newState)
+          .timeout(
+            updateStatusTimeout,
+            onTimeout: () {
+              commonPrint.log('updateStatus did not return in time');
+            },
+          );
     } catch (e) {
       commonPrint.log('updateStatus failed: $e');
     } finally {

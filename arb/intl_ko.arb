@@ -45,6 +45,8 @@
   "serviceRunning": "서비스 실행 중",
   "coreConnected": "연결됨",
   "coreSuspended": "일시 중지됨",
+  "coreStateResynced": "코어가 실행 중입니다. 스위치 상태를 동기화했습니다",
+  "coreExited": "코어가 종료되었습니다",
   "invalidIpFormat": "유효하지 않은 IP 또는 CIDR 형식입니다",
   "tooManyRules": "규칙은 최대 5개까지 허용됩니다",
   "dozeSuspend": "절전 모드 연동",

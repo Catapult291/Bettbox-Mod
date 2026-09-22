@@ -310,7 +310,11 @@ class MessageLookup extends MessageLookupByLibrary {
     "copySuccess": MessageLookupByLibrary.simpleMessage("Скопировано"),
     "core": MessageLookupByLibrary.simpleMessage("Ядро"),
     "coreConnected": MessageLookupByLibrary.simpleMessage("Подключено"),
+    "coreExited": MessageLookupByLibrary.simpleMessage("Ядро завершило работу"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("Информация о ядре"),
+    "coreStateResynced": MessageLookupByLibrary.simpleMessage(
+      "Ядро всё ещё работает — состояние переключателя синхронизировано",
+    ),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("Приостановлено"),
     "country": MessageLookupByLibrary.simpleMessage("Регион"),
     "countryOrRegion": MessageLookupByLibrary.simpleMessage("Страна / Регион"),

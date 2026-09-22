@@ -299,7 +299,11 @@ class MessageLookup extends MessageLookupByLibrary {
     "copySuccess": MessageLookupByLibrary.simpleMessage("با موفقیت کپی شد"),
     "core": MessageLookupByLibrary.simpleMessage("هسته"),
     "coreConnected": MessageLookupByLibrary.simpleMessage("متصل شد"),
+    "coreExited": MessageLookupByLibrary.simpleMessage("هسته بسته شد"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("اطلاعات هسته"),
+    "coreStateResynced": MessageLookupByLibrary.simpleMessage(
+      "هسته همچنان در حال اجراست — وضعیت کلید همگام شد",
+    ),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("معلق شد"),
     "country": MessageLookupByLibrary.simpleMessage("منطقه"),
     "countryOrRegion": MessageLookupByLibrary.simpleMessage("کشور / منطقه"),

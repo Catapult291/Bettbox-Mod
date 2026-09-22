@@ -248,7 +248,11 @@ class MessageLookup extends MessageLookupByLibrary {
     "copySuccess": MessageLookupByLibrary.simpleMessage("복사 성공"),
     "core": MessageLookupByLibrary.simpleMessage("코어"),
     "coreConnected": MessageLookupByLibrary.simpleMessage("연결됨"),
+    "coreExited": MessageLookupByLibrary.simpleMessage("코어가 종료되었습니다"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("코어 정보"),
+    "coreStateResynced": MessageLookupByLibrary.simpleMessage(
+      "코어가 실행 중입니다. 스위치 상태를 동기화했습니다",
+    ),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("일시 중지됨"),
     "country": MessageLookupByLibrary.simpleMessage("지역"),
     "countryOrRegion": MessageLookupByLibrary.simpleMessage("국가 / 지역"),

@@ -26,6 +26,12 @@ final baseInfoEdgeInsets = EdgeInsets.symmetric(
 final defaultTextScaleFactor =
     WidgetsBinding.instance.platformDispatcher.textScaleFactor;
 const httpTimeoutDuration = Duration(milliseconds: 5000);
+
+/// 界面启停控件等待 `updateStatus` 的上界。
+///
+/// 启停链路本身可能有较慢的合法分支（下发配置、下载订阅），但一旦某个环节卡住，
+/// 控件不能永远停在"禁用/转圈"上：超时后放开按钮，状态由内核对账拨正。
+const updateStatusTimeout = Duration(seconds: 120);
 const moreDuration = Duration(milliseconds: 100);
 const animateDuration = Duration(milliseconds: 100);
 const midDuration = Duration(milliseconds: 200);

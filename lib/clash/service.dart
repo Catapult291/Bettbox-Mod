@@ -16,6 +16,16 @@ import 'package:path/path.dart' as p;
 class ClashService extends ClashHandlerInterface {
   static ClashService? _instance;
 
+  /// IPC 服务端就绪的上界：`_initServer` 失败时 [serverCompleter] 永不完成，
+  /// 没有这个上界，整条内核生命周期链路（含 `_coreLifecycleLock`）会永久挂起。
+  static const _serverReadyTimeout = Duration(seconds: 5);
+
+  /// 上一个重启没有结束时继续等待的上界，避免重启链互相阻塞。
+  static const _restartChainTimeout = Duration(seconds: 60);
+
+  /// 等待内核连上 IPC 的上界，见 [sendMessage]。
+  static const _socketReadyTimeout = Duration(seconds: 3);
+
   Completer<ServerSocket> serverCompleter = Completer();
 
   Completer<Socket> socketCompleter = Completer();
@@ -24,6 +34,10 @@ class ClashService extends ClashHandlerInterface {
   bool _isDestroying = false;
 
   Process? process;
+
+  /// 内核在非过渡态下断开 IPC（或进程退出）时回调，用于让 UI 的启停状态与
+  /// 事实对账，见 `AppController.reconcileCoreState`。
+  void Function()? onCoreDisconnected;
 
   Completer<void>? _restartCompleter;
 
@@ -89,9 +103,11 @@ class ClashService extends ClashHandlerInterface {
                 onError: (error) {
                   if (_isDestroying || globalState.isExiting) return;
                   commonPrint.log('Frame decode error: $error');
+                  _notifyCoreDisconnected();
                 },
                 onDone: () {
                   commonPrint.log('Socket connection closed');
+                  _notifyCoreDisconnected();
                 },
               );
         }
@@ -108,6 +124,25 @@ class ClashService extends ClashHandlerInterface {
     );
   }
 
+  /// 只在非过渡态下上报断开：重启/退出过程中的 socket 关闭是预期行为。
+  void _notifyCoreDisconnected() {
+    if (_isDestroying || globalState.isExiting || isStarting) return;
+    onCoreDisconnected?.call();
+  }
+
+  /// [serverCompleter] 的上界封装，绑定失败时抛错而不是永久等待。
+  Future<ServerSocket> _awaitServerSocket() {
+    if (serverCompleter.isCompleted) {
+      return serverCompleter.future;
+    }
+    return serverCompleter.future.timeout(
+      _serverReadyTimeout,
+      onTimeout: () {
+        throw StateError('IPC server did not bind in time');
+      },
+    );
+  }
+
   @override
   Future<void> reStart() async {
     final completer = Completer<void>();
@@ -115,7 +150,12 @@ class ClashService extends ClashHandlerInterface {
     _restartCompleter = completer;
 
     if (previous != null) {
-      await previous.future;
+      await previous.future.timeout(
+        _restartChainTimeout,
+        onTimeout: () {
+          commonPrint.log('Previous core restart did not finish, continuing');
+        },
+      );
     }
 
     try {
@@ -152,7 +192,7 @@ class ClashService extends ClashHandlerInterface {
 
     socketCompleter = Completer();
 
-    final serverSocket = await serverCompleter.future;
+    final serverSocket = await _awaitServerSocket();
 
     final String arg;
     if (_transportType == TransportType.unixSocket) {
@@ -205,6 +245,7 @@ class ClashService extends ClashHandlerInterface {
       final error = utf8.decode(e);
       if (error.isNotEmpty) commonPrint.log(error);
     });
+    _watchCoreProcess();
     await _waitForCoreReady();
     isStarting = false;
     if (system.isWindows && globalState.config.appSetting.enableHighPriority) {
@@ -227,11 +268,28 @@ class ClashService extends ClashHandlerInterface {
     }
   }
 
+  /// 内核进程退出时上报一次（重启期间退出是预期行为，由 [_notifyCoreDisconnected] 过滤）。
+  void _watchCoreProcess() {
+    final current = process;
+    if (current == null) return;
+    unawaited(
+      current.exitCode.then((code) {
+        commonPrint.log('Core process exited with code $code');
+        _notifyCoreDisconnected();
+      }).catchError((_) {}),
+    );
+  }
+
   @override
   destroy() async {
     _isDestroying = true;
-    final server = await serverCompleter.future;
-    await server.close();
+    ServerSocket? server;
+    try {
+      server = await serverCompleter.future.timeout(_serverReadyTimeout);
+    } catch (e) {
+      commonPrint.log('IPC server was not available on destroy: $e');
+    }
+    await server?.close();
     await _deleteSocketFile();
     return true;
   }
@@ -241,7 +299,15 @@ class ClashService extends ClashHandlerInterface {
     if (_isDestroying || globalState.isExiting) {
       return;
     }
-    final socket = await socketCompleter.future;
+    final Socket socket;
+    try {
+      // 内核没连上来时 socketCompleter 永不完成；加上界，否则每一次 invoke 都会
+      // 留下一个永久 pending 的发送任务。
+      socket = await socketCompleter.future.timeout(_socketReadyTimeout);
+    } catch (e) {
+      commonPrint.log('Core socket is not ready, message dropped: $e');
+      return;
+    }
     try {
       final frame = FrameCodec.encode(message);
       socket.add(frame);
@@ -252,7 +318,8 @@ class ClashService extends ClashHandlerInterface {
         );
         return;
       }
-      rethrow;
+      commonPrint.log('Message send failed on closed socket: $e');
+      _notifyCoreDisconnected();
     } on StateError catch (e) {
       if (_isDestroying || globalState.isExiting || isStarting) {
         commonPrint.log(
@@ -260,7 +327,8 @@ class ClashService extends ClashHandlerInterface {
         );
         return;
       }
-      rethrow;
+      commonPrint.log('Message send failed on closed socket: $e');
+      _notifyCoreDisconnected();
     }
   }
 
@@ -311,7 +379,11 @@ class ClashService extends ClashHandlerInterface {
 
   @override
   Future<bool> preload() async {
-    await serverCompleter.future;
+    try {
+      await serverCompleter.future.timeout(_serverReadyTimeout);
+    } catch (e) {
+      commonPrint.log('IPC server is not available on preload: $e');
+    }
     return true;
   }
 }

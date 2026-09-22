@@ -332,6 +332,90 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 
 ---
 
+## 11. 首页总开关与内核状态脱节、界面挂起
+
+**文件**：`lib/clash/service.dart`、`lib/clash/core.dart`、`lib/controller.dart`、`lib/state.dart`、
+`lib/views/dashboard/dashboard.dart`、`lib/views/dashboard/widgets/start_button.dart`、
+`lib/widgets/quick_controls.dart`、`lib/common/system.dart`、`lib/common/request.dart`、
+`lib/common/constant.dart`、`arb/intl_*.arb`、`lib/l10n/*`
+
+**问题**（官方 Windows 版同样可复现）：长时间使用后，首页总开关显示为关闭且点不动，而系统代理
+开关仍是打开；整个程序卡死，只能退出重进应用才恢复。
+
+**证据**：本机 Windows 事件日志确认过真实挂起——`Application Hang`（Event ID 1002）
+`Bettbox.exe 1.19.1`，`HangType = Top level window is idle`（2026-09-19 20:56，UTC+8），
+同时留下 WER `AppHangB1` 报告（dump 已被系统清理）。`Top level window is idle` 的判定对象是
+消息泵线程，而 Flutter Windows 的 platform thread 就是 Dart 根 isolate 所在线程：只有同步阻塞
+该线程才会得到这个结果。
+
+**定位**（两条独立成因，都属于上游共有逻辑）：
+
+1. **启停状态与内核真实状态没有任何对账渠道**。桌面端没有内核退出通知（内核由帮助服务托管时连
+   进程句柄都没有），`ClashService.checkCoreHealth()` 定义后从未被调用，socket 断开只打日志；
+   而 UI 的运行状态 `runTimeProvider` 是纯内存状态，一旦停止指令没被内核应答（IPC 超时被
+   `invoke` 兜成 `false` 后调用方丢弃），界面就停在"已关闭"——内核其实还在跑，系统代理开关读的
+   是持久化配置位，于是"开关关闭 + 系统代理打开"同时成立。`updateRunTime()` 每秒把
+   `startTime == null` 传播成开关关闭，使这个错态每秒被固化一次。首页电源卡片又只在
+   `dashboardRefreshManager.tick1s` 触发时重建（`ref.read`），后台时 tick 被停，卡片文案会冻结在旧值。
+2. **启停链路上存在会冻住消息泵的同步调用**。`Windows.runas()` 直接在根 isolate 上调
+   `ShellExecuteW(..., "runas", ...)`，会一直阻塞到用户在 UAC 对话框上作出选择；而
+   `ClashService._doRestart()` 每次启动内核都会走 `registerService()`，帮助服务不健康（ping 失败）
+   时就进入 `_configureHelperService()` 的提权路径。此外 `serverCompleter.future`、
+   `sendMessage` 里的 `socketCompleter.future`、重启链的 `await previous.future`、
+   `_restartCompleter` 以及 `_clashDio`（无任何超时）都没有上界：任一挂住就把
+   `_coreLifecycleLock` 永久占死，此后所有启停/应用配置动作排队等待，按钮停在禁用或转圈上。
+
+**改动**：
+
+- **新增内核状态对账**（`AppController.reconcileCoreState`）：桌面端每 5 秒用一次 IPC 探测
+  （`getIsInit`，2 秒超时）比对"UI 的运行状态"与"内核是否还在"，连续两次同向才动手，避免开关来回跳；
+  启停动作刚结束、内核异常断开、窗口回到前台时各立即对账一次。判定"该拨回运行中"的依据是新增的
+  持久化意图 `core_listener_running`（`handleStart` / `handleStop` 维护），所以"内核进程在、监听已停"
+  这种常态不会被误判成需要启动代理；该意图**在每次启动时清空**（上一次会话留下的值不能代表这次的
+  期望，否则 `autoRun` 关闭时也会被它触发启动），正常退出时同样清掉。
+  拨回运行中时会补一次 `startListener()`、恢复 1 秒刷新循环并提示 `coreStateResynced`；
+  判定内核已死则清空运行状态并提示 `coreExited`。
+- **停止不再假成功**：`handleStop` 返回内核是否应答了停止指令，没应答时不再清空 `startTime`；
+  启动动作走完却没起来（静默中止或内核没就绪）时立即对账一次。
+- **启停控件不再永久卡住**：三处总开关（首页卡片、顶栏开关、右栏快捷开关）给 `updateStatus`
+  加了 120 秒上界（`updateStatusTimeout`），超时后放开按钮，状态交给对账拨正；首页电源卡片改用
+  `ref.watch(runTimeProvider)`，不再依赖 `tick1s`。
+- **补上缺失的上界**：`ClashService` 的 `serverCompleter`、`socketCompleter`、重启链前驱、
+  `destroy()` / `preload()` 各自加上超时，绑定失败时抛错而不是永久等待；IPC 断开或内核进程
+  退出时回调 `onCoreDisconnected` 触发对账；`sendMessage` 在非过渡态下写失败不再 rethrow 成
+  无人处理的异步错误。`_clashDio` 补 `connectTimeout: 15s` / `receiveTimeout: 30s`（后者是两次数据
+  之间的间隔，不影响大文件下载），订阅地址被黑洞时不再无限期占着生命周期锁。
+- **`runas()` 移出 platform thread**：`ShellExecuteW` 提权改在独立 isolate 里执行，等待用户点 UAC
+  期间界面照常刷新（`NetworkFix` 的逐条提权改成串行 `await`，保持一条一条弹提权的原有顺序）。
+
+**验证**：`flutter analyze` 无问题；`flutter test` 85/85 通过；Windows release 包
+（`Bettbox-1.19.2-windows-x64-corewatch`，Flutter 3.44.9 + `--dart-define=APP_ENV=stable`）构建成功，
+并在 `data/app.so` 中确认新代码与新文案都已编译进去（`core_listener_running`、
+`Core did not acknowledge the stop request`、`Core state reconcile failed`、`coreExited`/`coreStateResynced`
+的中英文案均可检索到）。该包已实机跑过一轮（截图在 `archive/screenshots/corestate/`）：
+
+- 启动正常（UIA 控件树可用），右键栏总开关点击 → 内核与监听起来（`127.0.0.1:7890` 可连）、
+  卡片显示运行时长、`core_listener_running` 写入为 true；再点一次 → 监听关闭、意图转 false、
+  内核进程保留（暖核）；再点一次又能起来，启停可反复。
+- **暖核 + UI 已停止**这个组合下，看门狗没有误把开关拨回运行中（意图判定生效，这是本次改动最
+  容易出的假阳性）；**上一次会话被强杀留下的意图 true + 重启后自动出现的暖核**也没能让应用在
+  `autoRun=false` 时偷偷起监听（启动清空意图生效）。
+- 未能在实机触发的分支：内核被强杀（`BettboxCore.exe` 由 SYSTEM 下的帮助服务托管，非提权
+  `taskkill` 报"拒绝访问"），所以"内核已死 → 开关翻回已停止 + `coreExited` 提示"这条只是在逻辑上
+  成立，没有实机证据。另外验证时观察到：应用在"内核未运行 + 自身 systemProxy 关闭"时会调
+  `proxy.stopProxy()`，会顺带清掉**别的程序**设置的系统代理（`ProxyEnable` 被置 0，`ProxyServer`
+  保留）——这是上游既有行为，不属于本次问题，验证后退回原值（`ProxyEnable=1`）。
+
+**未决问题**：
+
+- 上述改动能在"状态脱节"这一层自愈，但**没有复现出那次真实挂起**：导致 `Top level window is idle`
+  的同步阻塞点仍只是靠代码审计推断（`runas` 提权与无超时的 IPC 等待是仅有的候选）。要确证需要在
+  挂起时抓到 thread stack，办法是临时开启 WER LocalDumps（`HKLM\SOFTWARE\Microsoft\Windows\Windows
+  Error Reporting\LocalDumps\Bettbox.exe`，`DumpType=2`）后复现一次，再分析主线程调用栈。
+- 该对账是桌面端行为；Android 端本来就有原生 `runStateChanged` 回调与 VPN 状态同步，未改动。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，

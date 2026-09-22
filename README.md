@@ -32,6 +32,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 扫码成功后的转场 | 识别成功后先显示对勾停留 500ms，再用 `pushReplacement` 直接换成「从 URL 导入」页，不再闪回「添加配置」页（`lib/pages/scan.dart`、`lib/common/navigator.dart`） |
 | 开发体验 | `analysis_options.yaml` 排除构建产物与平台目录，`flutter analyze` 只报应用代码问题 |
 | 内存占用调整 | 首页「内存信息」同时显示「应用内存」（本应用 RSS）与「内核内存」；provider 的全节点列表不再进常驻单例，只在构组时随 isolate 瞬时使用；连接页快照在窗口隐藏/后台时释放；脚本引擎补上 30s / 256MB 执行上下界（`lib/clash/core.dart`、`lib/views/dashboard/widgets/memory_info.dart` 等） |
+| 内核状态对账与启停有界化 | 修首页总开关与内核真实状态脱节（显示已停止、内核仍在跑且点不动）与长时间使用后的界面挂起：桌面端每 5 秒探测一次内核并与 UI 状态对账（连续两次同向才动作，依据持久化运行意图 `core_listener_running`），停止不再假成功；三处总开关的启停动作加 120 秒上界；IPC / 重启链 / 订阅 HTTP 请求逐个补超时；`runas` 提权移出 platform thread（`lib/controller.dart`、`lib/clash/service.dart`、`lib/common/system.dart` 等） |
 
 > 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），
 > 本仓库直接采用上游实现，不再单列。

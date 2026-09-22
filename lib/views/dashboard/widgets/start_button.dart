@@ -30,7 +30,14 @@ class _StartButtonState extends ConsumerState<StartButton> {
     });
 
     try {
-      await globalState.appController.updateStatus(newState);
+      await globalState.appController
+          .updateStatus(newState)
+          .timeout(
+            updateStatusTimeout,
+            onTimeout: () {
+              commonPrint.log('updateStatus did not return in time');
+            },
+          );
     } catch (e) {
       commonPrint.log('updateStatus failed: $e');
     } finally {
@@ -102,7 +109,10 @@ class _StartButtonState extends ConsumerState<StartButton> {
     return ValueListenableBuilder<int>(
       valueListenable: dashboardRefreshManager.tick1s,
       builder: (_, _, _) {
-        final runTime = ref.read(runTimeProvider);
+        // 用 watch 而不是 read：这个卡片只在 tick/setState 时重建，而 tick 在
+        // 后台（窗口最小化到托盘）会被停掉，read 会让"运行中/已停止"文案冻结在
+        // 旧值上——内核已经起来了，卡片还显示为关闭。
+        final runTime = ref.watch(runTimeProvider);
         final isStart = runTime != null;
         final displayStart =
             isSmartStopped ? false : (_optimisticStart ?? isStart);

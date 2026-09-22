@@ -289,8 +289,10 @@ class ClashCore {
     await clashInterface.startListener();
   }
 
-  Future<void> stopListener() async {
-    await clashInterface.stopListener();
+  /// 返回内核是否应答了停止指令（IPC 超时会被 [ClashHandlerInterface.invoke]
+  /// 兜成 false），调用方据此判断能不能把状态改成"已停止"。
+  Future<bool> stopListener() async {
+    return await clashInterface.stopListener();
   }
 
   Future<Delay> getDelay(String url, String proxyName) async {

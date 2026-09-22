@@ -45,6 +45,8 @@
   "serviceRunning": "服务正在运行中",
   "coreConnected": "已连接",
   "coreSuspended": "已挂起",
+  "coreStateResynced": "内核仍在运行，开关状态已同步",
+  "coreExited": "内核已退出",
   "invalidIpFormat": "无效的 IP 或 CIDR 格式",
   "tooManyRules": "最多允许 5 个规则",
   "dozeSuspend": "休眠支持",

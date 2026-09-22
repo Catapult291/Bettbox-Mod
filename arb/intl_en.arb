@@ -45,6 +45,8 @@
   "serviceRunning": "Service Running",
   "coreConnected": "Connected",
   "coreSuspended": "Suspended",
+  "coreStateResynced": "Core is still running — switch state synced",
+  "coreExited": "Core has exited",
   "invalidIpFormat": "Invalid IP or CIDR format",
   "tooManyRules": "Max 5 rules allowed",
   "dozeSuspend": "Doze Support",

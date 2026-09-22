@@ -394,6 +394,26 @@ class AppLocalizations {
     return Intl.message('Suspended', name: 'coreSuspended', desc: '', args: []);
   }
 
+  /// `Core is still running — switch state synced`
+  String get coreStateResynced {
+    return Intl.message(
+      'Core is still running — switch state synced',
+      name: 'coreStateResynced',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Core has exited`
+  String get coreExited {
+    return Intl.message(
+      'Core has exited',
+      name: 'coreExited',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Invalid IP or CIDR format`
   String get invalidIpFormat {
     return Intl.message(

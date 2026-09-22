@@ -28,6 +28,9 @@ import 'models/models.dart';
 
 typedef UpdateTasks = List<FutureOr Function()>;
 
+/// `shared_preferences` 中"内核本应在运行"的键，见 [GlobalState.shouldCoreBeRunning]。
+const listenerRunningKey = 'core_listener_running';
+
 class GlobalState {
   static GlobalState? _instance;
   Map<CacheTag, FixedMap<String, double>> computeHeightMapCache = {};
@@ -264,6 +267,12 @@ class GlobalState {
 
   Future<void> resumeForegroundUpdates() async {
     dashboardRefreshManager.start();
+    if (system.isDesktop) {
+      // 先对账再决定要不要恢复每秒刷新：桌面端回到前台时可能内核状态已经变了
+      // （内核退出、或运行状态在后台期间与事实脱节），只按内存里的 isStart 判断
+      // 会把刚恢复的界面留在错误状态上。
+      await appController.reconcileCoreState();
+    }
     if (!isStart) {
       return;
     }
@@ -317,6 +326,7 @@ class GlobalState {
     }
     final prefs = await preferences.sharedPreferencesCompleter.future;
     await prefs?.setBool('is_vpn_running', true);
+    await prefs?.setBool(listenerRunningKey, true);
 
     if (system.isAndroid) {
       await service?.setQuickResponse(config.vpnProps.quickResponse);
@@ -327,7 +337,17 @@ class GlobalState {
     await startUpdateTasks(tasks);
   }
 
-  Future updateStartTime() async {
+  /// 内核本应在运行的持久化意图，`handleStart` / `handleStop` 维护。
+  ///
+  /// 桌面端 UI 的运行状态（`runTimeProvider`）只活在内存里，一旦与内核真实状态
+  /// 脱节（停止指令没被应答、GUI 被强杀后重启），就得有第二个来源来判断开关该
+  /// 拨回哪一边；见 `AppController.reconcileCoreState`。
+  Future<bool> shouldCoreBeRunning() async {
+    final prefs = await preferences.sharedPreferencesCompleter.future;
+    return prefs?.getBool(listenerRunningKey) ?? false;
+  }
+
+  Future<void> updateStartTime() async {
     startTime = await clashLib?.getRunTime();
   }
 
@@ -347,24 +367,35 @@ class GlobalState {
     }
   }
 
-  Future handleStop([bool includeVpnService = true]) async {
-    startTime = null;
+  /// 返回内核是否应答了停止指令。
+  ///
+  /// 内核没应答（IPC 超时）时不再清掉运行状态：以前 `startTime` 先被置空，
+  /// 界面随即显示"已停止"，而内核仍在代理，用户只能退出重进应用才恢复。
+  Future<bool> handleStop([bool includeVpnService = true]) async {
+    bool stopped = true;
     if (system.isAndroid && isService) {
-      await clashLibHandler?.stopListener();
+      stopped = await clashLibHandler?.stopListener() ?? true;
     } else {
-      await clashCore.stopListener();
+      stopped = await clashCore.stopListener();
     }
+    if (!stopped) {
+      commonPrint.log('Core did not acknowledge the stop request');
+      return false;
+    }
+    startTime = null;
+    final prefs = await preferences.sharedPreferencesCompleter.future;
+    await prefs?.setBool(listenerRunningKey, false);
     if (!includeVpnService) {
       stopUpdateTasks();
-      return;
+      return true;
     }
     await service?.stopVpn();
-    final prefs = await preferences.sharedPreferencesCompleter.future;
     await prefs?.setBool('is_vpn_running', false);
     if (system.isDesktop) {
       await prefs?.setBool('is_tun_running', false);
     }
     stopUpdateTasks();
+    return true;
   }
 
   Future<bool?> showMessage({

@@ -203,7 +203,9 @@ class NetworkFixItem extends ConsumerWidget {
         ];
 
         for (final cmd in commands) {
-          windows?.runas(cmd, '', showWindow: false);
+          // 逐条提权：runas 现在在独立 isolate 里等 UAC，串行等待才能保持
+          // 一条一条弹提权的顺序。
+          await windows?.runas(cmd, '', showWindow: false);
         }
       } else {
         final commands = [
@@ -227,7 +229,7 @@ class NetworkFixItem extends ConsumerWidget {
         ];
 
         for (final cmd in commands) {
-          windows?.runas(cmd, '', showWindow: false);
+          await windows?.runas(cmd, '', showWindow: false);
         }
       }
     } catch (e) {

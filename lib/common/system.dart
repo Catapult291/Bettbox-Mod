@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:ffi/ffi.dart';
@@ -219,11 +220,8 @@ final system = System();
 
 class Windows {
   static Windows? _instance;
-  late DynamicLibrary _shell32;
 
-  Windows._internal() {
-    _shell32 = DynamicLibrary.open('shell32.dll');
-  }
+  Windows._internal();
 
   factory Windows() {
     _instance ??= Windows._internal();
@@ -292,12 +290,32 @@ class Windows {
     }
   }
 
-  bool runas(String command, String arguments, {bool showWindow = false}) {
+  /// 以管理员身份执行命令（UAC 提权）。
+  ///
+  /// `ShellExecuteW(..., "runas", ...)` 会一直阻塞到用户在 UAC 对话框上做出选择，
+  /// 而 Dart 侧的根 isolate 就是 Flutter Windows 的消息泵线程——就地调用会让整个
+  /// 界面停止响应（Windows 事件日志记为 Application Hang，HangType = "Top level
+  /// window is idle"）。内核启动链上的 `registerService()` 会走到这里，所以放到
+  /// 独立 isolate 执行，等待提权期间界面照常刷新。
+  Future<bool> runas(
+    String command,
+    String arguments, {
+    bool showWindow = false,
+  }) async {
+    final result = await Isolate.run(
+      () => _runasSync(command, arguments, showWindow),
+    );
+    commonPrint.log('windows runas: [command masked] resultCode:$result');
+    return result > 32;
+  }
+
+  static int _runasSync(String command, String arguments, bool showWindow) {
+    final shell32 = DynamicLibrary.open('shell32.dll');
     final commandPtr = command.toNativeUtf16();
     final argumentsPtr = arguments.toNativeUtf16();
     final operationPtr = 'runas'.toNativeUtf16();
 
-    final shellExecute = _shell32
+    final shellExecute = shell32
         .lookupFunction<
           Int32 Function(
             Pointer<Utf16> hwnd,
@@ -331,9 +349,7 @@ class Windows {
     calloc.free(argumentsPtr);
     calloc.free(operationPtr);
 
-    commonPrint.log('windows runas: [command masked] resultCode:$result');
-
-    return result > 32;
+    return result;
   }
 
   Future<WindowsHelperServiceStatus> checkService() async {

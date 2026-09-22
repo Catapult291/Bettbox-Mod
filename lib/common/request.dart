@@ -25,7 +25,15 @@ class Request {
         return client;
       },
     );
-    _clashDio = Dio();
+    _clashDio = Dio(
+      // 经代理出站的请求此前没有任何超时：订阅地址被黑洞（连上但不应答）时，
+      // 内核启停链路会连带无限期挂住——锁一直被占，启停开关点不动，只能重启应用。
+      // 这里的 receiveTimeout 是"两次数据之间的间隔"，不影响大文件下载。
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
     _clashDio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
         final client = HttpClient();

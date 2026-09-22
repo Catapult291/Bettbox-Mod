@@ -303,7 +303,11 @@ class MessageLookup extends MessageLookupByLibrary {
     "copySuccess": MessageLookupByLibrary.simpleMessage("Copy Successful"),
     "core": MessageLookupByLibrary.simpleMessage("Core"),
     "coreConnected": MessageLookupByLibrary.simpleMessage("Connected"),
+    "coreExited": MessageLookupByLibrary.simpleMessage("Core has exited"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("Core Info"),
+    "coreStateResynced": MessageLookupByLibrary.simpleMessage(
+      "Core is still running — switch state synced",
+    ),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("Suspended"),
     "country": MessageLookupByLibrary.simpleMessage("Country"),
     "countryOrRegion": MessageLookupByLibrary.simpleMessage("Country / Region"),

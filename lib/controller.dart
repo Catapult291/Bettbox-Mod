@@ -43,6 +43,18 @@ class AppController {
   final Lock _coreLifecycleLock = Lock(reentrant: true);
   int _backgroundLoadVersion = 0;
 
+  /// 内核状态对账的周期。桌面端没有内核退出通知，只能主动探测。
+  static const _coreReconcileInterval = Duration(seconds: 5);
+
+  /// 单次探测（内核忙时会超时）不算数，连续同向多次才动手，避免开关来回跳。
+  static const _coreReconcileConfirmations = 2;
+
+  Timer? _coreReconcileTimer;
+  bool _isReconcilingCoreState = false;
+  int _coreTransitionDepth = 0;
+  int _coreAliveMismatch = 0;
+  int _coreDeadMismatch = 0;
+
   int _updateGroupsRetryCount = 0;
   bool _isUpdatingGroups = false;
   Timer? _updateGroupsRetryTimer;
@@ -125,11 +137,125 @@ class AppController {
     });
   }
 
+  /// 内核状态对账：把 UI 的启停状态拨回内核的真实状态。
+  ///
+  /// 桌面端既没有内核退出通知，也没有进程句柄（内核由帮助服务托管时 `process`
+  /// 恒为 null），所以内核崩溃、GUI 被强杀后重启、或停止指令没有被内核应答之后，
+  /// `runTimeProvider` 会与事实脱节：总开关显示已关闭而内核仍在跑（系统代理、
+  /// 虚拟网卡都还生效），或显示运行中而内核已死。以前只能退出应用重进才能恢复。
+  ///
+  /// [force] 为 true 时跳过"过渡中"判定并立即生效，供启停动作刚结束后自查；
+  /// 周期看门狗走默认可容忍单次探测误差的路径。
+  Future<void> reconcileCoreState({bool force = false}) async {
+    if (!system.isDesktop || globalState.isExiting) return;
+    if (_isReconcilingCoreState) return;
+    if (!force &&
+        (_coreTransitionDepth > 0 || _ref.read(isRestartingCoreProvider))) {
+      return;
+    }
+    final service = clashService;
+    if (service == null || service.isStarting) return;
+
+    _isReconcilingCoreState = true;
+    try {
+      final uiRunning = _ref.read(runTimeProvider) != null;
+      final shouldRun = await globalState.shouldCoreBeRunning();
+      // 内核本不应运行、UI 也不认为在运行：没有可对账的目标，省掉一次探测。
+      if (!uiRunning && !shouldRun) {
+        _coreAliveMismatch = 0;
+        _coreDeadMismatch = 0;
+        return;
+      }
+      final coreAlive = await service.checkCoreHealth();
+      if (coreAlive == uiRunning) {
+        _coreAliveMismatch = 0;
+        _coreDeadMismatch = 0;
+        return;
+      }
+      if (coreAlive) {
+        // 内核活着但 UI 以为已停止：只有在内核本应在运行时才拨回运行中，
+        // 否则会把"内核进程在、监听已停"的常态误判成需要启动代理。
+        _coreDeadMismatch = 0;
+        if (!shouldRun) {
+          _coreAliveMismatch = 0;
+          return;
+        }
+        _coreAliveMismatch++;
+        if (!force && _coreAliveMismatch < _coreReconcileConfirmations) return;
+        _coreAliveMismatch = 0;
+        await _resyncCoreRunning();
+      } else {
+        _coreAliveMismatch = 0;
+        _coreDeadMismatch++;
+        if (!force && _coreDeadMismatch < _coreReconcileConfirmations) return;
+        _coreDeadMismatch = 0;
+        await _resyncCoreStopped();
+      }
+    } catch (e) {
+      commonPrint.log('Core state reconcile failed: $e');
+    } finally {
+      _isReconcilingCoreState = false;
+    }
+  }
+
+  /// 内核在跑、UI 却以为已停止：把开关拨回运行中，并恢复 1 秒刷新循环。
+  Future<void> _resyncCoreRunning() async {
+    commonPrint.log('Core is running while the app state was stopped, resyncing');
+    globalState.startTime ??= DateTime.now();
+    // 内核进程活着不代表监听还开着（例如内核侧被停过），按意图补一次启动。
+    unawaited(clashCore.startListener());
+    if (_ref.read(runTimeProvider) == null) {
+      _ref.read(runTimeProvider.notifier).value = 0;
+    }
+    if (!globalState.backgroundMode.value) {
+      await globalState.startUpdateTasks([updateRunTime, updateTraffic]);
+    }
+    globalState.showNotifier(appLocalizations.coreStateResynced);
+  }
+
+  /// UI 以为在跑、内核已无响应：清空运行状态，并停掉每秒刷新。
+  Future<void> _resyncCoreStopped() async {
+    commonPrint.log('Core is not responding while the app state was running');
+    globalState.startTime = null;
+    clashCore.resetTraffic();
+    _ref.read(trafficsProvider.notifier).clear();
+    _ref.read(totalTrafficProvider.notifier).value = Traffic();
+    if (_ref.read(runTimeProvider) != null) {
+      _ref.read(runTimeProvider.notifier).value = null;
+    }
+    globalState.stopUpdateTasks();
+    globalState.showNotifier(appLocalizations.coreExited);
+  }
+
+  void startCoreStateWatchdog() {
+    if (!system.isDesktop) return;
+    _coreReconcileTimer ??= Timer.periodic(_coreReconcileInterval, (_) {
+      unawaited(reconcileCoreState());
+    });
+  }
+
+  void stopCoreStateWatchdog() {
+    _coreReconcileTimer?.cancel();
+    _coreReconcileTimer = null;
+  }
+
   Future<void> _restartCore({
     bool setupConfig = true,
     bool refreshData = true,
   }) async {
     commonPrint.log('restart core');
+    _coreTransitionDepth++;
+    try {
+      await _doRestartCore(setupConfig: setupConfig, refreshData: refreshData);
+    } finally {
+      _coreTransitionDepth--;
+    }
+  }
+
+  Future<void> _doRestartCore({
+    required bool setupConfig,
+    required bool refreshData,
+  }) async {
     _invalidateCoreReads();
 
     final wasRunning = _ref.read(runTimeProvider.notifier).isStart;
@@ -167,7 +293,14 @@ class AppController {
   }
 
   Future<void> updateStatus(bool isStart) {
-    return _coreLifecycleLock.synchronized(() => _updateStatus(isStart));
+    return _coreLifecycleLock.synchronized(() async {
+      _coreTransitionDepth++;
+      try {
+        await _updateStatus(isStart);
+      } finally {
+        _coreTransitionDepth--;
+      }
+    });
   }
 
   Future<void> _updateStatus(bool isStart) async {
@@ -176,12 +309,25 @@ class AppController {
       if (globalState.isStart && !_ref.read(runTimeProvider.notifier).isStart) {
         _ref.read(runTimeProvider.notifier).value = 0;
       }
+      if (!globalState.isStart) {
+        // 启动动作可能是"静默中止"（没有当前配置、下发配置失败）或内核没起来。
+        // 不做这步自查，开关会停在"已关闭"且没有任何解释。
+        commonPrint.log('Start request finished without a running core');
+        await reconcileCoreState(force: true);
+      }
     } else {
-      await globalState.handleStop();
+      final stopped = await globalState.handleStop();
       clashCore.resetTraffic();
       _ref.read(trafficsProvider.notifier).clear();
       _ref.read(totalTrafficProvider.notifier).value = Traffic();
-      _ref.read(runTimeProvider.notifier).value = null;
+      if (stopped) {
+        _ref.read(runTimeProvider.notifier).value = null;
+      } else {
+        // 内核没应答停止指令（IPC 超时）：别把开关停在"已关闭"这个假状态上
+        // （内核可能还在代理，而界面已经说停了）。交给对账按事实定夺。
+        commonPrint.log('Core did not acknowledge the stop request');
+        await reconcileCoreState(force: true);
+      }
       addCheckIpNumDebounce();
     }
   }
@@ -1038,6 +1184,8 @@ class AppController {
     final exitLock = Completer<void>();
     _exitLock = exitLock;
     globalState.isExiting = true;
+    stopCoreStateWatchdog();
+    clashService?.onCoreDisconnected = null;
 
     try {
       if (system.isDesktop) {
@@ -1052,6 +1200,9 @@ class AppController {
       if (system.isDesktop) {
         final prefs = await preferences.sharedPreferencesCompleter.future;
         await prefs?.setBool('is_tun_running', false);
+        // 退出会停掉内核，清掉"本应在运行"的意图，避免下次启动时被对账当成
+        // 需要恢复运行（GUI 被强杀时不会走到这里，意图仍保留，供恢复用）。
+        await prefs?.setBool(listenerRunningKey, false);
       }
       await savePreferences();
       if (proxy != null) {
@@ -1278,6 +1429,17 @@ class AppController {
     await updateTray(true);
 
     await _initCore();
+    if (system.isDesktop) {
+      // "内核本应在运行"的意图只对本进程有效：上一次会话（崩溃/被强杀）留下的值
+      // 不能代表这次启动的期望，否则 autoRun 关闭时也会被对账当成要恢复运行。
+      final prefs = await preferences.sharedPreferencesCompleter.future;
+      await prefs?.setBool(listenerRunningKey, false);
+      // 内核异常断开（进程退出/socket 断开）后立即对账一次；重启/退出过程中的
+      // 断开由 ClashService 过滤，不会走到这里。
+      clashService?.onCoreDisconnected = () {
+        unawaited(reconcileCoreState(force: true));
+      };
+    }
     try {
       await _initStatus();
     } catch (e) {
@@ -1307,6 +1469,7 @@ class AppController {
     }
     await syncDesktopRuntimeState(preferCurrentState: true);
     await updateTray(true, false, true);
+    startCoreStateWatchdog();
 
     await _handlePreference();
     await _handlerDisclaimer();
