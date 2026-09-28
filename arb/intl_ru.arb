@@ -47,6 +47,7 @@
   "coreSuspended": "Приостановлено",
   "coreStateResynced": "Ядро всё ещё работает — состояние переключателя синхронизировано",
   "coreExited": "Ядро завершило работу",
+  "coreRestarted": "Ядро не отвечает — перезапущено",
   "invalidIpFormat": "Неверный формат IP или CIDR",
   "tooManyRules": "Максимум 5 правил",
   "dozeSuspend": "Поддержка Doze",

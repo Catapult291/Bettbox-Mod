@@ -305,6 +305,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("Connected"),
     "coreExited": MessageLookupByLibrary.simpleMessage("Core has exited"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("Core Info"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage(
+      "Core not responding — restarted",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "Core is still running — switch state synced",
     ),

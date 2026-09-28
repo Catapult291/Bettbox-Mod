@@ -32,13 +32,18 @@ mixin ClashInterface {
 
   FutureOr<String> updateConfig(UpdateParams updateParams);
 
-  FutureOr<String> setupConfig(SetupParams setupParams);
+  FutureOr<String> setupConfig(
+    SetupParams setupParams, {
+    Duration timeout = const Duration(seconds: 60),
+  });
 
   FutureOr<Map> getProxies();
 
   FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams);
 
-  Future<bool> startListener();
+  Future<bool> startListener({
+    Duration timeout = const Duration(seconds: 30),
+  });
 
   Future<bool> stopListener();
 
@@ -127,7 +132,12 @@ abstract class ClashHandlerInterface with ClashInterface {
     }
   }
 
-  void sendMessage(String message);
+  /// 把一条消息交给传输层，返回是否真的送出去了。
+  ///
+  /// 内核没连上（或连接已断）时返回 false：调用方 [invoke] 会立刻按"无应答"
+  /// 返回默认值，而不是空等满 [invoke] 的超时（30 秒 / 60 秒）——内核卡死或
+  /// 刚被重启时，那几十秒的空等会一直占着生命周期锁，让总开关看起来"点不动"。
+  Future<bool> sendMessage(String message);
 
   FutureOr<void> reStart();
 
@@ -155,7 +165,13 @@ abstract class ClashHandlerInterface with ClashInterface {
       }
     }
 
-    sendMessage(json.encode(Action(id: id, method: method, data: data)));
+    final sent = await sendMessage(
+      json.encode(Action(id: id, method: method, data: data)),
+    );
+    if (!sent) {
+      callbackCompleterMap.remove(id);
+      return mDefaultValue as T;
+    }
 
     return (callbackCompleterMap[id] as Completer<T>).safeFuture(
       timeout: timeout,
@@ -257,12 +273,15 @@ abstract class ClashHandlerInterface with ClashInterface {
   }
 
   @override
-  Future<String> setupConfig(SetupParams setupParams) async {
+  Future<String> setupConfig(
+    SetupParams setupParams, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
     final data = await Isolate.run(() => json.encode(setupParams));
     return await invoke<String>(
       method: ActionMethod.setupConfig,
       data: data,
-      timeout: const Duration(seconds: 60),
+      timeout: timeout,
     );
   }
 
@@ -383,8 +402,10 @@ abstract class ClashHandlerInterface with ClashInterface {
   }
 
   @override
-  Future<bool> startListener() {
-    return invoke<bool>(method: ActionMethod.startListener);
+  Future<bool> startListener({
+    Duration timeout = const Duration(seconds: 30),
+  }) {
+    return invoke<bool>(method: ActionMethod.startListener, timeout: timeout);
   }
 
   @override

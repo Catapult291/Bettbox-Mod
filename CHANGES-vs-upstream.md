@@ -416,6 +416,86 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 
 ---
 
+## 12. 总开关仍会被"半死内核"锁死：后台刷新不再抢锁 + 启动前自动重启内核
+
+**文件**：`lib/controller.dart`、`lib/clash/service.dart`、`lib/clash/interface.dart`、
+`lib/clash/core.dart`、`lib/clash/lib.dart`、`lib/state.dart`、`lib/common/constant.dart`、
+`arb/intl_*.arb`、`lib/l10n/*`
+
+**问题**：第 11 节的修复上线（v1.19.3）后用户仍在报同一现象——"开关莫名被锁死关闭，只能退出应用重进"。
+本轮在本机用独立命名实例（`APP_DEV=true` 的 `BettboxDev` 身份，独立数据目录 / 窗口类 / 内核名）**完整复现**：
+把 dev 内核进程 `NtSuspendProcess` 挂起（内核进程还在、IPC 完全不应答）后，界面被对账拨回"已停止"（与
+用户截图一致），此时点右栏总开关：
+
+```
+18:48:21.801  updateStatus(start)#9 waiting (holder=updateGroups#8)   ← 用户点了开关
+18:48:41.476  updateGroups#8 released (held 20615ms)                  ← 后台刷新占了 20.6 秒
+18:48:41.477  updateStatus(start)#9 acquired after 19675ms            ← 开关等了 19.7 秒才拿到锁
+18:48:41.479  _updateStatus(isStart=true) enter
+18:50:21.803  updateStatus did not return in time                     ← 动作本身又耗 120 秒（IPC 超时）
+18:50:41.502  _updateStatus(isStart=true) leave
+18:50:41.504  updateGroups#10 acquired after 80644ms                  ← 排队的后台刷新等了 80 秒
+```
+
+**根因（三条，都已实测）**：
+
+1. **后台分组刷新和启停抢同一把生命周期锁**。刷新是 60 秒一次的后台任务，但内核 IPC 不应答时
+   `getProxies` 会等满 `invoke` 的默认超时（30 秒）再乘上内部重试，于是"后台刷新独占锁 20 秒甚至
+   100 秒"，用户点开关的动作排在后面。
+2. **启动链路对"半死内核"没有任何恢复路径**：`setupConfig`（60 秒）与 `startListener`（30 秒）只会静默
+   等到超时，没有任何一步会去重启内核——而"退出应用重进"之所以有效，正是因为退出时内核被杀掉、
+   下次启动重新拉起。用户只能手动做这件事。
+3. **IPC 没连上时调用方空等满超时**：`sendMessage` 在没有 socket 时丢弃消息就返回，而 `invoke` 仍会
+   等满自己的 30/60 秒；`ClashService._doRestart` 中途抛错还会把 `isStarting` 永久留在 `true`，
+   让健康探测与状态对账此后全部跳过。
+
+**改动**：
+
+- **后台刷新改用独立的 `_coreRefreshLock`**（不再占用生命周期锁），并给刷新加两层上界：单次向内核
+  要代理表 5 秒（`_groupsIpcTimeout`）、整轮刷新 15 秒（`_groupsRefreshTimeout`）。刷新内部本来就有
+  `_isUpdatingGroups` 与 generation 兜底，且从不反向获取生命周期锁，所以单独一把锁是安全的。
+- **生命周期锁加"持有过久"告警**：`_withCoreLock` 把 `updateStatus` / `restartCore` / `applyProfile` /
+  `updateClashConfig` / `setupClashConfig` / `handleChangeProfile` 这些动作具名化，持锁超过 20 秒就写日志
+  （`[Core] lifecycle action "xxx" has been holding the lock for Ns`），下次出现可一眼定位卡住的是谁。
+- **启动前先确认内核还在应答**（`_ensureCoreReachable`）：探测失败就走控制器级重启
+  （`_restartCore` = `reStart()` + 重新 `initClash`，缺了后者新内核会被 `getIsInit` 判成仍然不可达），
+  重启成功后提示新增文案 `coreRestarted`（内核无响应，已自动重启内核），再继续下发配置、起监听。
+- **启动动作其后自检**：开关已显示运行中但内核仍不应答时立即对账拨回已停止（`Start request left the
+  core unreachable`），不再把开关停在假运行态上。
+- **IPC 无连接时不再空等**：`sendMessage` 改为返回 `bool`（`interface.dart` / `service.dart` / `lib.dart`），
+  `invoke` 拿到 `false` 就立即按"无应答"返回默认值并清掉等待者，不再空等 30/60 秒。
+  `_socketReadyTimeout` 随之删除，`_waitForCoreReady` 的上界改用 `_coreReadyTimeout`。
+- **`_doRestart` 拆出 `_startCore` 并补 try/finally**：任何一步抛错都不会再把 `isStarting` 留在 `true`。
+- 启停链路显式上界：`startListener` 15 秒（`coreStartIpcTimeout`）、`setupConfig` 30 秒（`coreSetupIpcTimeout`），
+  通过新增的可选 `timeout` 参数传入，`invoke` 默认值不变。
+
+**验证**（`flutter analyze` 无问题、`flutter test` 85/85）：同一套"挂起 dev 内核"故障注入下，
+修复后点开关的日志为
+
+```
+19:11:48  （点总开关）
+19:11:51  [Core] Core is not reachable before start, restarting it
+19:11:51  restart core / Socket connection closed / Core process exited with code -1   ← 挂死的旧内核被杀
+19:12:24  127.0.0.1:7891 LISTENING                                                    ← 监听恢复、内核换新
+```
+
+即"点开关 → 自动重启内核 → 监听回来"在有界时间内完成，不再需要退出应用；修复前的同一场景是
+"开关等待 19.7 秒 + 动作耗 120 秒 + 界面回到已停止 + 监听始终起不来"。基线路径无回归：
+内核健康时点开关 30 余毫秒完成、`127.0.0.1:7891` 正常监听。
+
+**未决问题**：
+
+- 故障注入测的是 `Process.start` 回落路径（诊断构建跳过 Windows 助手服务）：用户机上内核由帮助服务
+  托管（`helperClient.startCore`），`reStart` 的杀进程/拉起由帮助服务完成，恢复路径同一套代码但未在
+  实机帮助服务模式下跑过；恢复耗时为数十秒（探测 2 秒 + 重启 + 重新下发配置），仍有压缩空间。
+- 诊断用的 dev 身份实例在本机偶发"启动 1~2 分钟后静默退出"（无日志、无崩溃转储），未定位；用户正式
+  实例（`Documents\Bettbox`，自 18:04 起持续运行）不受影响，与本问题无关。
+- 另记一条上游既有行为（非本轮改动）：应用启动/退出时会调 `proxy.stopProxy()`，会顺带清掉**别的程序**
+  设置的 Windows 系统代理（`ProxyEnable` 置 0、`ProxyServer` 保留）。诊断期间已多次核对并保持用户
+  `ProxyEnable=1 / 127.0.0.1:7890` 原值未变。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，

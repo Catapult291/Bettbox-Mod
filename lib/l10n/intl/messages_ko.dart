@@ -250,6 +250,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("연결됨"),
     "coreExited": MessageLookupByLibrary.simpleMessage("코어가 종료되었습니다"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("코어 정보"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage(
+      "코어가 응답하지 않아 재시작했습니다",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "코어가 실행 중입니다. 스위치 상태를 동기화했습니다",
     ),

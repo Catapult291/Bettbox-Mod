@@ -33,6 +33,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 开发体验 | `analysis_options.yaml` 排除构建产物与平台目录，`flutter analyze` 只报应用代码问题 |
 | 内存占用调整 | 首页「内存信息」同时显示「应用内存」（本应用 RSS）与「内核内存」；provider 的全节点列表不再进常驻单例，只在构组时随 isolate 瞬时使用；连接页快照在窗口隐藏/后台时释放；脚本引擎补上 30s / 256MB 执行上下界（`lib/clash/core.dart`、`lib/views/dashboard/widgets/memory_info.dart` 等） |
 | 内核状态对账与启停有界化 | 修首页总开关与内核真实状态脱节（显示已停止、内核仍在跑且点不动）与长时间使用后的界面挂起：桌面端每 5 秒探测一次内核并与 UI 状态对账（连续两次同向才动作，依据持久化运行意图 `core_listener_running`），停止不再假成功；三处总开关的启停动作加 120 秒上界；IPC / 重启链 / 订阅 HTTP 请求逐个补超时；`runas` 提权移出 platform thread（`lib/controller.dart`、`lib/clash/service.dart`、`lib/common/system.dart` 等） |
+| 总开关仍被"半死内核"锁死：后台刷新不再抢锁 + 启动前自动重启内核 | 内核进程在、IPC 不应答时，后台分组刷新会独占生命周期锁十几秒到上百秒、启停动作又只会静默等满 IPC 超时，表现为「开关点了没反应，只能退出应用重进」。现改为：分组刷新走独立锁并加上界（单次 5 秒 / 整轮 15 秒）；生命周期动作具名化并在持锁超 20 秒时告警；启动前先探测内核、不应答就自动重启内核（含重新 `initClash`）并提示 `coreRestarted`；启动后若内核仍不应答立即按事实拨回；`sendMessage` 在无连接时立刻回报失败，`invoke` 不再空等满 30/60 秒超时（`lib/controller.dart`、`lib/clash/service.dart`、`lib/clash/interface.dart` 等） |
 
 > 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），
 > 本仓库直接采用上游实现，不再单列。

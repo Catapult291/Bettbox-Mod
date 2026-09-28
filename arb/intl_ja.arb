@@ -47,6 +47,7 @@
   "coreSuspended": "一時停止中",
   "coreStateResynced": "コアは実行中です。スイッチの状態を同期しました",
   "coreExited": "コアが終了しました",
+  "coreRestarted": "コアが応答しないため再起動しました",
   "invalidIpFormat": "無効なIPまたはCIDR形式",
   "tooManyRules": "ルールは最大5つまでです",
   "dozeSuspend": "スリープ連携",

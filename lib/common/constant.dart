@@ -32,6 +32,15 @@ const httpTimeoutDuration = Duration(milliseconds: 5000);
 /// 启停链路本身可能有较慢的合法分支（下发配置、下载订阅），但一旦某个环节卡住，
 /// 控件不能永远停在"禁用/转圈"上：超时后放开按钮，状态由内核对账拨正。
 const updateStatusTimeout = Duration(seconds: 120);
+
+/// 启停链路上等待内核应答的上界。
+///
+/// 内核 IPC 卡死时 `invoke` 会等满自己的默认上限（30 秒 / 60 秒），累加到启停
+/// 链路上就是"点一下开关要等一两分钟、期间还占着生命周期锁"。这两个值只决定
+/// "等多久就放弃并如实上报"，不影响内核实际应用配置（配置照旧在后台生效，
+/// 之后由状态对账确认）。
+const coreStartIpcTimeout = Duration(seconds: 15);
+const coreSetupIpcTimeout = Duration(seconds: 30);
 const moreDuration = Duration(milliseconds: 100);
 const animateDuration = Duration(milliseconds: 100);
 const midDuration = Duration(milliseconds: 200);

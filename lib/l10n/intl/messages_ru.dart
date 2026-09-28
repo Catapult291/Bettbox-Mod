@@ -312,6 +312,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("Подключено"),
     "coreExited": MessageLookupByLibrary.simpleMessage("Ядро завершило работу"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("Информация о ядре"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage(
+      "Ядро не отвечает — перезапущено",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "Ядро всё ещё работает — состояние переключателя синхронизировано",
     ),

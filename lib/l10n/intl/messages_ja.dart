@@ -238,6 +238,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("接続済み"),
     "coreExited": MessageLookupByLibrary.simpleMessage("コアが終了しました"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("カーネル情報"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage("コアが応答しないため再起動しました"),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "コアは実行中です。スイッチの状態を同期しました",
     ),

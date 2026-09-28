@@ -216,6 +216,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("已連線"),
     "coreExited": MessageLookupByLibrary.simpleMessage("核心已退出"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("內核資訊"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage("核心無回應，已自動重啟核心"),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage("核心仍在執行，開關狀態已同步"),
     "coreSuspended": MessageLookupByLibrary.simpleMessage("已掛起"),
     "country": MessageLookupByLibrary.simpleMessage("區域"),

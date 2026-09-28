@@ -23,8 +23,8 @@ class ClashService extends ClashHandlerInterface {
   /// 上一个重启没有结束时继续等待的上界，避免重启链互相阻塞。
   static const _restartChainTimeout = Duration(seconds: 60);
 
-  /// 等待内核连上 IPC 的上界，见 [sendMessage]。
-  static const _socketReadyTimeout = Duration(seconds: 3);
+  /// 内核起来后等它连上 IPC 的上界，见 [_waitForCoreReady]。
+  static const _coreReadyTimeout = Duration(seconds: 5);
 
   Completer<ServerSocket> serverCompleter = Completer();
 
@@ -175,7 +175,17 @@ class ClashService extends ClashHandlerInterface {
   Future<void> _doRestart() async {
     isStarting = true;
     _isDestroying = false;
+    try {
+      await _startCore();
+    } finally {
+      // 任何一步抛错（IPC 服务没绑上、进程起不来）都不能把 [isStarting] 留在
+      // true：健康探测、断开上报和状态对账都会把它当成"正在过渡"而全部跳过，
+      // 此后内核状态与界面再也不会自愈——只能重启应用。
+      isStarting = false;
+    }
+  }
 
+  Future<void> _startCore() async {
     await _destroySocket();
 
     process?.kill();
@@ -215,7 +225,6 @@ class ClashService extends ClashHandlerInterface {
         );
         if (started) {
           await _waitForCoreReady();
-          isStarting = false;
           if (system.isWindows && globalState.config.appSetting.enableHighPriority) {
             unawaited(
               helperClient
@@ -247,7 +256,6 @@ class ClashService extends ClashHandlerInterface {
     });
     _watchCoreProcess();
     await _waitForCoreReady();
-    isStarting = false;
     if (system.isWindows && globalState.config.appSetting.enableHighPriority) {
       unawaited(
         helperClient
@@ -262,9 +270,11 @@ class ClashService extends ClashHandlerInterface {
 
   Future<void> _waitForCoreReady() async {
     try {
-      await socketCompleter.future.timeout(const Duration(seconds: 5));
+      await socketCompleter.future.timeout(_coreReadyTimeout);
     } catch (_) {
-      commonPrint.log('Core ready timeout after 5s');
+      commonPrint.log(
+        'Core ready timeout after ${_coreReadyTimeout.inSeconds}s',
+      );
     }
   }
 
@@ -295,40 +305,41 @@ class ClashService extends ClashHandlerInterface {
   }
 
   @override
-  sendMessage(String message) async {
+  Future<bool> sendMessage(String message) async {
     if (_isDestroying || globalState.isExiting) {
-      return;
+      return false;
     }
-    final Socket socket;
-    try {
-      // 内核没连上来时 socketCompleter 永不完成；加上界，否则每一次 invoke 都会
-      // 留下一个永久 pending 的发送任务。
-      socket = await socketCompleter.future.timeout(_socketReadyTimeout);
-    } catch (e) {
-      commonPrint.log('Core socket is not ready, message dropped: $e');
-      return;
+    if (!socketCompleter.isCompleted) {
+      // 内核还没连上（启动中 / 刚被重启 / 已经死了）：立刻回报"没送出去"，
+      // 让调用方按无应答处理。以前这里会等 3 秒、再让 invoke 空等满它自己的
+      // 超时（30 秒 / 60 秒）——那几十秒正是"开关点了没反应"的主因。
+      commonPrint.log('Core socket is not ready, message dropped');
+      return false;
     }
     try {
-      final frame = FrameCodec.encode(message);
-      socket.add(frame);
+      final socket = await socketCompleter.future;
+      socket.add(FrameCodec.encode(message));
+      return true;
     } on SocketException catch (e) {
       if (_isDestroying || globalState.isExiting || isStarting) {
         commonPrint.log(
           'Ignored message send on closed socket during transition: $e',
         );
-        return;
+        return false;
       }
       commonPrint.log('Message send failed on closed socket: $e');
       _notifyCoreDisconnected();
+      return false;
     } on StateError catch (e) {
       if (_isDestroying || globalState.isExiting || isStarting) {
         commonPrint.log(
           'Ignored message send on closed socket during transition: $e',
         );
-        return;
+        return false;
       }
       commonPrint.log('Message send failed on closed socket: $e');
       _notifyCoreDisconnected();
+      return false;
     }
   }
 

@@ -64,6 +64,46 @@ class AppController {
 
   AppController(this.context, WidgetRef ref) : _ref = ref;
 
+  /// 生命周期锁持有多久算异常，见 [_withCoreLock]。
+  static const _coreLockWarnDuration = Duration(seconds: 20);
+
+  /// 给内核生命周期动作套一个"具名 + 持有过久告警"的锁。
+  ///
+  /// 启停、下发配置、重启内核都要排这一把锁。一旦某个动作卡住（内核 IPC 不再
+  /// 应答、提权等待等），排在它后面的动作会一起停住——用户看到的就是"总开关
+  /// 点不动，只能退出应用重进"。持锁过久时留下日志，下次出现能直接定位到是哪个
+  /// 动作卡住了。
+  Future<T> _withCoreLock<T>(String name, FutureOr<T> Function() action) {
+    return _coreLifecycleLock.synchronized(() async {
+      final sw = Stopwatch()..start();
+      final warnTimer = Timer(_coreLockWarnDuration, () {
+        commonPrint.log(
+          '[Core] lifecycle action "$name" has been holding the lock for '
+          '${sw.elapsed.inSeconds}s',
+        );
+      });
+      try {
+        return await action();
+      } finally {
+        warnTimer.cancel();
+        if (sw.elapsed >= _coreLockWarnDuration) {
+          commonPrint.log(
+            '[Core] lifecycle action "$name" finished after '
+            '${sw.elapsed.inSeconds}s',
+          );
+        }
+      }
+    });
+  }
+
+  /// 后台的分组刷新用独立的锁，不与启停抢生命周期锁。
+  ///
+  /// 刷新是纯读取（内核代理表 + provider 原文 → 分组），内核 IPC 无响应时它会
+  /// 卡住十几秒甚至更久；以前它和启停共用一把锁，于是"内核半死"时开关会被
+  /// 刷新的超时一起堵死。刷新内部有 `_isUpdatingGroups` 与 generation 兜底，
+  /// 且从不反向申请生命周期锁，所以单独一把锁是安全的。
+  final Lock _coreRefreshLock = Lock();
+
   DateTime _lastModeChangeTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   void setupClashConfigDebounce() {
@@ -124,7 +164,7 @@ class AppController {
   }
 
   Future<void> restartCore() {
-    return _coreLifecycleLock.synchronized(() async {
+    return _withCoreLock('restartCore', () async {
       _ref.read(isRestartingCoreProvider.notifier).state = true;
       try {
         await _restartCore();
@@ -293,14 +333,17 @@ class AppController {
   }
 
   Future<void> updateStatus(bool isStart) {
-    return _coreLifecycleLock.synchronized(() async {
-      _coreTransitionDepth++;
-      try {
-        await _updateStatus(isStart);
-      } finally {
-        _coreTransitionDepth--;
-      }
-    });
+    return _withCoreLock(
+      isStart ? 'start' : 'stop',
+      () async {
+        _coreTransitionDepth++;
+        try {
+          await _updateStatus(isStart);
+        } finally {
+          _coreTransitionDepth--;
+        }
+      },
+    );
   }
 
   Future<void> _updateStatus(bool isStart) async {
@@ -313,6 +356,12 @@ class AppController {
         // 启动动作可能是"静默中止"（没有当前配置、下发配置失败）或内核没起来。
         // 不做这步自查，开关会停在"已关闭"且没有任何解释。
         commonPrint.log('Start request finished without a running core');
+        await reconcileCoreState(force: true);
+      } else if (system.isDesktop &&
+          !(await _waitForCoreReachable(const Duration(seconds: 3)))) {
+        // 界面已经显示"运行中"，但内核并不应答：这种假运行态既代理不了流量，
+        // 又会把后面的启停动作继续拖进 IPC 超时。立刻按事实拨回已停止。
+        commonPrint.log('Start request left the core unreachable');
         await reconcileCoreState(force: true);
       }
     } else {
@@ -332,6 +381,39 @@ class AppController {
     }
   }
 
+  /// 启动前确认内核还能应答；不应答就先重启内核。
+  ///
+  /// 内核进程可能还在（甚至还在代理），但 IPC 已经不应答（卡死、被挂起、连接
+  /// 半死）：这种状态下 `setupConfig` / `startListener` 只会静默等到超时，开关
+  /// 点了等于没点，用户只能退出应用重进——退出时内核会被杀掉、下次启动重新拉起，
+  /// 所以重进能好。这里把"重进"这一步自动做掉：探测失败就走控制器级重启
+  /// （`reStart` + 重新 initClash，少了后者新内核依旧被判成不可达）。
+  Future<void> _ensureCoreReachable() async {
+    if (await _waitForCoreReachable(Duration.zero)) return;
+    commonPrint.log('[Core] Core is not reachable before start, restarting it');
+    try {
+      await _restartCore(setupConfig: false, refreshData: false);
+    } catch (e) {
+      commonPrint.log('[Core] Restart before start failed: $e');
+      return;
+    }
+    if (await _waitForCoreReachable(const Duration(seconds: 10))) {
+      globalState.showNotifier(appLocalizations.coreRestarted);
+    }
+  }
+
+  /// 轮询等待内核 IPC 恢复应答，[timeout] 为零时只探测一次。
+  Future<bool> _waitForCoreReachable(Duration timeout) async {
+    final service = clashService;
+    if (service == null) return true;
+    final deadline = DateTime.now().add(timeout);
+    while (true) {
+      if (await service.checkCoreHealth()) return true;
+      if (!DateTime.now().isBefore(deadline)) return false;
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
   Future<void> _fastStart() async {
     final currentProfile = _ref.read(currentProfileProvider);
     if (currentProfile == null) {
@@ -341,6 +423,10 @@ class AppController {
 
     final patchConfig = _ref.read(patchClashConfigProvider);
     final isDesktop = system.isDesktop;
+
+    if (isDesktop) {
+      await _ensureCoreReachable();
+    }
 
     if (isDesktop && patchConfig.tun.enable) {
       await _quickSetupConfig(enableTun: false);
@@ -489,7 +575,10 @@ class AppController {
     final params = await globalState.getSetupParams(
       pathConfig: realPatchConfig,
     );
-    final message = await clashCore.setupConfig(params);
+    final message = await clashCore.setupConfig(
+      params,
+      timeout: coreSetupIpcTimeout,
+    );
     if (message.isNotEmpty) {
       commonPrint.log('[Core] Setup config failed: $message');
       throw message;
@@ -724,7 +813,7 @@ class AppController {
   }
 
   Future<void> updateClashConfig() {
-    return _coreLifecycleLock.synchronized(() async {
+    return _withCoreLock('updateClashConfig', () async {
       await safeRun(() async {
         await _updateClashConfig();
       }, needLoading: true);
@@ -787,7 +876,7 @@ class AppController {
   }
 
   Future<void> setupClashConfig() {
-    return _coreLifecycleLock.synchronized(() async {
+    return _withCoreLock('setupClashConfig', () async {
       await safeRun(() async {
         await _setupCoreConfig();
       }, needLoading: false);
@@ -810,7 +899,7 @@ class AppController {
   }
 
   Future<void> applyProfile({bool silence = false}) {
-    return _coreLifecycleLock.synchronized(() async {
+    return _withCoreLock('applyProfile', () async {
       if (silence) {
         try {
           await _applyProfile();
@@ -827,7 +916,7 @@ class AppController {
   }
 
   Future<void> handleChangeProfile({bool hardRestart = false}) {
-    return _coreLifecycleLock.synchronized(() async {
+    return _withCoreLock('handleChangeProfile', () async {
       if (hardRestart) {
         _ref.read(isRestartingCoreProvider.notifier).state = true;
         try {
@@ -936,10 +1025,27 @@ class AppController {
     }
   }
 
+  /// 单次刷新（一轮 retry 循环）的总预算，见 [_retryGetProxiesGroups]。
+  static const _groupsRefreshTimeout = Duration(seconds: 15);
+
+  /// 单次向内核要代理表的等待上界。
+  ///
+  /// 内核 IPC 卡住时 `invoke` 会等满它自己的超时（默认 30 秒），乘以 retry 次数
+  /// 就是以前那次"刷新独占生命周期锁 100 秒"的来源；这里给每次尝试一个更短的
+  /// 上界，卡住时快速作废这一轮，而不是把后台任务拖成分钟级。
+  static const _groupsIpcTimeout = Duration(seconds: 5);
+
   Future<void> updateGroups({String? preloadedProvidersRawContent}) {
-    return _coreLifecycleLock.synchronized(
-      () => _updateGroups(preloadedProvidersRawContent: preloadedProvidersRawContent),
-    );
+    // 后台刷新走自己的锁，不占用生命周期锁：内核卡住时它最多拖慢自己，
+    // 不会再把启停开关一起堵死。
+    return _coreRefreshLock.synchronized(() async {
+      try {
+        await _updateGroups(preloadedProvidersRawContent: preloadedProvidersRawContent)
+            .timeout(_groupsRefreshTimeout);
+      } on TimeoutException {
+        commonPrint.log('updateGroups exceeded ${_groupsRefreshTimeout.inSeconds}s, skipped');
+      }
+    });
   }
 
   static const List<Duration> _kGroupRetryDelays = [
@@ -956,9 +1062,11 @@ class AppController {
       if (attempt > 0) {
         await Future.delayed(_kGroupRetryDelays[attempt]);
       }
-      final groups = await clashCore.getProxiesGroups(
-        providersRawContent: preloadedProvidersRawContent,
-      );
+      final groups = await clashCore
+          .getProxiesGroups(
+            providersRawContent: preloadedProvidersRawContent,
+          )
+          .timeout(_groupsIpcTimeout, onTimeout: () => const <Group>[]);
       if (groups.isNotEmpty) return groups;
     }
     return [];

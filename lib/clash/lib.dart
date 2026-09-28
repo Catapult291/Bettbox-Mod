@@ -94,10 +94,11 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
   }
 
   @override
-  sendMessage(String message) async {
+  Future<bool> sendMessage(String message) async {
     await _canSendCompleter.future;
     try {
       sendPort?.send(message);
+      return true;
     } catch (e) {
       commonPrint.log('ClashLib: sendMessage failed: $e, reconnecting IPC');
       sendPort = null;
@@ -105,6 +106,7 @@ class ClashLib extends ClashHandlerInterface with AndroidClashInterface {
       await service?.reconnectIpc();
       await _waitForIpc();
       sendPort?.send(message);
+      return true;
     }
   }
 

@@ -87,8 +87,11 @@ class ClashCore {
     return await clashInterface.updateConfig(updateParams);
   }
 
-  Future<String> setupConfig(SetupParams setupParams) async {
-    return await clashInterface.setupConfig(setupParams);
+  Future<String> setupConfig(
+    SetupParams setupParams, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    return await clashInterface.setupConfig(setupParams, timeout: timeout);
   }
 
   /// [providersRawContent] 是 provider 列表的原始 JSON 原文（见
@@ -285,8 +288,10 @@ class ClashCore {
     return clashInterface.parseExternalProviderContent(providerName);
   }
 
-  Future<void> startListener() async {
-    await clashInterface.startListener();
+  Future<void> startListener({
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    await clashInterface.startListener(timeout: timeout);
   }
 
   /// 返回内核是否应答了停止指令（IPC 超时会被 [ClashHandlerInterface.invoke]

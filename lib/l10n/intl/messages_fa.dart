@@ -301,6 +301,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreConnected": MessageLookupByLibrary.simpleMessage("متصل شد"),
     "coreExited": MessageLookupByLibrary.simpleMessage("هسته بسته شد"),
     "coreInfo": MessageLookupByLibrary.simpleMessage("اطلاعات هسته"),
+    "coreRestarted": MessageLookupByLibrary.simpleMessage(
+      "هسته پاسخ نمی‌دهد — دوباره راه‌اندازی شد",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "هسته همچنان در حال اجراست — وضعیت کلید همگام شد",
     ),

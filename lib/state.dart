@@ -319,7 +319,7 @@ class GlobalState {
     if (system.isAndroid && isService) {
       await clashLibHandler?.startListener();
     } else {
-      await clashCore.startListener();
+      await clashCore.startListener(timeout: coreStartIpcTimeout);
     }
     if (includeVpnService) {
       await service?.startVpn();

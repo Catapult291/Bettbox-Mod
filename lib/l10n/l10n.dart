@@ -414,6 +414,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Core not responding — restarted`
+  String get coreRestarted {
+    return Intl.message(
+      'Core not responding — restarted',
+      name: 'coreRestarted',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Invalid IP or CIDR format`
   String get invalidIpFormat {
     return Intl.message(
