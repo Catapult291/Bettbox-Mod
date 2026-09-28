@@ -206,6 +206,12 @@ final wakelockStateProvider = StateProvider<bool>((ref) => false);
 
 final isRestartingCoreProvider = StateProvider<bool>((ref) => false);
 
+/// 内核启停过渡中：从用户点击开关那一刻起，到这次启停动作结束（含等锁和各阶段
+/// IPC）为止。与 [isRestartingCoreProvider] 的区别是后者只在"内核不应答、正在
+/// 重启"时为 true，而本标记覆盖整个过程——不覆盖的话，等待与下发配置的十几秒里
+/// 开关只是变灰没有任何动静，用户会当成卡死而直接退出应用。
+final isCoreBusyProvider = StateProvider<bool>((ref) => false);
+
 @riverpod
 TrayState trayState(Ref ref) {
   final isStart = ref.watch(runTimeProvider.select((state) => state != null));

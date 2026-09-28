@@ -488,11 +488,64 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 - 故障注入测的是 `Process.start` 回落路径（诊断构建跳过 Windows 助手服务）：用户机上内核由帮助服务
   托管（`helperClient.startCore`），`reStart` 的杀进程/拉起由帮助服务完成，恢复路径同一套代码但未在
   实机帮助服务模式下跑过；恢复耗时为数十秒（探测 2 秒 + 重启 + 重新下发配置），仍有压缩空间。
+  （"数十秒"的真正来源与后续修复见第 13 节。）
 - 诊断用的 dev 身份实例在本机偶发"启动 1~2 分钟后静默退出"（无日志、无崩溃转储），未定位；用户正式
   实例（`Documents\Bettbox`，自 18:04 起持续运行）不受影响，与本问题无关。
 - 另记一条上游既有行为（非本轮改动）：应用启动/退出时会调 `proxy.stopProxy()`，会顺带清掉**别的程序**
   设置的 Windows 系统代理（`ProxyEnable` 置 0、`ProxyServer` 保留）。诊断期间已多次核对并保持用户
   `ProxyEnable=1 / 127.0.0.1:7890` 原值未变。
+
+---
+
+## 13. 恢复过程看得见 + 找齐"锁死"根因：关闭旧 socket 会挂死整条启动链
+
+第 12 节把"半死内核"做成了自动重启，但恢复期间界面没有任何反馈——用户只看到一个灰着的开关，
+等不下去就退出应用，自动恢复等于白做。本轮补可见性，并顺着"恢复到底卡在哪"挖到了真正的卡死点。
+
+**改动**
+
+- **整个启停过程都有进行中指示**（新增 `isCoreBusyProvider`，`lib/providers/state.dart`）：从点击那一刻
+  起（含等待内核锁的时间）到动作结束，右栏总开关转圈并禁用、首页启动卡片转圈、顶栏开关禁用。
+  此前只有"检测到内核不应答、正在重启"那一段会转圈，等待与下发配置的十几秒里仍是灰的。
+- **恢复时真正关闭旧 socket**（`ClashService._destroySocket`）：内核崩溃 / 被强杀 / 卡死之后，旧连接上的
+  `close()` 会一直等发送缓冲区写完。整条启动链都等在这里——实测卡死 17 秒以上不再前进，之后
+  `socketCompleter` 也没有被重置，后续所有 IPC 都往死连接上写（日志里持续刷
+  `Ignored message send on closed socket`）。现在给 `close()` 加 2 秒上界并落到 `destroy()` 强制断开，
+  且无论成败都重建 `socketCompleter`。
+- **恢复重启改为带配置重启**（`_ensureCoreReachable` → `_restartCore(setupConfig: true)`）：只把进程拉起来
+  而不下发配置，新内核不会监听端口。
+- 新增 `coreRestarting` 文案（7 种语言），恢复期间提示"内核无响应，正在重启内核…"。
+
+**验证**（`flutter analyze` 无问题、`flutter test` 85/85）
+
+- **可见性**：dev 实例点开关后快速连拍（每帧约 0.44 秒）——点击后 0.55 秒，右栏总开关与首页启动卡片
+  即出现转圈、顶栏与其他按钮同步禁用，并一直保持到动作结束。
+- **卡死根因**：注入"强杀内核"后点开关，修复前日志停在 `startCore: begin` 之后不再前进（20 秒后出现
+  `lifecycle action "start" has been holding the lock for 20s`，界面持续显示"重启内核"）；修复后同一注入：
+
+```
+[Core] Core is not reachable before start, restarting it
+restart core
+[Core] Failed to close previous socket: SocketException: Write failed (OS Error 10054)
+[Core] startCore: previous socket destroyed      ← 修复前永远到不了这一行
+[Core] startCore: ipc server ready
+[Core] startCore: spawned pid=3080
+```
+
+  从 `begin` 到 `spawned` 共 8 毫秒。
+- **助手服务模式（补验）**：dev 助手服务 `BettboxDevHelperService` 运行后启动内核，新内核
+  `ParentProcessId` 即该服务 PID，启动耗时 1.04 秒（同路径直接 spawn 为 6.6 秒）；助手侧 `start_core`
+  在校验 SHA256 之后先 `stop_core()` 再 spawn，即卡死的旧内核由服务强制清理。
+
+**未决问题**
+
+- 验证走的是**进程内直接 spawn**路径（诊断构建用编译开关跳过助手服务，避免装服务触发 UAC）。
+  助手托管路径下"卡死后恢复"的端到端未复现：内核由服务托管时运行在 Session 0，普通权限既不能挂起
+  也不能杀，无法注入"半死"状态；该路径目前只有代码证据（助手 `start_core` 先 `stop_core`）与
+  生产实例的观察（UI 不在时内核仍在跑）。
+- "强杀内核"注入下恢复流程不再卡死，但新内核**没有监听 mixed-port**（进程在、端口未起），原因未查明。
+  该注入会留下"对端已死"的旧 socket，与内核自然崩溃未必等价，需进一步复验。
+- 诊断实例偶发"启动 1~2 分钟后静默退出"仍未定位（与第 12 节同一条）。
 
 ---
 

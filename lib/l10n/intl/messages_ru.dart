@@ -315,6 +315,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreRestarted": MessageLookupByLibrary.simpleMessage(
       "Ядро не отвечает — перезапущено",
     ),
+    "coreRestarting": MessageLookupByLibrary.simpleMessage(
+      "Ядро не отвечает — перезапускаем…",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "Ядро всё ещё работает — состояние переключателя синхронизировано",
     ),

@@ -308,6 +308,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreRestarted": MessageLookupByLibrary.simpleMessage(
       "Core not responding — restarted",
     ),
+    "coreRestarting": MessageLookupByLibrary.simpleMessage(
+      "Core not responding — restarting it…",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "Core is still running — switch state synced",
     ),

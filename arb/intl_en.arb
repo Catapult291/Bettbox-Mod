@@ -48,6 +48,7 @@
   "coreStateResynced": "Core is still running — switch state synced",
   "coreExited": "Core has exited",
   "coreRestarted": "Core not responding — restarted",
+  "coreRestarting": "Core not responding — restarting it…",
   "invalidIpFormat": "Invalid IP or CIDR format",
   "tooManyRules": "Max 5 rules allowed",
   "dozeSuspend": "Doze Support",

@@ -4,6 +4,7 @@ import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 /// 快捷控制栏的宽度，与左侧 `NavigationRail` 的默认宽度（minWidth = 72）对齐，
 /// 因此左右两条栏的宽度一致。
@@ -127,17 +128,24 @@ class _PowerButtonState extends ConsumerState<_PowerButton> {
     final colorScheme = context.colorScheme;
     final state = ref.watch(startButtonSelectorStateProvider);
     final isRestarting = ref.watch(isRestartingCoreProvider);
+    final isBusy = ref.watch(isCoreBusyProvider);
     final isSmartStopped = ref.watch(isSmartStoppedProvider);
     final isStart = ref.watch(runTimeProvider.select((value) => value != null));
     final displayStart = isSmartStopped ? false : (_optimisticStart ?? isStart);
 
     // 有没有可切换的对象：没配置 / 还没初始化 / 被智能停机挂起时显示为禁用灰
     final usable = state.isInit && state.hasProfile && !isSmartStopped;
-    final canPress = usable && !_isDisabled && !isRestarting;
+    final canPress = usable && !_isDisabled && !isRestarting && !isBusy;
 
     Color background = Colors.transparent;
     Color foreground = colorScheme.onSurfaceVariant;
-    if (!usable) {
+    if (isRestarting || isBusy) {
+      // 内核启停/自动恢复过程中：用运行中的配色 + 转圈，明确告诉用户"在处理，
+      // 别退出应用"。以前这里只是变灰禁用，用户会当成开关又卡死而直接退出。
+      final isLight = colorScheme.brightness == Brightness.light;
+      background = colorScheme.primary.withValues(alpha: isLight ? 0.20 : 0.26);
+      foreground = colorScheme.primary;
+    } else if (!usable) {
       foreground = colorScheme.onSurfaceVariant.withValues(alpha: 0.38);
     } else if (displayStart) {
       // 启动过程中（_isDisabled）保持运行中的配色，避免中途闪成灰的
@@ -149,6 +157,7 @@ class _PowerButtonState extends ConsumerState<_PowerButton> {
     return _QuickButton(
       label: appLocalizations.powerSwitch,
       icon: Icons.power_settings_new,
+      loading: isRestarting || isBusy || _isDisabled,
       background: background,
       foreground: foreground,
       onPressed: canPress ? _handleStart : null,
@@ -307,6 +316,9 @@ class _QuickButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final Widget? under;
 
+  /// 转圈代替图标：表示这件控件正在执行（右栏总开关在内核自动重启期间用）。
+  final bool loading;
+
   const _QuickButton({
     required this.label,
     required this.icon,
@@ -314,6 +326,7 @@ class _QuickButton extends StatelessWidget {
     required this.foreground,
     this.onPressed,
     this.under,
+    this.loading = false,
   });
 
   @override
@@ -330,7 +343,15 @@ class _QuickButton extends StatelessWidget {
           child: SizedBox(
             width: quickControlSize,
             height: quickControlSize,
-            child: Icon(icon, size: 22, color: foreground),
+            child: loading
+                ? Center(
+                    child: OverflowBox(
+                      maxWidth: 30,
+                      maxHeight: 16,
+                      child: SpinKitThreeBounce(color: foreground, size: 16),
+                    ),
+                  )
+                : Icon(icon, size: 22, color: foreground),
           ),
         ),
       ),

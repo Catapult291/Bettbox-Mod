@@ -48,6 +48,7 @@
   "coreStateResynced": "هسته همچنان در حال اجراست — وضعیت کلید همگام شد",
   "coreExited": "هسته بسته شد",
   "coreRestarted": "هسته پاسخ نمی‌دهد — دوباره راه‌اندازی شد",
+  "coreRestarting": "هسته پاسخ نمی‌دهد — در حال راه‌اندازی مجدد…",
   "invalidIpFormat": "فرمت IP یا CIDR نامعتبر است",
   "tooManyRules": "حداکثر ۵ قانون مجاز است",
   "dozeSuspend": "پشتیبانی از Doze",

@@ -332,18 +332,25 @@ class AppController {
     }
   }
 
-  Future<void> updateStatus(bool isStart) {
-    return _withCoreLock(
-      isStart ? 'start' : 'stop',
-      () async {
-        _coreTransitionDepth++;
-        try {
-          await _updateStatus(isStart);
-        } finally {
-          _coreTransitionDepth--;
-        }
-      },
-    );
+  Future<void> updateStatus(bool isStart) async {
+    // 从点击那一刻起就标记"忙"，等待锁的时间也算在内：这段时间界面若没有任何
+    // 反馈，用户会当成开关卡死而直接退出应用。
+    _ref.read(isCoreBusyProvider.notifier).state = true;
+    try {
+      await _withCoreLock(
+        isStart ? 'start' : 'stop',
+        () async {
+          _coreTransitionDepth++;
+          try {
+            await _updateStatus(isStart);
+          } finally {
+            _coreTransitionDepth--;
+          }
+        },
+      );
+    } finally {
+      _ref.read(isCoreBusyProvider.notifier).state = false;
+    }
   }
 
   Future<void> _updateStatus(bool isStart) async {
@@ -388,16 +395,26 @@ class AppController {
   /// 点了等于没点，用户只能退出应用重进——退出时内核会被杀掉、下次启动重新拉起，
   /// 所以重进能好。这里把"重进"这一步自动做掉：探测失败就走控制器级重启
   /// （`reStart` + 重新 initClash，少了后者新内核依旧被判成不可达）。
+  ///
+  /// 恢复期间必须**让用户看得见**：置 `isRestartingCoreProvider`（首页电源卡片
+  /// 转圈并显示"重启内核"，右栏总开关转圈并禁用，顶栏开关禁用）并补一条提示，
+  /// 否则用户看到开关一动不动，会像以前一样直接退出应用，恢复机制就白做了。
   Future<void> _ensureCoreReachable() async {
     if (await _waitForCoreReachable(Duration.zero)) return;
     commonPrint.log('[Core] Core is not reachable before start, restarting it');
+    _ref.read(isRestartingCoreProvider.notifier).state = true;
+    globalState.showNotifier(appLocalizations.coreRestarting);
     try {
-      await _restartCore(setupConfig: false, refreshData: false);
+      // 必须带配置重启：只把内核进程拉起来而不下发配置，新内核不会监听端口，
+      // 界面随后会回到"已停止"而内核白跑一遍——恢复就等于没恢复。
+      await _restartCore(setupConfig: true, refreshData: false);
     } catch (e) {
       commonPrint.log('[Core] Restart before start failed: $e');
       return;
+    } finally {
+      _ref.read(isRestartingCoreProvider.notifier).state = false;
     }
-    if (await _waitForCoreReachable(const Duration(seconds: 10))) {
+    if (await _waitForCoreReachable(const Duration(seconds: 15))) {
       globalState.showNotifier(appLocalizations.coreRestarted);
     }
   }
@@ -1435,6 +1452,11 @@ class AppController {
   }
 
   Future<void> _initCore() async {
+    // 内核刚被拉起时 IPC 可能还没连上：先（有界地）等连接再问/初始化。
+    // [ClashService.sendMessage] 在没连接时会立刻失败而不再空等 IPC 超时，
+    // 所以这里必须显式等待，否则重启后的新内核会因为 initClash 没下发成功
+    // 被 `getIsInit` 一直判成不可用。
+    await clashService?.waitForSocket();
     final isInit = await clashCore.isInit;
     if (!isInit) {
       await clashCore.init();

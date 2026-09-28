@@ -304,6 +304,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreRestarted": MessageLookupByLibrary.simpleMessage(
       "هسته پاسخ نمی‌دهد — دوباره راه‌اندازی شد",
     ),
+    "coreRestarting": MessageLookupByLibrary.simpleMessage(
+      "هسته پاسخ نمی‌دهد — در حال راه‌اندازی مجدد…",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "هسته همچنان در حال اجراست — وضعیت کلید همگام شد",
     ),

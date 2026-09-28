@@ -100,11 +100,17 @@ class _StartButtonState extends ConsumerState<StartButton> {
   Widget build(BuildContext context) {
     final state = ref.watch(startButtonSelectorStateProvider);
     final isSmartStopped = ref.watch(isSmartStoppedProvider);
+    final isRestarting = ref.watch(isRestartingCoreProvider);
+    final isBusy = ref.watch(isCoreBusyProvider);
     final canPress =
-        state.isInit && state.hasProfile && !_isDisabled && !isSmartStopped;
+        state.isInit &&
+        state.hasProfile &&
+        !_isDisabled &&
+        !isSmartStopped &&
+        !isBusy &&
+        !isRestarting;
     final hasNoProfile =
         state.isInit && !state.hasProfile && !_isDisabled && !isSmartStopped;
-    final isRestarting = ref.watch(isRestartingCoreProvider);
 
     return ValueListenableBuilder<int>(
       valueListenable: dashboardRefreshManager.tick1s,
@@ -150,7 +156,7 @@ class _StartButtonState extends ConsumerState<StartButton> {
                         state,
                         isStart,
                         runTime,
-                        isRestarting,
+                        isRestarting || isBusy,
                         _isDisabled,
                         isSmartStopped,
                       ),

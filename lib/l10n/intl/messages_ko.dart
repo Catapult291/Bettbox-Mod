@@ -253,6 +253,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "coreRestarted": MessageLookupByLibrary.simpleMessage(
       "코어가 응답하지 않아 재시작했습니다",
     ),
+    "coreRestarting": MessageLookupByLibrary.simpleMessage(
+      "코어가 응답하지 않아 재시작하는 중…",
+    ),
     "coreStateResynced": MessageLookupByLibrary.simpleMessage(
       "코어가 실행 중입니다. 스위치 상태를 동기화했습니다",
     ),

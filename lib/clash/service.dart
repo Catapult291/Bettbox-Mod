@@ -343,6 +343,23 @@ class ClashService extends ClashHandlerInterface {
     }
   }
 
+  /// 等内核连上 IPC（刚拉起 / 刚重启后需要一点时间），超时返回 false。
+  ///
+  /// [sendMessage] 在没连接时会立刻回报失败（不再空等 IPC 超时），所以"要等
+  /// 内核连上来"的地方改由本方法显式表达。
+  Future<bool> waitForSocket([
+    Duration timeout = const Duration(seconds: 10),
+  ]) async {
+    if (socketCompleter.isCompleted) return true;
+    try {
+      await socketCompleter.future.timeout(timeout);
+      return true;
+    } catch (_) {
+      commonPrint.log('Core socket not connected within ${timeout.inSeconds}s');
+      return false;
+    }
+  }
+
   Future<void> _deleteSocketFile() async {
     if (_transportType == TransportType.unixSocket && _socketPath != null) {
       final file = File(_socketPath!);
@@ -353,9 +370,20 @@ class ClashService extends ClashHandlerInterface {
   }
 
   Future<void> _destroySocket() async {
-    if (socketCompleter.isCompleted) {
+    if (!socketCompleter.isCompleted) return;
+    try {
       final lastSocket = await socketCompleter.future;
-      await lastSocket.close();
+      // close() 只做优雅关闭：内核进程已经消失（崩溃、被强杀、卡死）时，
+      // 发送缓冲区可能永远写不完，close() 会一直挂着。整条启动链路都等在这里，
+      // 界面就成了"开关点不动"——必须显式超时并用 destroy() 强制断开。
+      await lastSocket.close().timeout(const Duration(seconds: 2));
+    } catch (e) {
+      commonPrint.log('[Core] Failed to close previous socket: $e');
+      try {
+        final lastSocket = await socketCompleter.future;
+        lastSocket.destroy();
+      } catch (_) {}
+    } finally {
       socketCompleter = Completer();
     }
   }
