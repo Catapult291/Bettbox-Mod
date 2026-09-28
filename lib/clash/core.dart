@@ -288,10 +288,19 @@ class ClashCore {
     return clashInterface.parseExternalProviderContent(providerName);
   }
 
-  Future<void> startListener({
+  /// 返回内核是否接受了启动指令。
+  ///
+  /// 接受不代表监听已经建立（内核侧只置运行标志，建立失败也只写日志），要确认
+  /// 端口得用 [isLoopbackPortListening] 自己探测。
+  Future<bool> startListener({
     Duration timeout = const Duration(seconds: 30),
   }) async {
-    await clashInterface.startListener(timeout: timeout);
+    try {
+      return await clashInterface.startListener(timeout: timeout);
+    } catch (e) {
+      commonPrint.log('Core startListener failed: $e');
+      return false;
+    }
   }
 
   /// 返回内核是否应答了停止指令（IPC 超时会被 [ClashHandlerInterface.invoke]

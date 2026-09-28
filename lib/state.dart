@@ -318,8 +318,14 @@ class GlobalState {
     startTime ??= DateTime.now();
     if (system.isAndroid && isService) {
       await clashLibHandler?.startListener();
-    } else {
-      await clashCore.startListener(timeout: coreStartIpcTimeout);
+    } else if (!await _startListenerChecked()) {
+      // 监听没建立（指令被丢、IPC 超时，或内核接受了但 mixed-port 没起来）：
+      // 不能把开关停在"运行中"这个假状态上——那时内核可能只剩个进程、端口没人
+      // 听，代理实际不通。拨回已停止，让用户看到真实状态。
+      startTime = null;
+      _applyStoppedState();
+      showNotifier(appLocalizations.coreExited);
+      return;
     }
     if (includeVpnService) {
       await service?.startVpn();
@@ -335,6 +341,52 @@ class GlobalState {
       );
     }
     await startUpdateTasks(tasks);
+  }
+
+  /// 启动内核监听，并确认端口真的在听。
+  ///
+  /// 内核的 `startListener` 只回报"指令被接受"（内部只置运行标志，建立监听失败
+  /// 也只写日志），所以指令被丢、IPC 超时、或 mixed-port 没建立起来时它照样报
+  /// 成功。这里真连一次端口才算数，失败重试一次（新内核刚起来时监听可能还在建）。
+  Future<bool> _startListenerChecked() async {
+    final port = config.patchClashConfig.mixedPort;
+    // 内核已死时没必要再等 startListener 的整段 IPC 超时：先探一次健康度，
+    // 探测失败就直接判失败（2 秒），不把用户晾在几十秒的空等里。内核正在重启
+    // 过渡中（isStarting）时探测本身就会报"不应答"，那种情况交给下面的
+    // startListener 去等。
+    final service = clashService;
+    if (service != null &&
+        !service.isStarting &&
+        !await service.checkCoreHealth()) {
+      commonPrint.log('Core is not reachable, listener not started');
+      return false;
+    }
+    for (var attempt = 1; attempt <= 2; attempt++) {
+      // 内核处理启动指令是同步的内存操作，正常毫秒级返回；这里不必给长任务
+      // 那样的余量，短超时能让故障更快暴露给用户。
+      final accepted = await clashCore.startListener(
+        timeout: const Duration(seconds: 5),
+      );
+      final listening = port <= 0 || await isLoopbackPortListening(port);
+      if (accepted && listening) return true;
+      if (attempt == 1) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    commonPrint.log('Core did not open the listener on port $port');
+    return false;
+  }
+
+  /// 把界面拨回"已停止"（内核没能服务时，开关不能停在运行中）。
+  void _applyStoppedState() {
+    final controller = _appController;
+    if (controller == null) return;
+    final context = controller.context;
+    if (!context.mounted) return;
+    flutter_riverpod.ProviderScope.containerOf(
+      context,
+      listen: false,
+    ).read(runTimeProvider.notifier).value = null;
   }
 
   /// 内核本应在运行的持久化意图，`handleStart` / `handleStop` 维护。
