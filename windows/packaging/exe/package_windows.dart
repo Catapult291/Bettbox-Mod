@@ -82,7 +82,7 @@ void main(List<String> arguments) async {
     'APP_VERSION': appVersion,
     'EXECUTABLE_NAME': makeConfig['executable_name'] ?? 'Bettbox.exe',
     'DISPLAY_NAME': makeConfig['display_name'] ?? 'Bettbox',
-    'PUBLISHER_NAME': makeConfig['publisher'] ?? 'appshub.cc',
+    'PUBLISHER_NAME': makeConfig['publisher'] ?? 'Catapult291',
     'ARCH': arch == 'arm64' ? 'arm64' : 'x64',
     'PUBLISHER_URL': makeConfig['publisher_url'] ?? 'https://github.com/Catapult291/Bettbox-Mod',
     'CREATE_DESKTOP_ICON': true,

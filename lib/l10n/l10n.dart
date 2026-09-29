@@ -1724,16 +1724,6 @@ class AppLocalizations {
     );
   }
 
-  /// `Bettbox is based on the powerful and flexible Mihomo (Clash.Meta) proxy kernel, dedicated to a superior user experience. Our vision: Connecting Open Source and AI, Accelerating Innovation`
-  String get desc {
-    return Intl.message(
-      'Bettbox is based on the powerful and flexible Mihomo (Clash.Meta) proxy kernel, dedicated to a superior user experience. Our vision: Connecting Open Source and AI, Accelerating Innovation',
-      name: 'desc',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `Starting...`
   String get startVpn {
     return Intl.message('Starting...', name: 'startVpn', desc: '', args: []);
@@ -2544,16 +2534,6 @@ class AppLocalizations {
     return Intl.message(
       'External Link',
       name: 'externalLink',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Other Contributors (Random Order)`
-  String get otherContributors {
-    return Intl.message(
-      'Other Contributors (Random Order)',
-      name: 'otherContributors',
       desc: '',
       args: [],
     );

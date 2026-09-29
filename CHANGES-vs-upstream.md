@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.6`（tag `v1.19.6` 已发布 Release；`main` 上另有文档提交尚未随版本发布）
+- 本仓库当前版本：`1.19.7`（tag `v1.19.7` 已发布 Release）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
@@ -29,6 +29,7 @@
 | 15 | 上游跟进 | 吸收上游 09-10～09-28 的健壮性补丁（A1–A6 / B1–B4） | v1.19.5 |
 | 16 | 更新 | 应用内「检查更新」指向本仓库 | v1.19.1 |
 | 17 | 更新 | 「更多」页入口与 Windows 安装包发布者链接指向本仓库 | v1.19.6 |
+| 18 | 界面 | 「关于」页去上游内容、名称改 Bettbox-mod、发布者字段改本仓库作者 | v1.19.7 |
 
 ---
 
@@ -759,6 +760,50 @@ Android 上因签名不同无法安装（或提示签名冲突），Windows 上�
 `appshubcc/Bettbox` 已不再出现（`appshubcc/bett-rules` 仍在，那是 GeoIP 规则数据源，与本改动无关）。
 Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装包内都搜不到 URL 明文，
 因此这一项只有源码与 CI 输入层面的确认，未经安装包内的字符串复核。
+
+## 18. 「关于」页去掉上游内容、名称改为 Bettbox-mod，发布者字段改为本仓库作者
+
+**文件**：`lib/views/about.dart`、`lib/common/identity.dart`、`windows/packaging/exe/make_config.yaml`、
+`windows/packaging/exe/package_windows.dart`、`windows/runner/Runner.rc`、`linux/packaging/deb/make_config.yaml`、
+`linux/packaging/rpm/make_config.yaml`（v1.19.7）
+
+**问题**：第 16/17 节只把链接换成自己的仓库，界面与安装包里仍是上游身份：
+
+- 「关于」页保留上游宣传语（「Bettbox 基于强大灵活的 Mihomo…我们的愿景」）与上游「其他贡献者」头像墙，
+  外加上游 Telegram 群 / 频道入口——衍生版留着这些，等于替官方版做宣传并把用户引向上游社群。
+- 安装包版本信息里的 `CompanyName` 仍是 `appshub.cc`（Inno Setup 的 `VersionInfoCompany` 默认取 `AppPublisher`），
+  应用本体 `Bettbox.exe` 的 `CompanyName` 仍是 `com.appshub`；Linux 包的 maintainer / packager 同样是上游。
+
+**改动**：
+
+- `lib/views/about.dart`：删掉简介文案与「其他贡献者」板块（连同只为它存在的 `Contributor` / `Avatar` 两个类），
+  删掉 Telegram 群 / 频道一行；名称改用 `AppIdentity.brandName`；链接区新增上游 `Bettbox` 入口，与既有
+  `FlClash` / `Mihomo` 同排（`_LinkGridRow` 由固定左右两格改为格数可变，故三格同排）。
+- `lib/common/identity.dart`：新增 `AppIdentity.brandName = 'Bettbox-mod'`。**只影响「关于」页展示**：可执行文件名、
+  数据目录（`%APPDATA%\com.appshub\Bettbox`）、助手服务名、计划任务名仍取 `productName`。
+- 发布者字段改为 `Catapult291`：`make_config.yaml` 的 `publisher`、`package_windows.dart` 的同名兜底值、
+  `Runner.rc` 的 `CompanyName`、Linux 两份 `make_config.yaml` 的 maintainer / packager。
+- 死资源一并清掉：删掉 18 张贡献者头像（`assets/images/avatars/` 整目录）与 `pubspec.yaml` 里的同名资源目录，
+  并从 7 份 `arb` 删除已无人引用的 `desc` / `otherContributors`，再用 `flutter pub run intl_utils:generate`
+  重新生成 `lib/l10n/`（生成物 diff 只有这两个键，无其他格式漂移）。
+
+**验证**：`flutter analyze lib test` 无问题、`flutter test` 85 项全过；本机
+`flutter build windows --release --dart-define=APP_ENV=stable` 后，用 `GetFileVersionInfoW` 读回
+`Bettbox.exe` 版本资源 `CompanyName = 'Catapult291'`（该次构建仍在升版前，`FileVersion` 为 `1.19.6+2026092903`）。
+界面用 dev 身份调试版（`--debug --dart-define=APP_DEV=true`，窗口类与标题独立，可与已安装实例并存）实机渲染核对：
+标题为 `Bettbox-mod`，简介与「其他贡献者」板块、Telegram 行均已消失，链接区两行分别为
+`Github Releases | 检查更新`、`Bettbox | FlClash | Mihomo`，三格分隔线与右端图标正常。
+清死资源后 `flutter pub run intl_utils:generate` 的生成物 diff 只含两个键的删除（`lib/l10n/` 共 −56 行），
+再用 `flutter test` 复跑通过。
+
+**未决问题**：
+
+- 「关于」页只有这一处显示名改了：窗口标题、托盘提示、可执行文件名、数据目录、助手服务名与计划任务名仍是
+  `Bettbox` / `com.appshub.bettbox`（Android `applicationId` 与 Linux `APPLICATION_ID` 同理）。改动它们会让既装用户
+  变成「另一个应用」（无法覆盖升级、配置目录分裂），需要单独一轮评估。
+- `Runner.rc` 的 `LegalCopyright` 保留上游署名（「Copyright (C) 2025 com.appshub」），属 GPL 归属，不随发布者字段一起改。
+- 安装包（Inno `setup.exe`）的 `CompanyName` 取自 `publisher`，本机无 ISCC 打不出安装包，
+  只能读 CI 产出的 v1.19.7 安装包版本资源复核。
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 

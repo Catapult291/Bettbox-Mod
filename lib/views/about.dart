@@ -7,14 +7,6 @@ import 'package:bett_box/widgets/list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-@immutable
-class Contributor {
-  final String avatar;
-  final String name;
-
-  const Contributor({required this.avatar, required this.name});
-}
-
 class AboutView extends StatelessWidget {
   const AboutView({super.key});
 
@@ -37,130 +29,42 @@ class AboutView extends StatelessWidget {
       title: appLocalizations.more,
       items: [
         _LinkGridRow(
-          left: _LinkGridTile(
-            title: 'Github Releases',
-            icon: Icons.star,
-            onTap: () =>
-                globalState.openUrl('https://github.com/$repository/releases'),
-          ),
-          right: _LinkGridTile(
-            title: appLocalizations.checkUpdate,
-            icon: Icons.refresh,
-            onTap: () => _checkUpdate(context),
-          ),
-        ),
-        _LinkGridRow(
-          left: _LinkGridTile(
-            title: 'Telegram Group',
-            icon: Icons.launch,
-            onTap: () =>
-                globalState.openUrl('https://telegram.me/appshub_chat'),
-          ),
-          right: _LinkGridTile(
-            title: 'Channel',
-            icon: Icons.launch,
-            onTap: () =>
-                globalState.openUrl('https://telegram.me/appshub_channel'),
-          ),
-        ),
-        _LinkGridRow(
-          left: _LinkGridTile(
-            title: 'FlClash',
-            icon: Icons.launch,
-            onTap: () =>
-                globalState.openUrl('https://github.com/chen08209/FlClash'),
-          ),
-          right: _LinkGridTile(
-            title: 'Mihomo',
-            icon: Icons.launch,
-            onTap: () =>
-                globalState.openUrl('https://github.com/MetaCubeX/mihomo'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  List<Widget> _buildContributorsSection() {
-    final contributors = [
-      const Contributor(
-        avatar: 'assets/images/avatars/june2.jpg',
-        name: 'June2',
-      ),
-      const Contributor(avatar: 'assets/images/avatars/arue.jpg', name: 'Arue'),
-      const Contributor(
-        avatar: 'assets/images/avatars/dabaozi.jpg',
-        name: '大包子',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/xiaolou.png',
-        name: '小楼',
-      ),
-      const Contributor(avatar: 'assets/images/avatars/www.jpg', name: 'Www'),
-      const Contributor(
-        avatar: 'assets/images/avatars/AIsouler.jpg',
-        name: 'AIsouler',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/songchenwen.jpg',
-        name: 'songchenwen',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/EriDeLee.jpg',
-        name: 'EriDeLee',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/AdySnowflake.png',
-        name: 'AdySnowflake',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/CyberVacation.jpg',
-        name: 'CyberVacation',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/VillagerTom.png',
-        name: 'VillagerTom',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/ZeonX.jpg',
-        name: 'ZeonX',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/feitianmoo.png',
-        name: 'feitianmoo',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/kouhe3.jpg',
-        name: 'kouhe3',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/soffchen.png',
-        name: 'soffchen',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/utafrali.jpg',
-        name: 'utafrali',
-      ),
-      const Contributor(
-        avatar: 'assets/images/avatars/wfion.png',
-        name: 'wfion',
-      ),
-    ]..shuffle();
-    return generateSection(
-      separated: false,
-      title: appLocalizations.otherContributors,
-      items: [
-        ListItem(
-          title: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Wrap(
-              spacing: 24,
-              children: [
-                for (final contributor in contributors)
-                  Avatar(contributor: contributor),
-              ],
+          tiles: [
+            _LinkGridTile(
+              title: 'Github Releases',
+              icon: Icons.star,
+              onTap: () => globalState.openUrl(
+                'https://github.com/$repository/releases',
+              ),
             ),
-          ),
+            _LinkGridTile(
+              title: appLocalizations.checkUpdate,
+              icon: Icons.refresh,
+              onTap: () => _checkUpdate(context),
+            ),
+          ],
+        ),
+        _LinkGridRow(
+          tiles: [
+            _LinkGridTile(
+              title: 'Bettbox',
+              icon: Icons.launch,
+              onTap: () =>
+                  globalState.openUrl('https://github.com/appshubcc/Bettbox'),
+            ),
+            _LinkGridTile(
+              title: 'FlClash',
+              icon: Icons.launch,
+              onTap: () =>
+                  globalState.openUrl('https://github.com/chen08209/FlClash'),
+            ),
+            _LinkGridTile(
+              title: 'Mihomo',
+              icon: Icons.launch,
+              onTap: () =>
+                  globalState.openUrl('https://github.com/MetaCubeX/mihomo'),
+            ),
+          ],
         ),
       ],
     );
@@ -192,7 +96,7 @@ class AboutView extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            appName,
+                            AppIdentity.brandName,
                             style: Theme.of(context).textTheme.headlineSmall,
                           ),
                           Text(
@@ -216,40 +120,13 @@ class AboutView extends StatelessWidget {
                 );
               },
             ),
-            const SizedBox(height: 24),
-            Text(
-              appLocalizations.desc,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
           ],
         ),
       ),
       const SizedBox(height: 12),
-      ..._buildContributorsSection(),
       ..._buildMoreSection(context),
     ];
     return generateListView(items);
-  }
-}
-
-class Avatar extends StatelessWidget {
-  final Contributor contributor;
-
-  const Avatar({super.key, required this.contributor});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          width: 36,
-          height: 36,
-          child: CircleAvatar(foregroundImage: AssetImage(contributor.avatar)),
-        ),
-        const SizedBox(height: 4),
-        Text(contributor.name, style: context.textTheme.bodySmall),
-      ],
-    );
   }
 }
 
@@ -300,10 +177,9 @@ class _DeveloperModeDetectorState extends State<_DeveloperModeDetector> {
 }
 
 class _LinkGridRow extends StatelessWidget {
-  final _LinkGridTile left;
-  final _LinkGridTile right;
+  final List<_LinkGridTile> tiles;
 
-  const _LinkGridRow({required this.left, required this.right});
+  const _LinkGridRow({required this.tiles});
 
   @override
   Widget build(BuildContext context) {
@@ -314,15 +190,17 @@ class _LinkGridRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: left),
-          VerticalDivider(
-            width: 1,
-            thickness: 1,
-            indent: 8,
-            endIndent: 8,
-            color: dividerColor,
-          ),
-          Expanded(child: right),
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0)
+              VerticalDivider(
+                width: 1,
+                thickness: 1,
+                indent: 8,
+                endIndent: 8,
+                color: dividerColor,
+              ),
+            Expanded(child: tiles[i]),
+          ],
         ],
       ),
     );

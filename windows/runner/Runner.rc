@@ -101,7 +101,7 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.appshub" "\0"
+            VALUE "CompanyName", "Catapult291" "\0"
             VALUE "FileDescription", APP_FILE_DESCRIPTION "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", APP_INTERNAL_NAME "\0"
