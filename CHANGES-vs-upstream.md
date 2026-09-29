@@ -549,6 +549,51 @@ restart core
 
 ---
 
+## 14. 启动判据改为 mixed-port 真的在监听：不再停在"运行中"的假状态
+
+**文件**：`lib/clash/core.dart`、`lib/common/network.dart`、`lib/state.dart`
+
+**问题**：第 13 节遗留的"强杀内核后新内核没有监听 mixed-port"（进程在、端口没起）不是独立故障，而是
+启动判据本身的缺陷：内核的 `handleStartListener` 无条件返回成功（内部只置一个运行标志，建立监听失败
+也只写日志），客户端又把它的返回值丢掉。于是只要指令被丢、IPC 超时或端口没建起来，开关照样停在
+"运行中"——此时内核可能只剩个进程、`mixed-port` 没人听、代理实际不通。把这一轮的修复临时回退，同一套
+注入立刻复现："`close start` 之后 60 秒没有进展、端口起不来、IPC 全部报 `StreamSink is closed`"。
+
+**改动**：
+
+- `ClashCore.startListener` 改为返回 `bool`（`lib/clash/core.dart`）：让调用方看得到内核有没有接受指令；
+  异常落到 `false` 并写日志。
+- 新增 `isLoopbackPortListening(port)`（`lib/common/network.dart`）：真连一次回环端口判断有没有监听者
+  ——"监听是否真的建立"内核并不回报，只能从客户端侧实测。
+- `GlobalState.handleStart` 改走 `_startListenerChecked()`（`lib/state.dart`）：内核已不应答（且不在
+  重启过渡中）时 2 秒内直接判失败，不必等满整段 IPC 超时；`startListener` 超时收紧到 5 秒；随后真连
+  `mixed-port`，失败等 500 毫秒再重试一次（新内核刚起来时监听可能还在建）。
+- 重试仍失败：`startTime` 置空、`_applyStoppedState()` 把开关拨回已停止、不写运行意图，并提示
+  `coreExited`——不再停在假运行态。
+
+**验证**（`flutter analyze` 无问题、`flutter test` 85/85）：
+
+- 故障注入（在 `startListener` 之前杀掉内核）：**2.3 秒**内判失败，开关回到已停止，
+  `core_listener_running` 保持 `false`（没有写下"起过"的意图）。
+- "正常启动"与"强杀内核后点开关"两条路径都无回归：`mixed-port` 持续监听。
+- 助手托管路径（正式身份实机）：提权 + `SeDebugPrivilege` 挂起 Session 0 的内核后点开关，**5 秒内**
+  新内核接管、`7890` 由新 PID 监听、经代理 `curl --proxy 127.0.0.1:7890 http://cp.cloudflare.com/generate_204`
+  返回 204（0.22 秒），挂死的旧内核被帮助服务清掉。
+
+**未决问题**：
+
+- 用户报过的"点开关**首次**失败、第二次才成功"6 次启停均未复现（正常路径 0.86 秒就绪、停止 27 毫秒）。
+  剩下的可能是：点击时内核正处在重启过渡窗口（`isStarting` 期间 `sendMessage` 静默丢弃，重试间隔固定
+  500 毫秒，两次都可能落在窗口里），或那次点击实际命中的是"停止"。是否按前者加"重试前先等内核脱离
+  `isStarting`"的加固，待定。
+- 顺带确认的一条真实路径：`handleStop` 在停止指令没被应答时走 `reconcileCoreState(force: true)`，最终
+  落到 `_resyncCoreStopped()`，而它**只清界面状态、完全不碰内核**——"界面显示已停止、内核仍在跑"仍可能
+  出现（`core_listener_running` 也仍是 `true`，下次启动会尝试拉起）。实测系统代理会被正确关掉
+  （对账在 +10 秒把 `ProxyEnable` 置 0），不存在"界面已停止而系统代理还开着"。是否让停止失败也去真正
+  停内核，待定。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
