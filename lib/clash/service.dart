@@ -188,6 +188,12 @@ class ClashService extends ClashHandlerInterface {
   Future<void> _startCore() async {
     await _destroySocket();
 
+    // 助手托管时 process 为 null，`process?.kill()` 砍不到那半个旧内核，
+    // 必须先让助手把旧内核停掉再拉起新的（失败不阻塞后面的启动流程）。
+    if (system.isWindows) {
+      await helperClient.stopCore().catchError((_) => false);
+    }
+
     process?.kill();
     if (process != null) {
       await process!.exitCode.timeout(

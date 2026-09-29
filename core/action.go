@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/metacubex/mihomo/component/age"
 )
@@ -38,6 +39,13 @@ func (result ActionResult) error(data interface{}) {
 }
 
 func handleAction(action *Action, result ActionResult) {
+	// 单个 action 内的 panic 不能打穿整条指令通道：恢复后按失败应答，
+	// 客户端侧据此走既有的失败分支，而不是等 IPC 超时。
+	defer func() {
+		if r := recover(); r != nil {
+			result.error(fmt.Sprintf("panic: %v", r))
+		}
+	}()
 	switch action.Method {
 	case initClashMethod:
 		paramsString := action.Data.(string)

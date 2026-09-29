@@ -295,11 +295,10 @@ func handleCloseConnections() bool {
 }
 
 func closeConnections() {
+	// 单条连接关不掉不该中断整轮：以前直接 return false 会让后面的连接
+	// 全部漏关，换节点后旧连接继续占着内核内存。
 	statistic.DefaultManager.Range(func(c statistic.Tracker) bool {
-		err := c.Close()
-		if err != nil {
-			return false
-		}
+		_ = c.Close()
 		return true
 	})
 }

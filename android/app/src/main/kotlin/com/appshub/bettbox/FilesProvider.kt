@@ -64,7 +64,27 @@ class FilesProvider : DocumentsProvider() {
         documentId: String,
         mode: String,
         signal: CancellationSignal?
-    ): ParcelFileDescriptor = ParcelFileDescriptor.open(File(documentId), ParcelFileDescriptor.parseMode(mode))
+    ): ParcelFileDescriptor = ParcelFileDescriptor.open(File(documentId), ParcelFileDescriptor.parseMode(sanitizeMode(mode)))
+
+    /**
+     * Android 17 起 DocumentsProvider 收到的 mode 可能带 't'/'a' 等标志，
+     * [ParcelFileDescriptor.parseMode] 只认 "r"/"w"/"rw"，直接透传会抛
+     * IllegalArgumentException；这里收敛到它支持的组合。
+     */
+    private fun sanitizeMode(mode: String): String {
+        val hasR = mode.contains('r')
+        val hasW = mode.contains('w')
+        val hasT = mode.contains('t')
+        val hasA = mode.contains('a')
+        return when {
+            hasR && hasW && hasT -> "rwt"
+            hasR && hasW -> "rw"
+            hasW && hasT -> "wt"
+            hasW && hasA -> "wa"
+            hasW -> "w"
+            else -> "r"
+        }
+    }
 
     private fun includeFile(result: MatrixCursor, file: File) {
         result.newRow().apply {

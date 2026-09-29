@@ -129,11 +129,15 @@ begin
   ServiceName := '{{HELPER_SERVICE_NAME}}';
   HelperPath := ExpandConstant('{app}\{{HELPER_EXECUTABLE_NAME}}');
   
+  // 就地改指向而不是先删再建：升级安装时旧的 helper 服务仍在跑（内核由它托管），
+  // 删掉再建会让内核在中间窗口里失去托管者。服务不存在（全新安装）时 config 返回
+  // 非零，这时才走 create。
   Exec('sc', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('sc', 'delete ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  
-  Exec('sc', 'create ' + ServiceName + ' binPath= "' + HelperPath + '" start= auto', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  
+  Exec('sc', 'config ' + ServiceName + ' binPath= "' + HelperPath + '" start= auto', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  if ResultCode <> 0 then
+  begin
+    Exec('sc', 'create ' + ServiceName + ' binPath= "' + HelperPath + '" start= auto', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
   Exec('sc', 'start ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 

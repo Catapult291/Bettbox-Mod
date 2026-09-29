@@ -654,16 +654,45 @@ class GlobalState {
   Future<void> _writeRunningConfig(Map<String, dynamic> clashConfig) async {
     final content = await encodeCompactYamlTask(clashConfig);
     final configPath = await appPath.configFilePath;
-    final tempFile = File('$configPath.tmp');
-    await tempFile.writeAsString(content, flush: true);
+    // 临时文件名带时间戳：同一路径的并发写入不再互相踩，重试时也绝不会
+    // 先把目标配置删掉（旧实现 rename 失败会先 delete 目标，第二次再失败
+    // 就把运行配置写没了）。
+    final tempFile = File(
+      '$configPath.${DateTime.now().microsecondsSinceEpoch}.tmp',
+    );
+    await tempFile.parent.create(recursive: true);
     try {
-      await tempFile.rename(configPath);
-    } catch (_) {
-      final targetFile = File(configPath);
-      if (await targetFile.exists()) {
-        await targetFile.delete();
+      await tempFile.writeAsString(content, flush: true);
+      var success = false;
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          await tempFile.rename(configPath);
+          success = true;
+          break;
+        } catch (_) {
+          try {
+            await tempFile.copy(configPath);
+            success = true;
+            break;
+          } catch (_) {
+            if (attempt < 2) {
+              await Future.delayed(Duration(milliseconds: 50 * (attempt + 1)));
+            }
+          }
+        }
       }
-      await tempFile.rename(configPath);
+      if (!success) {
+        throw FileSystemException(
+          'Failed to write running config after retries',
+          configPath,
+        );
+      }
+    } finally {
+      if (await tempFile.exists()) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
     }
   }
 

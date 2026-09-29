@@ -58,6 +58,7 @@ class AppController {
   int _updateGroupsRetryCount = 0;
   bool _isUpdatingGroups = false;
   Timer? _updateGroupsRetryTimer;
+  Timer? _idleGcTimer;
   int _coreGeneration = 0;
   int _setupGeneration = 0;
   final Set<String> _updatingProfileIds = {};
@@ -105,6 +106,16 @@ class AppController {
   final Lock _coreRefreshLock = Lock();
 
   DateTime _lastModeChangeTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 大批量数据（provider 原文、分组、连接快照）用完即弃之后，等界面闲下来
+  /// 再让内核做一次真正的 GC 并把内存还给系统；期间再有活干就顺延。
+  void scheduleIdleGc({Duration delay = const Duration(seconds: 2)}) {
+    _idleGcTimer?.cancel();
+    _idleGcTimer = Timer(delay, () {
+      _idleGcTimer = null;
+      unawaited(clashCore.requestGc(forceFreeOSMemory: true));
+    });
+  }
 
   void setupClashConfigDebounce() {
     debouncer.call(FunctionTag.setupClashConfig, () async {
@@ -320,6 +331,7 @@ class AppController {
     if (refreshData && configured) {
       await updateGroups();
       await updateProviders();
+      scheduleIdleGc();
     }
 
     if (wasRunning) {
@@ -550,7 +562,7 @@ class AppController {
 
         await Future.delayed(const Duration(seconds: 2));
         if (version != _backgroundLoadVersion) return;
-        await clashCore.requestGc();
+        await clashCore.requestGc(forceFreeOSMemory: true);
       } catch (e) {
         commonPrint.log('Background load error: $e');
       }
@@ -724,6 +736,7 @@ class AppController {
   Future<void> updateProviders() async {
     _ref.read(providersProvider.notifier).value = await clashCore
         .getExternalProviders();
+    scheduleIdleGc();
   }
 
   Future<void> updateLocalIp() async {
@@ -868,6 +881,7 @@ class AppController {
       final prefs = await preferences.sharedPreferencesCompleter.future;
       await prefs?.setBool('is_tun_running', realTunEnable);
     }
+    scheduleIdleGc();
   }
 
   Future<Result<bool>> _requestAdmin(bool enableTun) async {
@@ -895,7 +909,10 @@ class AppController {
   Future<void> setupClashConfig() {
     return _withCoreLock('setupClashConfig', () async {
       await safeRun(() async {
-        await _setupCoreConfig();
+        final configured = await _setupCoreConfig();
+        if (configured) {
+          scheduleIdleGc();
+        }
       }, needLoading: false);
     });
   }
@@ -1260,7 +1277,7 @@ class AppController {
       ChangeProxyParams(groupName: groupName, proxyName: proxyName),
     );
     if (_ref.read(appSettingProvider).closeConnections) {
-      clashCore.closeConnections();
+      await clashCore.closeConnections();
     }
     addCheckIp();
   }
@@ -1451,17 +1468,27 @@ class AppController {
     await handleExit();
   }
 
-  Future<void> _initCore() async {
-    // 内核刚被拉起时 IPC 可能还没连上：先（有界地）等连接再问/初始化。
-    // [ClashService.sendMessage] 在没连接时会立刻失败而不再空等 IPC 超时，
-    // 所以这里必须显式等待，否则重启后的新内核会因为 initClash 没下发成功
-    // 被 `getIsInit` 一直判成不可用。
-    await clashService?.waitForSocket();
-    final isInit = await clashCore.isInit;
-    if (!isInit) {
-      await clashCore.init();
-      await clashCore.setState(globalState.getCoreState());
-    }
+  Future<void>? _initCoreFuture;
+
+  Future<void> _initCore() {
+    // 启动、重载配置与状态对账会从多条路径并发走到这里，去重后只实际跑一份
+    // init()+setState()，避免并发初始化互相覆盖内核状态。
+    return _initCoreFuture ??= () async {
+      try {
+        // 内核刚被拉起时 IPC 可能还没连上：先（有界地）等连接再问/初始化。
+        // [ClashService.sendMessage] 在没连接时会立刻失败而不再空等 IPC 超时，
+        // 所以这里必须显式等待，否则重启后的新内核会因为 initClash 没下发成功
+        // 被 `getIsInit` 一直判成不可用。
+        await clashService?.waitForSocket();
+        final isInit = await clashCore.isInit;
+        if (!isInit) {
+          await clashCore.init();
+          await clashCore.setState(globalState.getCoreState());
+        }
+      } finally {
+        _initCoreFuture = null;
+      }
+    }();
   }
 
   void startWakelockAutoRecovery() {

@@ -630,7 +630,23 @@ class SyntaxHighlighter {
     return null;
   }
 
+  bool get _supportsCStyleBlockComments {
+    final id = languageId?.toLowerCase().trim();
+    if (id != null) {
+      return id == 'javascript' || id == 'js';
+    }
+
+    final name = language.name?.toLowerCase().trim();
+    if (name == 'javascript' || name == 'js') return true;
+
+    return language.aliases?.any(
+          (a) => a.toLowerCase() == 'javascript' || a.toLowerCase() == 'js',
+        ) ??
+        false;
+  }
+
   bool _isInsideBlockComment(int lineIndex) {
+    if (!_supportsCStyleBlockComments) return false;
     final getLineText = this.getLineText;
     if (getLineText == null) return false;
 
@@ -701,7 +717,7 @@ class SyntaxHighlighter {
   }
 
   TextSpan? _applyRegexFallback(String lineText, TextSpan? span) {
-    if (span == null || lineText.isEmpty) return span;
+    if (span == null || lineText.isEmpty || !lineText.contains('/')) return span;
 
     final regexpStyle = _resolvedTheme['regexp'] ?? _resolvedTheme['string'];
     if (regexpStyle == null) return span;
@@ -1018,16 +1034,6 @@ class SyntaxHighlighter {
     }
 
     if (linesToProcess.isEmpty) return;
-
-    if (!forceIsolate && linesToProcess.length < 50) {
-      if (requestVersion != _version) return;
-      for (final entry in linesToProcess.entries) {
-        if (requestVersion != _version) return;
-        final span = _highlightLine(entry.value);
-        _grammarCache[entry.key] = HighlightedLine(entry.value, span, _version);
-      }
-      return;
-    }
 
     final results = await compute(
       _highlightLinesInBackground,

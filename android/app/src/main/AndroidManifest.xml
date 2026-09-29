@@ -22,6 +22,10 @@
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
+    <uses-permission
+        android:name="android.permission.INTERACT_ACROSS_USERS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".BettboxApplication"
@@ -66,6 +70,7 @@
 
                 <data android:scheme="clash" android:host="install-config" />
                 <data android:scheme="clashmeta" android:host="install-config" />
+                <data android:scheme="flclash" android:host="install-config" />
                 <data android:scheme="bettbox" android:host="install-config" />
             </intent-filter>
         </activity>
@@ -94,6 +99,7 @@
 
                 <data android:scheme="clash" android:host="install-config" />
                 <data android:scheme="clashmeta" android:host="install-config" />
+                <data android:scheme="flclash" android:host="install-config" />
                 <data android:scheme="bettbox" android:host="install-config" />
             </intent-filter>
         </activity-alias>
@@ -124,6 +130,7 @@
 
                 <data android:scheme="clash" android:host="install-config" />
                 <data android:scheme="clashmeta" android:host="install-config" />
+                <data android:scheme="flclash" android:host="install-config" />
                 <data android:scheme="bettbox" android:host="install-config" />
             </intent-filter>
         </activity-alias>

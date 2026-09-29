@@ -36,6 +36,8 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 总开关仍被"半死内核"锁死：后台刷新不再抢锁 + 启动前自动重启内核 | 内核进程在、IPC 不应答时，后台分组刷新会独占生命周期锁十几秒到上百秒、启停动作又只会静默等满 IPC 超时，表现为「开关点了没反应，只能退出应用重进」。现改为：分组刷新走独立锁并加上界（单次 5 秒 / 整轮 15 秒）；生命周期动作具名化并在持锁超 20 秒时告警；启动前先探测内核、不应答就自动重启内核（含重新 `initClash`）并提示 `coreRestarted`；启动后若内核仍不应答立即按事实拨回；`sendMessage` 在无连接时立刻回报失败，`invoke` 不再空等满 30/60 秒超时（`lib/controller.dart`、`lib/clash/service.dart`、`lib/clash/interface.dart` 等） |
 | 恢复过程可见化 + 修掉挂死启动链的旧 socket | 整个启停过程（从点击那一刻起，含等待内核锁）右栏总开关转圈并禁用、首页启动卡片转圈、顶栏禁用，不再只有一个灰着的开关；内核崩溃 / 被强杀后旧连接上的 `close()` 会等发送缓冲区写满、把整条启动链卡死在这里，现加 2 秒上界并落到 `destroy()`、无论成败都重建 `socketCompleter`；恢复重启改为带配置重启（`lib/clash/service.dart`、`lib/providers/state.dart`、`lib/state.dart` 等） |
 | 启动判据改为 mixed-port 真的在监听 | 内核 `startListener` 只回报"指令被接受"（内部只置运行标志），客户端又丢弃返回值，于是指令被丢或端口没建起来时开关会停在"运行中"的假状态（内核只剩进程、代理实际不通）。现由客户端真连一次 `mixed-port` 确认，内核不应答 2 秒内判失败、失败重试一次，仍失败就把开关拨回已停止并提示（`lib/clash/core.dart`、`lib/common/network.dart`、`lib/state.dart`） |
+| 上游健壮性补丁（内核/进程） | 吸收上游 9/10～9/28 的六条：`handleAction` 加 panic 恢复；运行配置改「时间戳临时文件 + 最多 3 次重试 + 清理」，不再出现「重试前先删掉目标配置」；助手托管下重启前先让助手停旧内核；`_initCore` 去重防并发初始化；换节点后关连接改为等待、内核侧单条失败不再中断整轮；内核返回值按类型收敛，不再强转抛错打断启动链（`core/action.go`、`core/hub.go`、`lib/state.dart`、`lib/clash/service.dart`、`lib/clash/core.dart`、`lib/controller.dart`） |
+| 上游平台专项补丁 | Windows 安装器改 `sc config binPath=` 就地改指向（升级不再先删服务）；内置代码编辑器取上游版（修 Windows 中文输入错位，上游 issue #498）；脚本引擎 `flutter_qjs` 取上游健壮化并在空闲 2 秒后归还内存；Android 17 兼容（`ACCESS_LOCAL_NETWORK` / `INTERACT_ACROSS_USERS` 权限、`FilesProvider` 的 `mode` 收敛、`flclash://` 导入）(`inno_setup.iss`、`plugins/code_forge`、`plugins/flutter_qjs`、`AndroidManifest.xml`、`FilesProvider.kt`、`lib/common/window.dart`) |
 
 > 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），
 > 本仓库直接采用上游实现，不再单列。

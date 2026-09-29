@@ -594,6 +594,58 @@ restart core
 
 ---
 
+## 15. 吸收上游 2026-09-10～09-28 的健壮性补丁（A 类 6 条 + B 类 4 条）
+
+本仓库基线是上游 `70b6077`（2026-09-10）。到上游 `31893466`（v1.19.4-pre1，2026-09-28）之间的约 95 个提交里，
+扣掉 macOS/Linux 专属、mips/Android TV、解锁检测新模块与纯风格改名后，挑出 10 条对本仓库有实际价值的补丁
+整批吸收，共 22 个文件，除下面明确说明的例外，实现与上游一致。
+
+**内核与进程健壮性**：
+
+- `handleAction` 加 `defer recover()`：单个 action 内 panic 不再打穿整条指令通道，而是按失败应答（`core/action.go`）。
+- `_writeRunningConfig` 改为「时间戳临时文件名 + 最多 3 次 rename/copy 重试 + `finally` 清理」。旧实现 rename
+  失败会**先把目标配置删掉**再重试，第二次仍失败就把运行配置写没了（`lib/state.dart`）。
+- `_startCore()` 在 `_destroySocket()` 之后、`process?.kill()` 之前补 Windows 的 `helperClient.stopCore()`：
+  助手托管时 `process` 为 `null`，原来这一刀砍不到旧内核（`lib/clash/service.dart`）。
+- `_initCore` 用 `_initCoreFuture` 去重：启动 / 重载配置 / 状态对账并发走到这里时只实际初始化一次（`lib/controller.dart`）。
+- 换节点后的 `closeConnections()` 改为 `await`；内核侧单条连接关闭失败不再中断整轮（原来 `return false` 会让
+  后面的连接全部漏关）（`lib/controller.dart`、`core/hub.go`）。
+- 内核返回值不再直接强转：`getConfig` 与分组构建按 `is Map` 收敛类型，内核回意外类型时不再抛错打断启动链
+  （`lib/clash/core.dart`）。
+
+**平台专项**：
+
+- Windows 安装器注册助手服务改为 `sc config binPath=` 就地改指向，失败（服务不存在）才 `create`，
+  升级安装不再「先删服务再建」（`windows/packaging/exe/inno_setup.iss`）。
+- 内置代码编辑器取上游修复，含 Windows 上中文输入错位（上游 issue #498）（`plugins/code_forge`）。
+- 脚本引擎取上游健壮化（JS 返回 `null` 不再崩等）；控制器接上空闲 GC——界面闲 2 秒后才
+  `requestGc(forceFreeOSMemory: true)`，后台加载收尾那次也改成真正归还内存（`plugins/flutter_qjs`、`lib/controller.dart`）。
+- Android 17 兼容：manifest 补 `ACCESS_LOCAL_NETWORK` / `INTERACT_ACROSS_USERS`，`FilesProvider.openDocument`
+  收敛 `mode`，三处 intent-filter 与 Windows 侧协议注册补 `flclash://` 导入（`AndroidManifest.xml`、
+  `FilesProvider.kt`、`lib/common/window.dart`）。
+
+**有意没拿的**：
+
+- `107468a3` 夹带的 `libclash.so → libmeta.so` 整组重命名：本仓库发布的就是 `libclash.so`（`jniLibs`、ffigen
+  头、`setup.dart` 均以此命名），只取 Dart 那半会直接打挂 Android 构建。
+- `b6b07a78` 同笔给 `_setupCoreConfig()` / `_updateClashConfig()` 加的两处 `await _initCore()`：本仓库的
+  `_initCore()` 先 `waitForSocket(10 秒)`，摆在配置更新路径上会在「内核已停止」时把这条路径拖 10 秒，只做去重。
+- 两个插件的 `macos/` 文件（本仓库不发 macOS）。
+- 上游的内存详情面板（`f3773739` / `ed31901a` / `66c48587`：点击内存卡片弹出「内核负载详情」，含已分配 / 可回收
+  环形图、Goroutines、Heap Objects、Geodata 用途等，并把内核读数口径改为含 Go 保留空闲堆）：属于新功能，
+  且会替换第 10 节「应用 / 内核」双读数的口径，按「只做针对性修补」的定位未吸收。
+
+**验证**：`flutter analyze` 无问题、`flutter test` 85/85、内核按项目设置（`CGO_ENABLED=0 -tags=with_gvisor`）
+编译通过、Windows release 构建通过。实机（正式身份、助手托管路径）：总开关停止 → `7890` 立即不监听、系统代理关闭；
+启动 → `7890` 重新监听、经代理 `generate_204` 返回 204；内置编辑器打开用户脚本，渲染与中文输入正常（未保存）。
+
+**未决问题**：
+
+- 助手托管下的「重启内核」这条路径（`_startCore()` 里新增的 `helperClient.stopCore()`）本机未触发到：重启入口是
+  仪表盘电源卡片长按 / 托盘「重启内核」，而助手托管的内核以 SYSTEM 运行、非提权杀不掉，没法用故障注入逼出重启，
+  该条目前只有代码级证据。
+- 上游的内存详情面板未吸收，第 10 节的读数口径保持不变。
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
