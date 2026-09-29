@@ -1,8 +1,8 @@
 <h1 align="center">Bettbox-Mod</h1>
 
 <p align="center">
-  基于 <a href="https://github.com/appshubcc/Bettbox">appshubcc/Bettbox</a> 的衍生版本（GPL-3.0）<br>
-  只做少量针对性修补，其余功能与上游保持一致
+  <a href="https://github.com/appshubcc/Bettbox">appshubcc/Bettbox</a> 的衍生版本（GPL-3.0）<br>
+  在上游基线之上叠加功能改进与内核稳定性修复
 </p>
 
 ---
@@ -10,37 +10,33 @@
 ## 这是什么
 
 Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本重构的多平台网络调试与规则分流客户端。
-本仓库是它的衍生版本，用于承载少量针对性的修补，并只发布 **Android** 与 **Windows** 构建。
+本仓库是它的衍生版本，承载持续演进的本地改动：既新增面向日常使用的功能，也集中修复内核启动、停止和异常恢复
+过程中的一系列卡死与状态错误，并只发布 **Android** 与 **Windows** 构建。
 
-仓库以“上游快照 + 独立改动提交”的方式组织：第一个提交是上游代码原样导入，后续提交是我们的改动，
+仓库以「上游快照 + 独立改动提交」的方式组织：第一个提交是上游代码原样导入，后续提交是本仓库的改动，
 因此任何一笔差异都可以直接对照、审阅与回退。
 
-- 当前基线：上游 `main` @ `70b6077`（2026-09-10）
-- 完整改动清单：[CHANGES-vs-upstream.md](CHANGES-vs-upstream.md)
+- 基线：上游 `main` @ `70b6077`（2026-09-10）；上游补丁已跟进至 `31893466`（2026-09-28）
+- 完整改动清单（逐条含问题、方案与验证）：[CHANGES-vs-upstream.md](CHANGES-vs-upstream.md)
 
 ## 相对上游的改动
 
-| 改动 | 说明 |
-| --- | --- |
-| 首页 IP 检测来源重构 | 「国外 HTTPS 源优先（`api.ip.sb/geoip`、Cloudflare `/cdn-cgi/trace`、`ipify`、可选 `ipinfo`），全部失败再回退国内源」；串行探测、成功即停，不再跨源合并结果，避免出现“IP 与国家错配”的脏数据（`lib/common/request.dart`） |
-| 脚本页「规则」区块 | 脚本页可直接添加自定义规则，按「覆盖全局规则」语义插入到配置规则最前面，支持编辑与多选删除，改动后自动重载当前配置（`lib/views/profiles/scripts.dart` 等） |
-| 规则目标分组过滤 | 脚本页添加规则时的目标分组与代理页保持一致：只列顶层分组（GLOBAL 的成员），并按「显示隐藏项」开关决定是否展示隐藏分组（`lib/views/profiles/override_profile.dart`） |
-| 配置更新控制 | 新增「跟随更新」开关（默认开，升上来的老配置行为不变）：配置页「全部同步」只更新订阅型且开启该开关的配置；编辑页右上角可单独更新当前配置，成功/失败以小提示反馈，不再弹全局错误对话框（`lib/models/profile.dart`、`lib/views/profiles/edit_profile.dart` 等） |
-| 右侧快捷控制栏（仅桌面） | 桌面端右侧新增常驻栏：总开关 / 系统代理 / 虚拟网卡 / 出站模式，与左侧导航栏等宽、首个控件与左栏「首页」图标同高，切换动作与托盘菜单共用同一入口；Android 端不渲染（`lib/widgets/quick_controls.dart`、`lib/manager/app_manager.dart`） |
-| 从 URL 导入自动取名 | 不填名称时按 `profile-title` 响应头 → `content-disposition` 文件名 → URL 末段 → 主机名的优先级取名（兼容 base64 与百分号编码），不再回落到时间戳 id（`lib/common/utils.dart`、`lib/models/profile.dart`） |
-| 桌面端二维码导入 | Windows / Linux 上用纯 Dart（`zxing2` + `image`）解码二维码图片，修复上游在桌面端选图必失败（`MissingPluginException`）的问题；Android / iOS / macOS 仍优先走原生识别（`lib/common/qr_reader.dart`、`lib/common/picker.dart`） |
-| 扫码成功后的转场 | 识别成功后先显示对勾停留 500ms，再用 `pushReplacement` 直接换成「从 URL 导入」页，不再闪回「添加配置」页（`lib/pages/scan.dart`、`lib/common/navigator.dart`） |
-| 开发体验 | `analysis_options.yaml` 排除构建产物与平台目录，`flutter analyze` 只报应用代码问题 |
-| 内存占用调整 | 首页「内存信息」同时显示「应用内存」（本应用 RSS）与「内核内存」；provider 的全节点列表不再进常驻单例，只在构组时随 isolate 瞬时使用；连接页快照在窗口隐藏/后台时释放；脚本引擎补上 30s / 256MB 执行上下界（`lib/clash/core.dart`、`lib/views/dashboard/widgets/memory_info.dart` 等） |
-| 内核状态对账与启停有界化 | 修首页总开关与内核真实状态脱节（显示已停止、内核仍在跑且点不动）与长时间使用后的界面挂起：桌面端每 5 秒探测一次内核并与 UI 状态对账（连续两次同向才动作，依据持久化运行意图 `core_listener_running`），停止不再假成功；三处总开关的启停动作加 120 秒上界；IPC / 重启链 / 订阅 HTTP 请求逐个补超时；`runas` 提权移出 platform thread（`lib/controller.dart`、`lib/clash/service.dart`、`lib/common/system.dart` 等） |
-| 总开关仍被"半死内核"锁死：后台刷新不再抢锁 + 启动前自动重启内核 | 内核进程在、IPC 不应答时，后台分组刷新会独占生命周期锁十几秒到上百秒、启停动作又只会静默等满 IPC 超时，表现为「开关点了没反应，只能退出应用重进」。现改为：分组刷新走独立锁并加上界（单次 5 秒 / 整轮 15 秒）；生命周期动作具名化并在持锁超 20 秒时告警；启动前先探测内核、不应答就自动重启内核（含重新 `initClash`）并提示 `coreRestarted`；启动后若内核仍不应答立即按事实拨回；`sendMessage` 在无连接时立刻回报失败，`invoke` 不再空等满 30/60 秒超时（`lib/controller.dart`、`lib/clash/service.dart`、`lib/clash/interface.dart` 等） |
-| 恢复过程可见化 + 修掉挂死启动链的旧 socket | 整个启停过程（从点击那一刻起，含等待内核锁）右栏总开关转圈并禁用、首页启动卡片转圈、顶栏禁用，不再只有一个灰着的开关；内核崩溃 / 被强杀后旧连接上的 `close()` 会等发送缓冲区写满、把整条启动链卡死在这里，现加 2 秒上界并落到 `destroy()`、无论成败都重建 `socketCompleter`；恢复重启改为带配置重启（`lib/clash/service.dart`、`lib/providers/state.dart`、`lib/state.dart` 等） |
-| 启动判据改为 mixed-port 真的在监听 | 内核 `startListener` 只回报"指令被接受"（内部只置运行标志），客户端又丢弃返回值，于是指令被丢或端口没建起来时开关会停在"运行中"的假状态（内核只剩进程、代理实际不通）。现由客户端真连一次 `mixed-port` 确认，内核不应答 2 秒内判失败、失败重试一次，仍失败就把开关拨回已停止并提示（`lib/clash/core.dart`、`lib/common/network.dart`、`lib/state.dart`） |
-| 上游健壮性补丁（内核/进程） | 吸收上游 9/10～9/28 的六条：`handleAction` 加 panic 恢复；运行配置改「时间戳临时文件 + 最多 3 次重试 + 清理」，不再出现「重试前先删掉目标配置」；助手托管下重启前先让助手停旧内核；`_initCore` 去重防并发初始化；换节点后关连接改为等待、内核侧单条失败不再中断整轮；内核返回值按类型收敛，不再强转抛错打断启动链（`core/action.go`、`core/hub.go`、`lib/state.dart`、`lib/clash/service.dart`、`lib/clash/core.dart`、`lib/controller.dart`） |
-| 上游平台专项补丁 | Windows 安装器改 `sc config binPath=` 就地改指向（升级不再先删服务）；内置代码编辑器取上游版（修 Windows 中文输入错位，上游 issue #498）；脚本引擎 `flutter_qjs` 取上游健壮化并在空闲 2 秒后归还内存；Android 17 兼容（`ACCESS_LOCAL_NETWORK` / `INTERACT_ACROSS_USERS` 权限、`FilesProvider` 的 `mode` 收敛、`flclash://` 导入）(`inno_setup.iss`、`plugins/code_forge`、`plugins/flutter_qjs`、`AndroidManifest.xml`、`FilesProvider.kt`、`lib/common/window.dart`) |
+下表只写用户能直接感受到的变化；每条改动涉及的文件与实现细节，逐条列在上面那份改动清单里。
 
-> 访问控制列表排序稳定性问题（原 `lib/models/selector.dart` 修复）已由上游合并（上游提交 `79cf06e`），
-> 本仓库直接采用上游实现，不再单列。
+| 领域 | 改动 | 说明 |
+| --- | --- | --- |
+| 稳定性 | 总开关不再和内核真实状态脱节 | 修复「首页总开关显示已关闭、点不动，系统代理开关却还开着，而代理其实已经不通了，整个程序卡死，只能退出重进」。桌面端会定时核对内核是否真的在运行，发现不一致自动把界面纠正过来并给出提示。 |
+| 稳定性 | 内核卡死时能自动恢复 | 打开开关时如果发现内核已经不再应答，应用会自动重启内核并重新下发配置，不再需要退出应用重进。整个恢复过程界面上一直有「进行中」的反馈，不会只看到一个灰按钮。 |
+| 稳定性 | 显示「运行中」就一定真的通 | 启动后会实际连接一次本地代理端口做确认，端口没起来就把开关拨回关闭并提示，不会再出现「界面显示运行中、代理却连不通」。启停中的每一步等待也都设了时间上限，不会无限期卡住。 |
+| 界面 | 桌面端右侧快捷控制栏 | 不用回首页就能在右侧栏切换总开关、系统代理、虚拟网卡和出站模式，右栏与左侧导航栏等宽对齐。只在 Windows / macOS / Linux 上出现，手机和平板不显示。 |
+| 界面 | 配置可以单独控制是否跟随同步 | 新增「跟随更新」开关（默认开启）：关掉后配置页的「全部同步」会跳过这个配置；在该配置的编辑页右上角可以单独更新它，成功与失败用一条小提示告知，不再弹对话框。 |
+| 界面 | 脚本页可直接添加规则 | 不写脚本也能在应用内给当前配置追加自定义规则，新规则排在最前面、优先于原有规则，支持编辑和长按多选删除。 |
+| 导入 | 桌面端可扫二维码导入 | 修复 Windows / Linux 上「选二维码图片后必然报错」（上游本身的缺陷）；识别成功后直接进入「从 URL 导入」页面，中间不会闪回上一页。 |
+| 导入 | 订阅名称自动获取 | 导入订阅时不填名称也能显示可读的名字（依次取订阅返回的标题、下载文件名、网址最后一段），不再显示成一串时间戳数字。 |
+| 更新 | 应用内检查更新指向本仓库 | 「检查更新」与「去下载」都取自本仓库的 Release，不会把用户导向签名不同、装不上的官方版安装包。 |
+| 首页 | IP 检测结果更准 | 首页出口 IP 显示成国内 IP 或「IP 与国家不符」的问题得到修复：优先用境外地址探测，逐个尝试、成功即停，多个来源的结果不再混在一起；全部失败时才回退国内源。 |
+| 内存 | 占用下降与读数分列 | 首页内存卡片分成「应用」和「内核」两个读数；节点列表等大块数据不再常驻内存；脚本执行加了 30 秒 / 256MB 上限，失控脚本拖不爆进程。 |
+| 上游跟进 | 定期吸收上游补丁 | 已跟进上游至 2026-09-28 的健壮性修复：内核单条指令出错不再拖垮整个通道、配置写入失败不再把配置写没、Windows 升级安装不再删服务重建、Android 17 兼容等。 |
 
 ## 下载
 
@@ -51,17 +47,6 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | Android | `Bettbox-<版本>-android-arm64-v8a.apk`（主流机型）、`Bettbox-<版本>-android-universal.apk`（通用） |
 | Windows | `Bettbox-<版本>-windows-amd64-setup.exe` |
 
-注意事项：
-
-- 本仓库使用自有签名证书，与官方 Bettbox 不同（包名相同，均为 `com.appshub.bettbox`）：
-  - **Windows**：安装程序可直接覆盖升级官方版，数据保留；
-  - **Android（未装签名校验豁免模块）**：安装时会提示签名不一致，需要先卸载官方版再安装，应用内数据会被清除
-    （建议先用应用内备份 / WebDAV 导出配置）；
-  - **Android（已装核心破解 / CorePatch 等禁用 APK 签名校验的模块）**：可直接覆盖安装且数据保留，
-    订阅与设置不受影响（实测）。
-- 本仓库各版本之间使用同一证书，可直接覆盖升级，无需以上操作。
-- Windows 安装包未做代码签名，SmartScreen 可能提示“未知发布者”，选择“仍要运行”即可。
-- Android 端首次启动 TUN 需要授予 VPN 权限；如果系统限制后台，请按应用内提示放行。
 
 ## 自行构建
 

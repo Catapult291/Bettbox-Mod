@@ -1,8 +1,33 @@
 # 相对上游 Bettbox 的改动清单
 
-- 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）
-- 对应提交：`feat: 本地改动（IP 检测源 / 脚本页规则区块 / 规则目标分组过滤）`
-- 查看完整差异：`git diff <导入提交> HEAD`
+- 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
+- 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
+- 查看完整差异：`git diff 19d5e118 HEAD`
+- 本仓库当前版本：`1.19.5`（tag `v1.19.5` 已发布 Release；`main` 上另有 2 个提交尚未随版本发布）
+
+各节「验证」里的 `flutter test` 计数是该节当时的实测值，随用例增加逐节变大（34 → 65 → 72 → 85），不是互相矛盾的数字。
+文中提到的截图与构建产物均为本机验证留存，**未入库**，只作为「做过这一步」的记录。
+
+## 目录与发布版本对照
+
+| 节 | 领域 | 改动 | 首个包含它的版本 |
+| --- | --- | --- | --- |
+| 1 | 首页 | 首页网络检测：IP 来源与探测策略 | v1.19.1 |
+| 2 | 界面 | 脚本页「规则」区块（UI 添加规则） | v1.19.1 |
+| 3 | 界面 | 「添加规则」的目标分组与代理页一致 | v1.19.1 |
+| 4 | 界面 | 配置「跟随更新」开关与编辑页单配置更新 | v1.19.2 |
+| 5 | 界面 | 右侧快捷控制栏（总开关 / 系统代理 / 虚拟网卡 / 出站模式） | v1.19.2 |
+| 6 | 导入 | 从 URL 导入：不填名称时自动获取配置名称 | v1.19.2 |
+| 7 | 导入 | 二维码导入：桌面端补上图片解码 | v1.19.2（解码改引擎优先：v1.19.3） |
+| 8 | 导入 | 扫码成功后的转场 | v1.19.2 |
+| 9 | 仓库工程 | 其他（CI、忽略规则、对外文案） | v1.19.1 起持续 |
+| 10 | 内存 | 内存占用：数据层与展示口径调整 | v1.19.3 |
+| 11 | 稳定性 | 首页总开关与内核状态脱节、界面挂起 | v1.19.3 |
+| 12 | 稳定性 | 总开关被「半死内核」锁死：后台刷新不抢锁 + 启动前自动重启 | v1.19.4 |
+| 13 | 稳定性 | 恢复过程看得见 + 关闭旧 socket 挂死整条启动链 | v1.19.4 |
+| 14 | 稳定性 | 启动判据改为 mixed-port 真的在监听 | v1.19.4 |
+| 15 | 上游跟进 | 吸收上游 09-10～09-28 的健壮性补丁（A1–A6 / B1–B4） | v1.19.5 |
+| 16 | 更新 | 应用内「检查更新」指向本仓库 | v1.19.1 |
 
 ---
 
@@ -143,15 +168,13 @@
 
 **验证**：Android x86_64 模拟器宽屏布局（`wm size 1600x900` + `wm density 160`）实测：右栏三行（中文四字标签一行排下）、
 任意页面常驻、点模式方块后底色与模式名、首页「出站模式」滑块同步变化；像素级实测左右两栏等宽（中英文下均为 81px）。
-`flutter analyze lib test` 仅剩基线告警，`flutter test` 34/34。详见 `.grok/stage-log.md` 第 5 节（含未验证项：本机无法出
-Windows 包）。
+`flutter analyze lib test` 仅剩基线告警，`flutter test` 34/34（当时本机还出不了 Windows 包，桌面实测见下一段）。
 
 **Windows 桌面实测（同一节，后一版）**：出站模式方块中心与左栏「首页」图标中心逐像素重合（135.5 对 135.5，1365×930 窗口；
 137.5 对 137.5，1920×1140 最大化；扩展栏 `showLabel` 下 144.5 对 144.5），方块顶部都在 40px 顶栏色带之下；顶栏色带宽度实测
 = 从左侧导航栏右边框（含扩展栏时是其实际宽度）一直铺到窗口右边缘（右侧余量 0~1.3 逻辑px），关闭按钮墨迹距窗口右边缘
 约 13~15 逻辑px（按钮盒子贴边，与 Windows 标题栏按钮的观感一致）。手机布局（宽 467 逻辑px）下两条侧栏一起消失、色带铺满整宽、
-按钮组仍在右上角。截图：`archive/screenshots/sidebar/31-windows-topbar-extend-window.png`（窗口）、`32-…-max.png`（最大化）、
-`33-…-laptop.png`（宽 800 的 laptop 布局）、`34-…-mobile.png`（手机布局）、`35-…-showlabel.png`（扩展左栏）。
+按钮组仍在右上角。以上五种形态（窗口、最大化、宽 800 的 laptop 布局、手机布局、扩展左栏）各有截图核对。
 
 **模式名可读性（2026-09-20）**：新增 `test/widgets/quick_controls_caption_test.dart`，按 `QuickSidebar` 的摆法渲染三种模式 × 深浅两套，
 断言模式名文字相对侧栏底色 `surfaceContainerHigh` 的对比度 > 4.5:1（改前浅色下全局 / 直连只有 1.20:1，用例会红）；并把控件渲染成
@@ -161,8 +184,7 @@ PNG 目视核对（浅色下三个模式名都是深色字，深色下都是浅�
 **总开关 + 控件顺序（2026-09-20）**：右栏新增总开关 `_PowerButton` 并排到最上，自上而下改为
 **总开关 / 系统代理 / 虚拟网卡 / 出站模式**；对齐基准随之从出站模式方块改为总开关（用户不再要求模式方块与「首页」对齐）。
 
-- 总开关与首页「电源开关」卡片、首页顶栏那个开关、托盘菜单共用 `appController.updateStatus()`（开 = 重新下发配置 + 起核心，
-  关 = 停核心 + 收掉系统代理/TUN，见第 13 节的答疑记录）。它是右栏唯一能启动核心的入口：核心没跑时下面两个开关都是禁用的，
+- 总开关与首页「电源开关」卡片、首页顶栏那个开关、托盘菜单共用 `appController.updateStatus()`。它是右栏唯一能启动核心的入口：核心没跑时下面两个开关都是禁用的，
   所以它同时充当「核心在跑没跑」的常驻指示——运行中为 `primary` 20%（浅色）/ 26%（深色）底色 + `primary` 图标，
   与右栏两个开关的开启态同一表达式。
 - 可点条件与首页两处同口径（`isInit && hasProfile && !isRestarting && !isSmartStopped`）：无配置 / 未初始化 / 智能停机挂起时
@@ -179,16 +201,15 @@ PNG 目视核对（浅色下三个模式名都是深色字，深色下都是浅�
 无配置时不可点且 38% 灰、zh/en 两种语言在 400 逻辑px 高下都不溢出（en 那例在改动前会红）。`flutter test` 72/72、
 `flutter analyze lib test` 仅剩基线告警。Windows 真机（探针实跑，1365×930 物理、150% 缩放）：右栏首个控件（电源图标）墨迹中心
 y=135.5，左栏「首页」图标墨迹中心 y=135.5，**差 0.0 px**；右栏四行自上而下确为 电源 / 系统代理 / 虚拟网卡 / 出站模式（后三者的
-图标在核心未启动时都是 38% 灰，与配置一致）。产物 `Bettbox-1.19.1-windows-x64-sidebar-power/`（129.1MB，`Bettbox.exe` SHA256
-`4317A533…EBCC5794`，与第 6/7 节同一份 exe——只有 Dart AOT 变了）。
+图标在核心未启动时都是 38% 灰，与配置一致）。本次验证用的 Windows 包与第 6/7 节是同一份 exe（只有 Dart AOT 变了）。
 
 **右栏限定为桌面平台（2026-09-20）**：Android 平板这类设备同样会走「非移动布局」，右栏原本也会出现。改为
 `showQuickRail = system.isDesktop`（非桌面时页面内容的 `Padding(right:)` 同时归零），移动端不再渲染右栏。
 
 **验证（Android A/B 实跑）**：同一台 x86_64 模拟器（`nnhanman_test`，`wm size 1600x900` + `wm density 160`，即非移动布局）上
-依次安装改动前的 debug 包（`Bettbox-1.19.1-qr-import-debug.apk`，Sep 19 23:58）与本次新包：改动前右边缘有一条常驻栏，
-「出站模式 / 规则」可见（系统代理与虚拟网卡因非桌面本就隐藏）；改动后右栏消失、首页卡片区吃满整宽，左侧导航栏与页面布局不变。
-截图 `archive/screenshots/android-wide-before-2.png`、`android-wide-after-2.png`。`flutter test` 72/72、
+依次安装改动前的 debug 包与本次新包：改动前右边缘有一条常驻栏，
+「出站模式 / 规则」可见（系统代理与虚拟网卡因非桌面本就隐藏）；改动后右栏消失、首页卡片区吃满整宽，左侧导航栏与页面布局不变
+（改动前后各留一张截图核对）。`flutter test` 72/72、
 `flutter analyze lib test` 仅剩 `lib/clash/core.dart:197` 基线告警（新包构建命令：
 `flutter build apk --debug --target-platform android-x64 --android-skip-build-dependency-validation`）。
 
@@ -223,7 +244,7 @@ y=135.5，左栏「首页」图标墨迹中心 y=135.5，**差 0.0 px**；右栏
 
 ---
 
-## 7. 二维码导入：桌面端补上纯 Dart 解码
+## 7. 二维码导入：桌面端补上图片解码（引擎优先，纯 Dart 兜底）
 
 **文件**：`lib/common/qr_reader.dart`（新增）、`lib/common/picker.dart`、`lib/pages/scan.dart`、
 `pubspec.yaml`　**测试**：`test/common/qr_import_test.dart`
@@ -236,27 +257,35 @@ y=135.5，左栏「首页」图标墨迹中心 y=135.5，**差 0.0 px**；右栏
 
 **改动**：
 
-- 新增 `QrReader`：用 `zxing2`（ZXing 的 Dart 移植）+ `image` 做纯 Dart 解码（`qrcode.dart` 的
-  `QRCodeReader` + `HybridBinarizer`）。长边超过 2000px 的图先等比缩小，避免大图产生几百 MB 的像素缓冲；
-  图片损坏、非图片、无二维码、无二维码可识别等情况都返回 null，不抛异常。
+- 新增 `QrReader`：**首选 Flutter 引擎自带的图片解码器**（`dart:ui` 的 `ImmutableBuffer` → `ImageDescriptor`
+  → `instantiateCodec`），按目标尺寸采样解码、在引擎工作线程上跑，比纯 Dart 快好几倍（实测 12MP 照片 97ms 对
+  636ms）且不占 isolate；引擎报错或解不了的格式（TIFF 等）退回纯 Dart 解码（`image` 解码 + `zxing2` 的
+  `QRCodeReader` + `HybridBinarizer`，整个在后台 isolate 里跑，12MP 照片 0.6~0.8s）。解码前把长边压到
+  2000px（`maxDecodeSide`）以内，避免大图产生几百 MB 的像素缓冲；缩放后没解出还会用原图再试一次（小二维码
+  可能因缩放丢细节）。图片损坏、非图片、无二维码、无二维码可识别等情况都返回 null，不抛异常。
+  `useEngineCodec: false` 可关掉引擎那条路只走纯 Dart，测试用它比对两条路的结果。
 - `Picker.decodeProfileUrlFromQrImage()`：解码 + 校验为 URL，失败抛 `pleaseUploadValidQrcode`；
   `pickerConfigQRCode()` 只负责选图后转调它，便于脱离文件对话框做测试。
 - 平台策略：Android / iOS / macOS 仍优先用 `mobile_scanner` 原生识别，原生报错或没识别出内容时再退回
-  Dart 解码；Windows / Linux 直接走 Dart。
+  `QrReader`；Windows / Linux 直接走 `QrReader`。
 - `lib/pages/scan.dart` 相机扫码：原来要求 `barcode.type == BarcodeType.url` 才回传，而该类型由各平台
   自行推断（Apple 端是插件里的启发式判断），类型判错就会静默什么都不导入；改为按内容判断
   （`rawValue` 是 URL 即回传），并加 `_handled` 防止一次扫码重复 pop。
+- 后续（`42cfd30e`，v1.19.3）把上面第一段的解码顺序改成引擎优先、纯 Dart 兜底，与上游 PR #489
+  （`perf(qr): decode qr code images with the engine codec first`，未合并）同内容；因为该 PR 不在上游
+  `main` 的历史里，§15 的吸收清单不重复计入。
 
 **验证**：`flutter analyze lib test` 仅剩基线告警（`lib/clash/core.dart:197`）；`flutter test` 全部通过
-（新增 9 例：合成截图、合成二维码、非 URL 内容、超长边大图缩放、无码图片、坏文件，以及 picker 入口的
-URL 校验与失败提示）。
+（`test/common/qr_import_test.dart` 现有 13 例：合成截图、合成二维码、非 URL 内容、超长边大图、大图里小二维码
+退回原图、无码图片、坏文件、灰度与调色板图、引擎与纯 Dart 结果一致、引擎解不了的文件退回纯 Dart，以及 picker 入口的
+URL 校验与两条失败提示）。
 
 - 用户提供的失败截图（`PixPin_2026-09-19_21-54-16.png`）在本机通过 `picker.decodeProfileUrlFromQrImage()`
   解出 `https://niva.fyi/s/34e9c0655bd7305e4994d123a04b5d96`，即用户遇到的那张二维码现已可导入。
 - 该截图带用户的订阅令牌，**未入库**；测试夹具改为测试内生成的合成图片（灰底 + 白卡片 + 二维码）。
 - 未在运行中的应用里点完「二维码 → 选图 → 导入」：应用启动会接管系统代理 / TUN，且当前已有一个实例在运行
   （Windows runner 的 `activate_existing` 会让新实例只去激活旧窗口），故验证停在「picker 入口 + 解码」这一层。
-  构建产物已复制到工作区根目录 `Bettbox-1.19.1-windows-x64-qr/`。
+  构建产物已复制到工作区根目录，属本地产物不入库。
 
 ---
 
@@ -304,10 +333,22 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 
 ---
 
-## 9. 其他
+## 9. 其他（仓库工程性改动）
 
 - `analysis_options.yaml`：analyzer 排除 `build/**`、`android/**`、`windows/**`、`macos/**`、`linux/**`，
   避免 `flutter analyze` 被平台侧生成代码与构建产物淹没。
+- `.github/workflows/build.yaml`：重写为只构建本仓库要发布的三个目标——Android `arm64`、Android `universal`、
+  Windows `amd64`（上游原版的矩阵还含 macOS / Linux / 其余 Android ABI）。推送 `v*` 标签时构建并创建 Release
+  （标题 `Bettbox-Mod <tag>`，标签名含 `pre` 时标记为预发布）；`workflow_dispatch` 手动触发只上传构建产物、
+  不创建 Release。构建时注入 `CORE_SHA256`、`APP_ENV`（stable / pre）与 `APP_ASSET_SUFFIX`，后两者决定
+  应用内检查更新拼出的下载地址（见第 16 节）。
+- `.gitignore`：补上落在仓库根目录的 Windows 安装包（`21cd5ec1`）——构建产物按约定复制到根目录方便取用，
+  与已有的 apk / zip 忽略规则同一口径。
+- 对外文案：`README.md` 的衍生仓库说明、`.github/release_template.md`、Issue 模板与仓库 About 描述统一口径
+  （致谢只留 README、「覆写页」改称「脚本页」；`94088230`、`2880581a`、`d4b304ef`）。同时删除
+  `SIGNING-POLICY.md` 与 `.github/ISSUE_TEMPLATE/config.yml`（后者只剩一条指向外部论坛的联系项）；
+  `SIGNING-POLICY.md` 的要点一度并入 README 的「下载注意事项」（与本仓库签名不同时的覆盖安装行为），
+  现按维护者决定整体删除，本仓库不再说明签名差异。
 
 ---
 
@@ -340,7 +381,7 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 `lib/common/constant.dart`、`arb/intl_*.arb`、`lib/l10n/*`
 
 **问题**（官方 Windows 版同样可复现）：长时间使用后，首页总开关显示为关闭且点不动，而系统代理
-开关仍是打开；整个程序卡死，只能退出重进应用才恢复。
+开关仍是打开——此时监听已经停了，代理并不通，走系统代理的请求全部失败；整个程序卡死，只能退出重进应用才恢复。
 
 **证据**：本机 Windows 事件日志确认过真实挂起——`Application Hang`（Event ID 1002）
 `Bettbox.exe 1.19.1`，`HangType = Top level window is idle`（2026-09-19 20:56，UTC+8），
@@ -351,12 +392,13 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 **定位**（两条独立成因，都属于上游共有逻辑）：
 
 1. **启停状态与内核真实状态没有任何对账渠道**。桌面端没有内核退出通知（内核由帮助服务托管时连
-   进程句柄都没有），`ClashService.checkCoreHealth()` 定义后从未被调用，socket 断开只打日志；
-   而 UI 的运行状态 `runTimeProvider` 是纯内存状态，一旦停止指令没被内核应答（IPC 超时被
-   `invoke` 兜成 `false` 后调用方丢弃），界面就停在"已关闭"——内核其实还在跑，系统代理开关读的
-   是持久化配置位，于是"开关关闭 + 系统代理打开"同时成立。`updateRunTime()` 每秒把
-   `startTime == null` 传播成开关关闭，使这个错态每秒被固化一次。首页电源卡片又只在
-   `dashboardRefreshManager.tick1s` 触发时重建（`ref.read`），后台时 tick 被停，卡片文案会冻结在旧值。
+   进程句柄都没有），`ClashService.checkCoreHealth()` 定义后从未被调用（改动后由状态对账调用，见下方
+   `reconcileCoreState`），socket 断开只打日志；而 UI 的运行状态 `runTimeProvider` 是纯内存状态，
+   一旦停止指令没被内核应答（IPC 超时被 `invoke` 兜成 `false` 后调用方丢弃），界面就停在「已关闭」，
+   而系统代理开关读的是持久化配置位、仍显示打开，于是「开关关闭 + 系统代理打开」同时成立——
+   实际监听已经停了，代理不通。`updateRunTime()` 每秒把 `startTime == null` 传播成开关关闭，
+   使这个错态每秒被固化一次。首页电源卡片又只在 `dashboardRefreshManager.tick1s` 触发时重建
+   （`ref.read`），后台时 tick 被停，卡片文案会冻结在旧值。
 2. **启停链路上存在会冻住消息泵的同步调用**。`Windows.runas()` 直接在根 isolate 上调
    `ShellExecuteW(..., "runas", ...)`，会一直阻塞到用户在 UAC 对话框上作出选择；而
    `ClashService._doRestart()` 每次启动内核都会走 `registerService()`，帮助服务不健康（ping 失败）
@@ -368,9 +410,9 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 **改动**：
 
 - **新增内核状态对账**（`AppController.reconcileCoreState`）：桌面端每 5 秒用一次 IPC 探测
-  （`getIsInit`，2 秒超时）比对"UI 的运行状态"与"内核是否还在"，连续两次同向才动手，避免开关来回跳；
-  启停动作刚结束、内核异常断开、窗口回到前台时各立即对账一次。判定"该拨回运行中"的依据是新增的
-  持久化意图 `core_listener_running`（`handleStart` / `handleStop` 维护），所以"内核进程在、监听已停"
+  （`getIsInit`，2 秒超时）比对「UI 的运行状态」与「内核是否还在」，连续两次同向才动手，避免开关来回跳；
+  启停动作刚结束、内核异常断开、窗口回到前台时各立即对账一次。判定「该拨回运行中」的依据是新增的
+  持久化意图 `core_listener_running`（`handleStart` / `handleStop` 维护），所以「内核进程在、监听已停」
   这种常态不会被误判成需要启动代理；该意图**在每次启动时清空**（上一次会话留下的值不能代表这次的
   期望，否则 `autoRun` 关闭时也会被它触发启动），正常退出时同样清掉。
   拨回运行中时会补一次 `startListener()`、恢复 1 秒刷新循环并提示 `coreStateResynced`；
@@ -389,10 +431,10 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
   期间界面照常刷新（`NetworkFix` 的逐条提权改成串行 `await`，保持一条一条弹提权的原有顺序）。
 
 **验证**：`flutter analyze` 无问题；`flutter test` 85/85 通过；Windows release 包
-（`Bettbox-1.19.2-windows-x64-corewatch`，Flutter 3.44.9 + `--dart-define=APP_ENV=stable`）构建成功，
+（Flutter 3.44.9 + `--dart-define=APP_ENV=stable`）构建成功，
 并在 `data/app.so` 中确认新代码与新文案都已编译进去（`core_listener_running`、
 `Core did not acknowledge the stop request`、`Core state reconcile failed`、`coreExited`/`coreStateResynced`
-的中英文案均可检索到）。该包已实机跑过一轮（截图在 `archive/screenshots/corestate/`）：
+的中英文案均可检索到）。该包已实机跑过一轮：
 
 - 启动正常（UIA 控件树可用），右键栏总开关点击 → 内核与监听起来（`127.0.0.1:7890` 可连）、
   卡片显示运行时长、`core_listener_running` 写入为 true；再点一次 → 监听关闭、意图转 false、
@@ -401,14 +443,14 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
   容易出的假阳性）；**上一次会话被强杀留下的意图 true + 重启后自动出现的暖核**也没能让应用在
   `autoRun=false` 时偷偷起监听（启动清空意图生效）。
 - 未能在实机触发的分支：内核被强杀（`BettboxCore.exe` 由 SYSTEM 下的帮助服务托管，非提权
-  `taskkill` 报"拒绝访问"），所以"内核已死 → 开关翻回已停止 + `coreExited` 提示"这条只是在逻辑上
-  成立，没有实机证据。另外验证时观察到：应用在"内核未运行 + 自身 systemProxy 关闭"时会调
+  `taskkill` 报「拒绝访问」），所以「内核已死 → 开关翻回已停止 + `coreExited` 提示」这条只是在逻辑上
+  成立，没有实机证据。另外验证时观察到：应用在「内核未运行 + 自身 systemProxy 关闭」时会调
   `proxy.stopProxy()`，会顺带清掉**别的程序**设置的系统代理（`ProxyEnable` 被置 0，`ProxyServer`
   保留）——这是上游既有行为，不属于本次问题，验证后退回原值（`ProxyEnable=1`）。
 
 **未决问题**：
 
-- 上述改动能在"状态脱节"这一层自愈，但**没有复现出那次真实挂起**：导致 `Top level window is idle`
+- 上述改动能在「状态脱节」这一层自愈，但**没有复现出那次真实挂起**：导致 `Top level window is idle`
   的同步阻塞点仍只是靠代码审计推断（`runas` 提权与无超时的 IPC 等待是仅有的候选）。要确证需要在
   挂起时抓到 thread stack，办法是临时开启 WER LocalDumps（`HKLM\SOFTWARE\Microsoft\Windows\Windows
   Error Reporting\LocalDumps\Bettbox.exe`，`DumpType=2`）后复现一次，再分析主线程调用栈。
@@ -416,15 +458,15 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 
 ---
 
-## 12. 总开关仍会被"半死内核"锁死：后台刷新不再抢锁 + 启动前自动重启内核
+## 12. 总开关仍会被「半死内核」锁死：后台刷新不再抢锁 + 启动前自动重启内核
 
 **文件**：`lib/controller.dart`、`lib/clash/service.dart`、`lib/clash/interface.dart`、
 `lib/clash/core.dart`、`lib/clash/lib.dart`、`lib/state.dart`、`lib/common/constant.dart`、
 `arb/intl_*.arb`、`lib/l10n/*`
 
-**问题**：第 11 节的修复上线（v1.19.3）后用户仍在报同一现象——"开关莫名被锁死关闭，只能退出应用重进"。
+**问题**：第 11 节的修复上线（v1.19.3）后用户仍在报同一现象——「开关莫名被锁死关闭，只能退出应用重进」。
 本轮在本机用独立命名实例（`APP_DEV=true` 的 `BettboxDev` 身份，独立数据目录 / 窗口类 / 内核名）**完整复现**：
-把 dev 内核进程 `NtSuspendProcess` 挂起（内核进程还在、IPC 完全不应答）后，界面被对账拨回"已停止"（与
+把 dev 内核进程 `NtSuspendProcess` 挂起（内核进程还在、IPC 完全不应答）后，界面被对账拨回「已停止」（与
 用户截图一致），此时点右栏总开关：
 
 ```
@@ -440,10 +482,10 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 **根因（三条，都已实测）**：
 
 1. **后台分组刷新和启停抢同一把生命周期锁**。刷新是 60 秒一次的后台任务，但内核 IPC 不应答时
-   `getProxies` 会等满 `invoke` 的默认超时（30 秒）再乘上内部重试，于是"后台刷新独占锁 20 秒甚至
-   100 秒"，用户点开关的动作排在后面。
-2. **启动链路对"半死内核"没有任何恢复路径**：`setupConfig`（60 秒）与 `startListener`（30 秒）只会静默
-   等到超时，没有任何一步会去重启内核——而"退出应用重进"之所以有效，正是因为退出时内核被杀掉、
+   `getProxies` 会等满 `invoke` 的默认超时（30 秒）再乘上内部重试，于是「后台刷新独占锁 20 秒甚至
+   100 秒」，用户点开关的动作排在后面。
+2. **启动链路对「半死内核」没有任何恢复路径**：`setupConfig`（60 秒）与 `startListener`（30 秒）只会静默
+   等到超时，没有任何一步会去重启内核——而「退出应用重进」之所以有效，正是因为退出时内核被杀掉、
    下次启动重新拉起。用户只能手动做这件事。
 3. **IPC 没连上时调用方空等满超时**：`sendMessage` 在没有 socket 时丢弃消息就返回，而 `invoke` 仍会
    等满自己的 30/60 秒；`ClashService._doRestart` 中途抛错还会把 `isStarting` 永久留在 `true`，
@@ -454,7 +496,7 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 - **后台刷新改用独立的 `_coreRefreshLock`**（不再占用生命周期锁），并给刷新加两层上界：单次向内核
   要代理表 5 秒（`_groupsIpcTimeout`）、整轮刷新 15 秒（`_groupsRefreshTimeout`）。刷新内部本来就有
   `_isUpdatingGroups` 与 generation 兜底，且从不反向获取生命周期锁，所以单独一把锁是安全的。
-- **生命周期锁加"持有过久"告警**：`_withCoreLock` 把 `updateStatus` / `restartCore` / `applyProfile` /
+- **生命周期锁加「持有过久」告警**：`_withCoreLock` 把 `updateStatus` / `restartCore` / `applyProfile` /
   `updateClashConfig` / `setupClashConfig` / `handleChangeProfile` 这些动作具名化，持锁超过 20 秒就写日志
   （`[Core] lifecycle action "xxx" has been holding the lock for Ns`），下次出现可一眼定位卡住的是谁。
 - **启动前先确认内核还在应答**（`_ensureCoreReachable`）：探测失败就走控制器级重启
@@ -463,13 +505,13 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 - **启动动作其后自检**：开关已显示运行中但内核仍不应答时立即对账拨回已停止（`Start request left the
   core unreachable`），不再把开关停在假运行态上。
 - **IPC 无连接时不再空等**：`sendMessage` 改为返回 `bool`（`interface.dart` / `service.dart` / `lib.dart`），
-  `invoke` 拿到 `false` 就立即按"无应答"返回默认值并清掉等待者，不再空等 30/60 秒。
+  `invoke` 拿到 `false` 就立即按「无应答」返回默认值并清掉等待者，不再空等 30/60 秒。
   `_socketReadyTimeout` 随之删除，`_waitForCoreReady` 的上界改用 `_coreReadyTimeout`。
 - **`_doRestart` 拆出 `_startCore` 并补 try/finally**：任何一步抛错都不会再把 `isStarting` 留在 `true`。
 - 启停链路显式上界：`startListener` 15 秒（`coreStartIpcTimeout`）、`setupConfig` 30 秒（`coreSetupIpcTimeout`），
   通过新增的可选 `timeout` 参数传入，`invoke` 默认值不变。
 
-**验证**（`flutter analyze` 无问题、`flutter test` 85/85）：同一套"挂起 dev 内核"故障注入下，
+**验证**（`flutter analyze` 无问题、`flutter test` 85/85）：同一套「挂起 dev 内核」故障注入下，
 修复后点开关的日志为
 
 ```
@@ -479,8 +521,8 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 19:12:24  127.0.0.1:7891 LISTENING                                                    ← 监听恢复、内核换新
 ```
 
-即"点开关 → 自动重启内核 → 监听回来"在有界时间内完成，不再需要退出应用；修复前的同一场景是
-"开关等待 19.7 秒 + 动作耗 120 秒 + 界面回到已停止 + 监听始终起不来"。基线路径无回归：
+即「点开关 → 自动重启内核 → 监听回来」在有界时间内完成，不再需要退出应用；修复前的同一场景是
+「开关等待 19.7 秒 + 动作耗 120 秒 + 界面回到已停止 + 监听始终起不来」。基线路径无回归：
 内核健康时点开关 30 余毫秒完成、`127.0.0.1:7891` 正常监听。
 
 **未决问题**：
@@ -488,8 +530,8 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 - 故障注入测的是 `Process.start` 回落路径（诊断构建跳过 Windows 助手服务）：用户机上内核由帮助服务
   托管（`helperClient.startCore`），`reStart` 的杀进程/拉起由帮助服务完成，恢复路径同一套代码但未在
   实机帮助服务模式下跑过；恢复耗时为数十秒（探测 2 秒 + 重启 + 重新下发配置），仍有压缩空间。
-  （"数十秒"的真正来源与后续修复见第 13 节。）
-- 诊断用的 dev 身份实例在本机偶发"启动 1~2 分钟后静默退出"（无日志、无崩溃转储），未定位；用户正式
+  （「数十秒」的真正来源与后续修复见第 13 节。）
+- 诊断用的 dev 身份实例在本机偶发「启动 1~2 分钟后静默退出」（无日志、无崩溃转储），未定位；用户正式
   实例（`Documents\Bettbox`，自 18:04 起持续运行）不受影响，与本问题无关。
 - 另记一条上游既有行为（非本轮改动）：应用启动/退出时会调 `proxy.stopProxy()`，会顺带清掉**别的程序**
   设置的 Windows 系统代理（`ProxyEnable` 置 0、`ProxyServer` 保留）。诊断期间已多次核对并保持用户
@@ -497,16 +539,16 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
 
 ---
 
-## 13. 恢复过程看得见 + 找齐"锁死"根因：关闭旧 socket 会挂死整条启动链
+## 13. 恢复过程看得见 + 找齐「锁死」根因：关闭旧 socket 会挂死整条启动链
 
-第 12 节把"半死内核"做成了自动重启，但恢复期间界面没有任何反馈——用户只看到一个灰着的开关，
-等不下去就退出应用，自动恢复等于白做。本轮补可见性，并顺着"恢复到底卡在哪"挖到了真正的卡死点。
+第 12 节把「半死内核」做成了自动重启，但恢复期间界面没有任何反馈——用户只看到一个灰着的开关，
+等不下去就退出应用，自动恢复等于白做。本轮补可见性，并顺着「恢复到底卡在哪」挖到了真正的卡死点。
 
 **改动**
 
 - **整个启停过程都有进行中指示**（新增 `isCoreBusyProvider`，`lib/providers/state.dart`）：从点击那一刻
   起（含等待内核锁的时间）到动作结束，右栏总开关转圈并禁用、首页启动卡片转圈、顶栏开关禁用。
-  此前只有"检测到内核不应答、正在重启"那一段会转圈，等待与下发配置的十几秒里仍是灰的。
+  此前只有「检测到内核不应答、正在重启」那一段会转圈，等待与下发配置的十几秒里仍是灰的。
 - **恢复时真正关闭旧 socket**（`ClashService._destroySocket`）：内核崩溃 / 被强杀 / 卡死之后，旧连接上的
   `close()` 会一直等发送缓冲区写完。整条启动链都等在这里——实测卡死 17 秒以上不再前进，之后
   `socketCompleter` 也没有被重置，后续所有 IPC 都往死连接上写（日志里持续刷
@@ -514,14 +556,14 @@ Android 模拟器（`nnhanman_test`，x86_64，1080×2340）实跑新包：`配�
   且无论成败都重建 `socketCompleter`。
 - **恢复重启改为带配置重启**（`_ensureCoreReachable` → `_restartCore(setupConfig: true)`）：只把进程拉起来
   而不下发配置，新内核不会监听端口。
-- 新增 `coreRestarting` 文案（7 种语言），恢复期间提示"内核无响应，正在重启内核…"。
+- 新增 `coreRestarting` 文案（7 种语言），恢复期间提示「内核无响应，正在重启内核…」。
 
 **验证**（`flutter analyze` 无问题、`flutter test` 85/85）
 
 - **可见性**：dev 实例点开关后快速连拍（每帧约 0.44 秒）——点击后 0.55 秒，右栏总开关与首页启动卡片
   即出现转圈、顶栏与其他按钮同步禁用，并一直保持到动作结束。
-- **卡死根因**：注入"强杀内核"后点开关，修复前日志停在 `startCore: begin` 之后不再前进（20 秒后出现
-  `lifecycle action "start" has been holding the lock for 20s`，界面持续显示"重启内核"）；修复后同一注入：
+- **卡死根因**：注入「强杀内核」后点开关，修复前日志停在 `startCore: begin` 之后不再前进（20 秒后出现
+  `lifecycle action "start" has been holding the lock for 20s`，界面持续显示「重启内核」）；修复后同一注入：
 
 ```
 [Core] Core is not reachable before start, restarting it
@@ -540,31 +582,31 @@ restart core
 **未决问题**
 
 - 验证走的是**进程内直接 spawn**路径（诊断构建用编译开关跳过助手服务，避免装服务触发 UAC）。
-  助手托管路径下"卡死后恢复"的端到端未复现：内核由服务托管时运行在 Session 0，普通权限既不能挂起
-  也不能杀，无法注入"半死"状态；该路径目前只有代码证据（助手 `start_core` 先 `stop_core`）与
+  助手托管路径下「卡死后恢复」的端到端未复现：内核由服务托管时运行在 Session 0，普通权限既不能挂起
+  也不能杀，无法注入「半死」状态；该路径目前只有代码证据（助手 `start_core` 先 `stop_core`）与
   生产实例的观察（UI 不在时内核仍在跑）。
-- "强杀内核"注入下恢复流程不再卡死，但新内核**没有监听 mixed-port**（进程在、端口未起），原因未查明。
-  该注入会留下"对端已死"的旧 socket，与内核自然崩溃未必等价，需进一步复验。
-- 诊断实例偶发"启动 1~2 分钟后静默退出"仍未定位（与第 12 节同一条）。
+- 「强杀内核」注入下恢复流程不再卡死，但新内核**没有监听 mixed-port**（进程在、端口未起），原因未查明。
+  该注入会留下「对端已死」的旧 socket，与内核自然崩溃未必等价，需进一步复验。
+- 诊断实例偶发「启动 1~2 分钟后静默退出」仍未定位（与第 12 节同一条）。
 
 ---
 
-## 14. 启动判据改为 mixed-port 真的在监听：不再停在"运行中"的假状态
+## 14. 启动判据改为 mixed-port 真的在监听：不再停在「运行中」的假状态
 
 **文件**：`lib/clash/core.dart`、`lib/common/network.dart`、`lib/state.dart`
 
-**问题**：第 13 节遗留的"强杀内核后新内核没有监听 mixed-port"（进程在、端口没起）不是独立故障，而是
+**问题**：第 13 节遗留的「强杀内核后新内核没有监听 mixed-port」（进程在、端口没起）不是独立故障，而是
 启动判据本身的缺陷：内核的 `handleStartListener` 无条件返回成功（内部只置一个运行标志，建立监听失败
 也只写日志），客户端又把它的返回值丢掉。于是只要指令被丢、IPC 超时或端口没建起来，开关照样停在
-"运行中"——此时内核可能只剩个进程、`mixed-port` 没人听、代理实际不通。把这一轮的修复临时回退，同一套
-注入立刻复现："`close start` 之后 60 秒没有进展、端口起不来、IPC 全部报 `StreamSink is closed`"。
+「运行中」——此时内核可能只剩个进程、`mixed-port` 没人听、代理实际不通。把这一轮的修复临时回退，同一套
+注入立刻复现：「`close start` 之后 60 秒没有进展、端口起不来、IPC 全部报 `StreamSink is closed`」。
 
 **改动**：
 
 - `ClashCore.startListener` 改为返回 `bool`（`lib/clash/core.dart`）：让调用方看得到内核有没有接受指令；
   异常落到 `false` 并写日志。
 - 新增 `isLoopbackPortListening(port)`（`lib/common/network.dart`）：真连一次回环端口判断有没有监听者
-  ——"监听是否真的建立"内核并不回报，只能从客户端侧实测。
+  ——「监听是否真的建立」内核并不回报，只能从客户端侧实测。
 - `GlobalState.handleStart` 改走 `_startListenerChecked()`（`lib/state.dart`）：内核已不应答（且不在
   重启过渡中）时 2 秒内直接判失败，不必等满整段 IPC 超时；`startListener` 超时收紧到 5 秒；随后真连
   `mixed-port`，失败等 500 毫秒再重试一次（新内核刚起来时监听可能还在建）。
@@ -574,53 +616,54 @@ restart core
 **验证**（`flutter analyze` 无问题、`flutter test` 85/85）：
 
 - 故障注入（在 `startListener` 之前杀掉内核）：**2.3 秒**内判失败，开关回到已停止，
-  `core_listener_running` 保持 `false`（没有写下"起过"的意图）。
-- "正常启动"与"强杀内核后点开关"两条路径都无回归：`mixed-port` 持续监听。
+  `core_listener_running` 保持 `false`（没有写下「起过」的意图）。
+- 「正常启动」与「强杀内核后点开关」两条路径都无回归：`mixed-port` 持续监听。
 - 助手托管路径（正式身份实机）：提权 + `SeDebugPrivilege` 挂起 Session 0 的内核后点开关，**5 秒内**
   新内核接管、`7890` 由新 PID 监听、经代理 `curl --proxy 127.0.0.1:7890 http://cp.cloudflare.com/generate_204`
   返回 204（0.22 秒），挂死的旧内核被帮助服务清掉。
 
 **未决问题**：
 
-- 用户报过的"点开关**首次**失败、第二次才成功"6 次启停均未复现（正常路径 0.86 秒就绪、停止 27 毫秒）。
+- 用户报过的「点开关**首次**失败、第二次才成功」6 次启停均未复现（正常路径 0.86 秒就绪、停止 27 毫秒）。
   剩下的可能是：点击时内核正处在重启过渡窗口（`isStarting` 期间 `sendMessage` 静默丢弃，重试间隔固定
-  500 毫秒，两次都可能落在窗口里），或那次点击实际命中的是"停止"。是否按前者加"重试前先等内核脱离
-  `isStarting`"的加固，待定。
+  500 毫秒，两次都可能落在窗口里），或那次点击实际命中的是「停止」。是否按前者加「重试前先等内核脱离
+  `isStarting`」的加固，待定。
 - 顺带确认的一条真实路径：`handleStop` 在停止指令没被应答时走 `reconcileCoreState(force: true)`，最终
-  落到 `_resyncCoreStopped()`，而它**只清界面状态、完全不碰内核**——"界面显示已停止、内核仍在跑"仍可能
+  落到 `_resyncCoreStopped()`，而它**只清界面状态、完全不碰内核**——「界面显示已停止、内核仍在跑」仍可能
   出现（`core_listener_running` 也仍是 `true`，下次启动会尝试拉起）。实测系统代理会被正确关掉
-  （对账在 +10 秒把 `ProxyEnable` 置 0），不存在"界面已停止而系统代理还开着"。是否让停止失败也去真正
+  （对账在 +10 秒把 `ProxyEnable` 置 0），不存在「界面已停止而系统代理还开着」。是否让停止失败也去真正
   停内核，待定。
 
 ---
 
-## 15. 吸收上游 2026-09-10～09-28 的健壮性补丁（A 类 6 条 + B 类 4 条）
+## 15. 吸收上游 2026-09-10～09-28 的健壮性补丁（A1–A6 内核与进程 + B1–B4 平台专项）
 
-本仓库基线是上游 `70b6077`（2026-09-10）。到上游 `31893466`（v1.19.4-pre1，2026-09-28）之间的约 95 个提交里，
+本仓库基线是上游 `70b6077`（2026-09-10）。到上游 `31893466`（v1.19.4-pre1，2026-09-28）之间的 91 个提交里，
 扣掉 macOS/Linux 专属、mips/Android TV、解锁检测新模块与纯风格改名后，挑出 10 条对本仓库有实际价值的补丁
-整批吸收，共 22 个文件，除下面明确说明的例外，实现与上游一致。
+整批吸收，共 22 个文件，除下面明确说明的例外，实现与上游一致。下面按 **A = 内核与进程健壮性**、
+**B = 平台专项** 编号，本节之后的验证与未决项里出现的「A3」等编号即指这些条目。
 
 **内核与进程健壮性**：
 
-- `handleAction` 加 `defer recover()`：单个 action 内 panic 不再打穿整条指令通道，而是按失败应答（`core/action.go`）。
-- `_writeRunningConfig` 改为「时间戳临时文件名 + 最多 3 次 rename/copy 重试 + `finally` 清理」。旧实现 rename
+- **A1** `handleAction` 加 `defer recover()`：单个 action 内 panic 不再打穿整条指令通道，而是按失败应答（`core/action.go`）。
+- **A2** `_writeRunningConfig` 改为「时间戳临时文件名 + 最多 3 次 rename/copy 重试 + `finally` 清理」。旧实现 rename
   失败会**先把目标配置删掉**再重试，第二次仍失败就把运行配置写没了（`lib/state.dart`）。
-- `_startCore()` 在 `_destroySocket()` 之后、`process?.kill()` 之前补 Windows 的 `helperClient.stopCore()`：
+- **A3** `_startCore()` 在 `_destroySocket()` 之后、`process?.kill()` 之前补 Windows 的 `helperClient.stopCore()`：
   助手托管时 `process` 为 `null`，原来这一刀砍不到旧内核（`lib/clash/service.dart`）。
-- `_initCore` 用 `_initCoreFuture` 去重：启动 / 重载配置 / 状态对账并发走到这里时只实际初始化一次（`lib/controller.dart`）。
-- 换节点后的 `closeConnections()` 改为 `await`；内核侧单条连接关闭失败不再中断整轮（原来 `return false` 会让
+- **A4** `_initCore` 用 `_initCoreFuture` 去重：启动 / 重载配置 / 状态对账并发走到这里时只实际初始化一次（`lib/controller.dart`）。
+- **A5** 换节点后的 `closeConnections()` 改为 `await`；内核侧单条连接关闭失败不再中断整轮（原来 `return false` 会让
   后面的连接全部漏关）（`lib/controller.dart`、`core/hub.go`）。
-- 内核返回值不再直接强转：`getConfig` 与分组构建按 `is Map` 收敛类型，内核回意外类型时不再抛错打断启动链
+- **A6** 内核返回值不再直接强转：`getConfig` 与分组构建按 `is Map` 收敛类型，内核回意外类型时不再抛错打断启动链
   （`lib/clash/core.dart`）。
 
 **平台专项**：
 
-- Windows 安装器注册助手服务改为 `sc config binPath=` 就地改指向，失败（服务不存在）才 `create`，
+- **B1** Windows 安装器注册助手服务改为 `sc config binPath=` 就地改指向，失败（服务不存在）才 `create`，
   升级安装不再「先删服务再建」（`windows/packaging/exe/inno_setup.iss`）。
-- 内置代码编辑器取上游修复，含 Windows 上中文输入错位（上游 issue #498）（`plugins/code_forge`）。
-- 脚本引擎取上游健壮化（JS 返回 `null` 不再崩等）；控制器接上空闲 GC——界面闲 2 秒后才
+- **B2** 内置代码编辑器取上游修复，含 Windows 上中文输入错位（上游 issue #498）（`plugins/code_forge`）。
+- **B3** 脚本引擎取上游健壮化（JS 返回 `null` 不再崩等）；控制器接上空闲 GC——界面闲 2 秒后才
   `requestGc(forceFreeOSMemory: true)`，后台加载收尾那次也改成真正归还内存（`plugins/flutter_qjs`、`lib/controller.dart`）。
-- Android 17 兼容：manifest 补 `ACCESS_LOCAL_NETWORK` / `INTERACT_ACROSS_USERS`，`FilesProvider.openDocument`
+- **B4** Android 17 兼容：manifest 补 `ACCESS_LOCAL_NETWORK` / `INTERACT_ACROSS_USERS`，`FilesProvider.openDocument`
   收敛 `mode`，三处 intent-filter 与 Windows 侧协议注册补 `flclash://` 导入（`AndroidManifest.xml`、
   `FilesProvider.kt`、`lib/common/window.dart`）。
 
@@ -633,7 +676,7 @@ restart core
 - 两个插件的 `macos/` 文件（本仓库不发 macOS）。
 - 上游的内存详情面板（`f3773739` / `ed31901a` / `66c48587`：点击内存卡片弹出「内核负载详情」，含已分配 / 可回收
   环形图、Goroutines、Heap Objects、Geodata 用途等，并把内核读数口径改为含 Go 保留空闲堆）：属于新功能，
-  且会替换第 10 节「应用 / 内核」双读数的口径，按「只做针对性修补」的定位未吸收。
+  且会替换第 10 节「应用 / 内核」双读数的口径，与本仓库既定取向冲突，本轮未吸收。
 
 **验证**：`flutter analyze` 无问题、`flutter test` 85/85、内核按项目设置（`CGO_ENABLED=0 -tags=with_gvisor`）
 编译通过、Windows release 构建通过。实机（正式身份、助手托管路径）：总开关停止 → `7890` 立即不监听、系统代理关闭；
@@ -670,6 +713,31 @@ RPC。`stopCore()` 的实际作用是让助手 `kill()`+`wait()` 回收它记录
   （`main.dart` 里那个 `singleInstanceLock` 只是 macOS 分支，容易误判成 Windows 无单实例）。dev 身份另有独立的
   服务名 / 命名管道 / 内核名，也拿不到同一个助手槽位。因此该行的独立效果仍只有代码级证据；路径本身已按上文复验通过。
 - 上游的内存详情面板未吸收，第 10 节的读数口径保持不变。
+
+---
+
+## 16. 应用内「检查更新」指向本仓库
+
+**文件**：`lib/common/constant.dart`（`47d964f0`，v1.19.1）、`lib/common/request.dart`、`lib/controller.dart`
+
+**问题**：上游原版把 `repository` 常量写死成 `appshubcc/Bettbox`，应用内的「检查更新」与「去下载」拼出的链接
+都取自这个常量指向的仓库。衍生仓库若不改，用户在本仓库的构建里点检查更新，拿到的是**官方版**的版本号与安装包：Android 上
+因签名不同装不上（或提示签名冲突），Windows 上会把安装器指回官方包，本地改动被静默覆盖回去。
+
+**改动**：`repository` 改为 `Catapult291/Bettbox-Mod`，取更新的两处都跟着这一个常量走：
+
+- `Request.checkForUpdate()`：请求 `https://github.com/$repository/releases/latest`，用 `followRedirects: false`
+  拿 302 的 `location` 头解析出最新 tag，再与本地版本号比较，不解析页面 HTML。
+- 更新弹窗的「去下载」：构建时注入了 `--dart-define=APP_ASSET_SUFFIX=<平台-架构-扩展名>` 的话，直接拼
+  `https://github.com/$repository/releases/download/<tag>/Bettbox-<版本>-<assetSuffix>`；没注入（如本地调试构建）
+  时退回 Release 列表页。CI 按矩阵注入该值，Windows 侧为 `windows-amd64-setup.exe`（见第 9 节）。
+
+**未决问题**：
+
+- `releases/latest` 只返回 GitHub 标记为 Latest 的正式版，**预发布（标签含 `pre`）不会被检出**，所以本仓库发
+  `-pre` 版时应用内不会提示更新，只能手动去 Release 页取。要覆盖预发布需改走 `/releases` 列表或 API。
+- 更新弹窗只比较版本号，不校验下载物的签名与来源；本仓库与上游版本号同为 `1.19.x` 递增，若上游先出更高版本，
+  用户在本仓库的构建里也不会收到提示。
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 
