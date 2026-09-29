@@ -57,7 +57,7 @@
 
 ---
 
-## 3. 覆写页「添加规则」的目标分组与代理页一致
+## 3. 脚本页「添加规则」的目标分组与代理页一致
 
 **文件**：`lib/views/profiles/override_profile.dart`　**测试**：`test/views/profiles/rule_target_groups_test.dart`
 

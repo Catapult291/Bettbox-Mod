@@ -24,7 +24,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | --- | --- |
 | 首页 IP 检测来源重构 | 「国外 HTTPS 源优先（`api.ip.sb/geoip`、Cloudflare `/cdn-cgi/trace`、`ipify`、可选 `ipinfo`），全部失败再回退国内源」；串行探测、成功即停，不再跨源合并结果，避免出现“IP 与国家错配”的脏数据（`lib/common/request.dart`） |
 | 脚本页「规则」区块 | 脚本页可直接添加自定义规则，按「覆盖全局规则」语义插入到配置规则最前面，支持编辑与多选删除，改动后自动重载当前配置（`lib/views/profiles/scripts.dart` 等） |
-| 规则目标分组过滤 | 覆写页添加规则时的目标分组与代理页保持一致：只列顶层分组（GLOBAL 的成员），并按「显示隐藏项」开关决定是否展示隐藏分组（`lib/views/profiles/override_profile.dart`） |
+| 规则目标分组过滤 | 脚本页添加规则时的目标分组与代理页保持一致：只列顶层分组（GLOBAL 的成员），并按「显示隐藏项」开关决定是否展示隐藏分组（`lib/views/profiles/override_profile.dart`） |
 | 配置更新控制 | 新增「跟随更新」开关（默认开，升上来的老配置行为不变）：配置页「全部同步」只更新订阅型且开启该开关的配置；编辑页右上角可单独更新当前配置，成功/失败以小提示反馈，不再弹全局错误对话框（`lib/models/profile.dart`、`lib/views/profiles/edit_profile.dart` 等） |
 | 右侧快捷控制栏（仅桌面） | 桌面端右侧新增常驻栏：总开关 / 系统代理 / 虚拟网卡 / 出站模式，与左侧导航栏等宽、首个控件与左栏「首页」图标同高，切换动作与托盘菜单共用同一入口；Android 端不渲染（`lib/widgets/quick_controls.dart`、`lib/manager/app_manager.dart`） |
 | 从 URL 导入自动取名 | 不填名称时按 `profile-title` 响应头 → `content-disposition` 文件名 → URL 末段 → 主机名的优先级取名（兼容 base64 与百分号编码），不再回落到时间戳 id（`lib/common/utils.dart`、`lib/models/profile.dart`） |
