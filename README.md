@@ -78,6 +78,8 @@ dart .\setup.dart android --arch arm64               # 产物位于 dist/
 
 CI 见 [.github/workflows/build.yaml](.github/workflows/build.yaml)：推送 `v*` 标签时构建 Android 与
 Windows 产物并创建 Release；亦可在 Actions 页面手动触发，手动触发仅上传产物、不创建 Release。
+Release 标题只写版本号，正文取自 [.github/release-notes/versions/](.github/release-notes/versions) 中该标签对应的
+文件（逐版本撰写本版本改动与本版本跟进的上游更新，见 [.github/release-notes/README.md](.github/release-notes/README.md)）。
 
 ## 致谢
 
