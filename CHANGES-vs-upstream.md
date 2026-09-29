@@ -794,7 +794,14 @@ Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装�
 标题为 `Bettbox-mod`，简介与「其他贡献者」板块、Telegram 行均已消失，链接区两行分别为
 `Github Releases | 检查更新`、`Bettbox | FlClash | Mihomo`，三格分隔线与右端图标正常。
 清死资源后 `flutter pub run intl_utils:generate` 的生成物 diff 只含两个键的删除（`lib/l10n/` 共 −56 行），
-再用 `flutter test` 复跑通过。
+再用 `flutter test` 复跑通过。CI run `36589541353` 四个 job 全绿，产出 v1.19.7 三件产物；取回后复核：
+
+- Windows 安装包 `Bettbox-1.19.7-windows-amd64-setup.exe` 的版本资源 `CompanyName` = `Catapult291`（改前为 `appshub.cc`），
+  即 Inno 的 `AppPublisher` 已随 `make_config.yaml` 生效（该 exe 的 `FileVersion` 为空是 Inno 默认行为，各版一致）。
+- 解包 `Bettbox-1.19.7-android-arm64-v8a.apk` 的 `lib/arm64-v8a/libapp.so`：`Bettbox-mod` 出现 1 次，
+  上游简介文案、「其他贡献者」、「Telegram Group」、`appshub_chat` / `appshub_channel` 均为 0 次；
+  `appshubcc/Bettbox` 仍有 1 次，是「关于」页新增的上游入口；`Catapult291/Bettbox-Mod` 3 次。APK 内已无 avatar 资源。
+- 三件产物体积均比 v1.19.6 略小（arm64 APK −53,642 B、universal APK −72,578 B、Windows 安装包 −41,142 B），与删掉 18 张头像一致。
 
 **未决问题**：
 
@@ -802,8 +809,7 @@ Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装�
   `Bettbox` / `com.appshub.bettbox`（Android `applicationId` 与 Linux `APPLICATION_ID` 同理）。改动它们会让既装用户
   变成「另一个应用」（无法覆盖升级、配置目录分裂），需要单独一轮评估。
 - `Runner.rc` 的 `LegalCopyright` 保留上游署名（「Copyright (C) 2025 com.appshub」），属 GPL 归属，不随发布者字段一起改。
-- 安装包（Inno `setup.exe`）的 `CompanyName` 取自 `publisher`，本机无 ISCC 打不出安装包，
-  只能读 CI 产出的 v1.19.7 安装包版本资源复核。
+- 覆盖安装后的界面与「应用列表里的发布者名」由用户在新安装包上复核；本轮只到「读安装包版本资源」这一层。
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 
