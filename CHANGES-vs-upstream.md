@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.5`（tag `v1.19.5` 已发布 Release；`main` 上另有 2 个提交尚未随版本发布）
+- 本仓库当前版本：`1.19.6`（tag `v1.19.6` 已发布 Release；`main` 上另有文档提交尚未随版本发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
@@ -28,6 +28,7 @@
 | 14 | 稳定性 | 启动判据改为 mixed-port 真的在监听 | v1.19.4 |
 | 15 | 上游跟进 | 吸收上游 09-10～09-28 的健壮性补丁（A1–A6 / B1–B4） | v1.19.5 |
 | 16 | 更新 | 应用内「检查更新」指向本仓库 | v1.19.1 |
+| 17 | 更新 | 「更多」页入口与 Windows 安装包发布者链接指向本仓库 | v1.19.6 |
 
 ---
 
@@ -738,6 +739,26 @@ Android 上因签名不同无法安装（或提示签名冲突），Windows 上�
   `-pre` 版时应用内不会提示更新，需手动前往 Release 页获取。要覆盖预发布需改走 `/releases` 列表或 API。
 - 更新弹窗只比较版本号，不校验下载物的签名与来源；本仓库与上游版本号同为 `1.19.x` 递增，若上游先发布更高版本，
   用户在本仓库的构建中也不会收到提示。
+
+## 17. 「更多」页入口与 Windows 安装包发布者链接指向本仓库
+
+**文件**：`lib/views/about.dart`、`windows/packaging/exe/make_config.yaml`、`windows/packaging/exe/package_windows.dart`（v1.19.6）
+
+**问题**：第 16 节只改了更新检查与「去下载」共用的 `repository` 常量，界面上另有两处仍是上游地址：
+
+- 「更多」页的 `Github Releases` 磁贴硬编码 `https://github.com/appshubcc/Bettbox`，点开是官方版 Releases。
+- Windows 安装包的 `publisher_url` 取自 `make_config.yaml` 的上游地址，安装界面与卸载项里的支持链接因此指向官方仓库。
+
+**改动**：
+
+- `lib/views/about.dart` 的该入口改为 `https://github.com/$repository/releases`，与更新检查共用同一常量，后续换源只需改一处。
+- `make_config.yaml` 的 `publisher_url` 与 `package_windows.dart` 中的同名兜底值改为本仓库地址。
+
+**验证**：`flutter analyze lib/views/about.dart` 无问题；CI run `36580355081` 产出 v1.19.6，
+解包 `Bettbox-1.19.6-android-arm64-v8a.apk` 的 `lib/arm64-v8a/libapp.so` 后，`Catapult291/Bettbox-Mod` 存在、
+`appshubcc/Bettbox` 已不再出现（`appshubcc/bett-rules` 仍在，那是 GeoIP 规则数据源，与本改动无关）。
+Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装包内都搜不到 URL 明文，
+因此这一项只有源码与 CI 输入层面的确认，未经安装包内的字符串复核。
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 
