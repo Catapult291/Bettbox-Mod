@@ -966,6 +966,9 @@ class MessageLookup extends MessageLookupByLibrary {
       "Установить порт прослушивания Clash",
     ),
     "proxyProviders": MessageLookupByLibrary.simpleMessage("Провайдеры прокси"),
+    "proxyUpdate": MessageLookupByLibrary.simpleMessage(
+      "Обновлять через прокси",
+    ),
     "pulse": MessageLookupByLibrary.simpleMessage("Пульсация"),
     "pureBlackMode": MessageLookupByLibrary.simpleMessage("Чистый чёрный"),
     "qrcode": MessageLookupByLibrary.simpleMessage("QR-код"),
@@ -1287,8 +1290,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("Без имени"),
     "unpin": MessageLookupByLibrary.simpleMessage("Открепить"),
     "update": MessageLookupByLibrary.simpleMessage("Обновить"),
-    "updateFailed": MessageLookupByLibrary.simpleMessage("Не удалось обновить"),
-    "updateSuccess": MessageLookupByLibrary.simpleMessage("Обновлено"),
     "updateTime": MessageLookupByLibrary.simpleMessage("Время обновления"),
     "upload": MessageLookupByLibrary.simpleMessage("Отправка"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),

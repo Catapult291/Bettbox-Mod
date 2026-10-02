@@ -1314,21 +1314,11 @@ class AppLocalizations {
     );
   }
 
-  /// `Update Successful`
-  String get updateSuccess {
+  /// `Update via Proxy`
+  String get proxyUpdate {
     return Intl.message(
-      'Update Successful',
-      name: 'updateSuccess',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Update Failed`
-  String get updateFailed {
-    return Intl.message(
-      'Update Failed',
-      name: 'updateFailed',
+      'Update via Proxy',
+      name: 'proxyUpdate',
       desc: '',
       args: [],
     );

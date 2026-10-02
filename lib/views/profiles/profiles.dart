@@ -293,14 +293,6 @@ class ProfileItem extends StatelessWidget {
         return AdaptiveSheetScaffold(
           type: type,
           actions: [
-            if (profile.type == ProfileType.url)
-              IconButton(
-                icon: const Icon(Icons.sync),
-                tooltip: appLocalizations.sync,
-                onPressed: () {
-                  editKey.currentState?.updateFromUrl();
-                },
-              ),
             IconButton(
               icon: const Icon(Icons.security),
               tooltip: appLocalizations.ageKeyGenerateTitle,

@@ -71,6 +71,7 @@ abstract class Profile with _$Profile {
     SubscriptionInfo? subscriptionInfo,
     @Default(true) bool autoUpdate,
     @JsonKey(name: 'follow-update') @Default(true) bool followUpdate,
+    @JsonKey(name: 'proxy-update') @Default(true) bool proxyUpdate,
     @Default({}) SelectedMap selectedMap,
     @Default({}) Set<String> unfoldSet,
     @Default(OverrideData()) OverrideData overrideData,
@@ -187,7 +188,10 @@ extension ProfileExtension on Profile {
   /// 名称来源优先级：用户填写的名称 → `profile-title` 响应头 → `content-disposition`
   /// 文件名 → URL 末段路径 → 配置 id。用户不填名称导入订阅时由此自动取名。
   Future<Profile> update({bool validate = true}) async {
-    final response = await request.getFileResponseForUrl(url);
+    final response = await request.getFileResponseForUrl(
+      url,
+      proxy: proxyUpdate,
+    );
     final headers = response.headers;
     final name = utils.getProfileName(
       profileTitle: headers['profile-title']?.firstOrNull,

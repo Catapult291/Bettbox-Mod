@@ -37,13 +37,10 @@ class EditProfileViewState extends State<EditProfileView> {
   late TextEditingController autoUpdateDurationController;
   late bool autoUpdate;
   late bool followUpdate;
+  late bool proxyUpdate;
   late TextEditingController ageSecretKeyController;
   FocusNode? urlFocusNode;
   bool _obscureAgeSecretKey = true;
-  bool _updateTipVisible = false;
-  bool _updateTipSuccess = true;
-  String? _updateTipReason;
-  Timer? _updateTipTimer;
   String? rawText;
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final fileInfoNotifier = ValueNotifier<FileInfo?>(null);
@@ -58,6 +55,7 @@ class EditProfileViewState extends State<EditProfileView> {
     urlController = TextEditingController(text: widget.profile.url);
     autoUpdate = widget.isNew ? false : widget.profile.autoUpdate;
     followUpdate = widget.isNew ? true : widget.profile.followUpdate;
+    proxyUpdate = widget.isNew ? true : widget.profile.proxyUpdate;
     autoUpdateDurationController = TextEditingController(
       text: widget.profile.autoUpdateDuration.inMinutes.toString(),
     );
@@ -86,7 +84,6 @@ class EditProfileViewState extends State<EditProfileView> {
     autoUpdateDurationController.dispose();
     ageSecretKeyController.dispose();
     urlFocusNode?.dispose();
-    _updateTipTimer?.cancel();
     super.dispose();
   }
 
@@ -173,136 +170,11 @@ class EditProfileViewState extends State<EditProfileView> {
           : ageSecretKeyController.text.trim(),
       autoUpdate: autoUpdate,
       followUpdate: followUpdate,
+      proxyUpdate: proxyUpdate,
       autoUpdateDuration: Duration(
         minutes:
             int.tryParse(autoUpdateDurationController.text) ??
             profile.autoUpdateDuration.inMinutes,
-      ),
-    );
-  }
-
-  /// 手动更新当前配置：仅更新这一个配置，不受「跟随更新」开关影响。
-  /// 失败只弹「更新失败」提示，不弹全局错误弹框（原始错误写进日志）。
-  Future<void> updateFromUrl() async {
-    if (!_formKey.currentState!.validate()) return;
-    final appController = globalState.appController;
-    final loading = appController.ref.read(loadingProvider.notifier);
-    loading.value = true;
-    bool updated = false;
-    try {
-      updated = await appController.updateProfile(_buildProfileFromForm());
-      if (updated) {
-        fileInfoNotifier.value = await _getFileInfo(
-          await appPath.getProfilePath(widget.profile.id),
-        );
-      }
-    } on Object catch (e) {
-      commonPrint.log(e.formatErrorLog);
-      _showUpdateTip(success: false, reason: _updateErrorReason(e));
-      return;
-    } finally {
-      loading.value = false;
-    }
-    // updated 为 false 表示同一配置已有更新在途，静默跳过。
-    if (updated) {
-      _showUpdateTip();
-    }
-  }
-
-  /// 失败提示里的简短原因：HTTP 错误只报状态码，其它错误压成一行。
-  String _updateErrorReason(Object e) {
-    final statusCode = RegExp(
-      r'status code of (\d+)',
-    ).firstMatch(e.toString())?.group(1);
-    if (statusCode != null) {
-      return 'HTTP $statusCode';
-    }
-    return e.formatError.replaceAll(RegExp(r'\s+'), ' ').trim();
-  }
-
-  void _showUpdateTip({bool success = true, String? reason}) {
-    if (!mounted) return;
-    _updateTipTimer?.cancel();
-    setState(() {
-      _updateTipSuccess = success;
-      _updateTipReason = success ? null : reason;
-      _updateTipVisible = true;
-    });
-    _updateTipTimer = Timer(const Duration(milliseconds: 1600), () {
-      if (!mounted) return;
-      setState(() {
-        _updateTipVisible = false;
-      });
-    });
-  }
-
-  Widget _buildUpdateTip(BuildContext context, {required bool success}) {
-    final colorScheme = context.colorScheme;
-    final reason = success ? null : _updateTipReason;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: success ? colorScheme.primary : colorScheme.error,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.2),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Text(
-            success
-                ? appLocalizations.updateSuccess
-                : appLocalizations.updateFailed,
-            style: context.textTheme.bodyMedium?.copyWith(
-              color: success ? colorScheme.onPrimary : colorScheme.onError,
-              height: 1.0,
-            ),
-          ),
-          if (reason != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              reason,
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onError.withValues(alpha: 0.9),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// 更新提示占位（成功/失败共用）：与列表分隔同高，提示本身溢出该槽位、
-  /// 纵向居中于「跟随更新」与「配置」两行之间的留白带，出现与消失都不推动列表。
-  Widget _buildUpdateTipSlot(BuildContext context) {
-    return SizedBox(
-      height: _listGapHeight,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return IgnorePointer(
-            child: AnimatedOpacity(
-              opacity: _updateTipVisible ? 1 : 0,
-              duration: const Duration(milliseconds: 200),
-              child: OverflowBox(
-                minWidth: 0,
-                maxWidth: constraints.maxWidth * 0.86,
-                minHeight: 0,
-                maxHeight: double.infinity,
-                child: _buildUpdateTip(context, success: _updateTipSuccess),
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -318,6 +190,13 @@ class EditProfileViewState extends State<EditProfileView> {
     if (followUpdate == value) return;
     setState(() {
       followUpdate = value;
+    });
+  }
+
+  void _setProxyUpdate(bool value) {
+    if (proxyUpdate == value) return;
+    setState(() {
+      proxyUpdate = value;
     });
   }
 
@@ -515,6 +394,13 @@ class EditProfileViewState extends State<EditProfileView> {
           ),
         ),
         ListItem.switchItem(
+          title: Text(appLocalizations.proxyUpdate),
+          delegate: SwitchDelegate<bool>(
+            value: proxyUpdate,
+            onChanged: _setProxyUpdate,
+          ),
+        ),
+        ListItem.switchItem(
           title: Text(appLocalizations.autoUpdate),
           delegate: SwitchDelegate<bool>(
             value: autoUpdate,
@@ -591,19 +477,13 @@ class EditProfileViewState extends State<EditProfileView> {
           },
         ),
     ];
-    // 更新成功提示放在「跟随更新」与「配置」之间（仅这两行相邻时存在该槽位）。
-    final tipGapIndex = widget.isNew ? -1 : items.length - 2;
     final children = <Widget>[];
     for (var i = 0; i < items.length; i++) {
       children.add(items[i]);
       if (i == items.length - 1) {
         break;
       }
-      children.add(
-        i == tipGapIndex
-            ? _buildUpdateTipSlot(context)
-            : const SizedBox(height: _listGapHeight),
-      );
+      children.add(const SizedBox(height: _listGapHeight));
     }
     return CommonPopScope(
       onPop: () {

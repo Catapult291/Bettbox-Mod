@@ -949,6 +949,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "proxyProviders": MessageLookupByLibrary.simpleMessage(
       "ارائه‌دهندگان پروکسی",
     ),
+    "proxyUpdate": MessageLookupByLibrary.simpleMessage(
+      "به‌روزرسانی با پروکسی",
+    ),
     "pulse": MessageLookupByLibrary.simpleMessage("پالس"),
     "pureBlackMode": MessageLookupByLibrary.simpleMessage("حالت مشکی خالص"),
     "qrcode": MessageLookupByLibrary.simpleMessage("کد QR"),
@@ -1266,10 +1269,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "unnamed": MessageLookupByLibrary.simpleMessage("بدون نام"),
     "unpin": MessageLookupByLibrary.simpleMessage("برداشتن پین"),
     "update": MessageLookupByLibrary.simpleMessage("بروزرسانی"),
-    "updateFailed": MessageLookupByLibrary.simpleMessage(
-      "بروزرسانی ناموفق بود",
-    ),
-    "updateSuccess": MessageLookupByLibrary.simpleMessage("بروزرسانی شد"),
     "updateTime": MessageLookupByLibrary.simpleMessage("زمان به‌روزرسانی"),
     "upload": MessageLookupByLibrary.simpleMessage("آپلود"),
     "url": MessageLookupByLibrary.simpleMessage("آدرس URL"),

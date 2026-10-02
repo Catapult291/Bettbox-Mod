@@ -14,6 +14,7 @@ import 'package:flutter/cupertino.dart';
 class Request {
   late final Dio _dio;
   late final Dio _clashDio;
+  late final Dio _directDio;
   String? userAgent;
 
   Request() {
@@ -41,6 +42,25 @@ class Request {
         client.findProxy = (Uri uri) {
           client.userAgent = globalState.ua;
           return BettboxHttpOverrides.handleFindProxy(uri);
+        };
+        return client;
+      },
+    );
+    // 与 _clashDio 同参数，唯一区别是强制直连：订阅更新选择「不走代理」时用它，
+    // 避免内核未运行或规则把订阅域名判成代理时反而连不上。
+    _directDio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
+    _directDio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        final client = HttpClient();
+        client.autoUncompress = false;
+        client.findProxy = (Uri uri) {
+          client.userAgent = globalState.ua;
+          return 'DIRECT';
         };
         return client;
       },
@@ -87,8 +107,9 @@ class Request {
 
   Future<Response> _getResponseForUrl(
     String url,
-    ResponseType responseType,
-  ) async {
+    ResponseType responseType, {
+    bool proxy = true,
+  }) async {
     String? userInfo;
     String requestUrl = url;
 
@@ -118,7 +139,8 @@ class Request {
       headers['Authorization'] = 'Basic $auth';
     }
 
-    final response = await _clashDio.get(
+    final dio = proxy ? _clashDio : _directDio;
+    final response = await dio.get(
       requestUrl,
       options: Options(responseType: ResponseType.bytes, headers: headers),
     );
@@ -152,12 +174,18 @@ class Request {
     }
   }
 
-  Future<Response> getFileResponseForUrl(String url) async {
-    return _getResponseForUrl(url, ResponseType.bytes);
+  Future<Response> getFileResponseForUrl(
+    String url, {
+    bool proxy = true,
+  }) async {
+    return _getResponseForUrl(url, ResponseType.bytes, proxy: proxy);
   }
 
-  Future<Response> getTextResponseForUrl(String url) async {
-    return _getResponseForUrl(url, ResponseType.plain);
+  Future<Response> getTextResponseForUrl(
+    String url, {
+    bool proxy = true,
+  }) async {
+    return _getResponseForUrl(url, ResponseType.plain, proxy: proxy);
   }
 
   Future<MemoryImage?> getImage(String url) async {
