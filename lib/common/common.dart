@@ -10,6 +10,7 @@ export 'fixed.dart';
 export 'identity.dart';
 export 'function.dart';
 export 'future.dart';
+export 'group_switch.dart';
 export 'http.dart';
 export 'icons.dart';
 export 'iterable.dart';

@@ -1111,32 +1111,12 @@ class GlobalState {
       }
     }
 
-    if (targetProfile.groupSwitches.isNotEmpty &&
-        !scriptActive &&
-        rawConfig['proxy-groups'] is List) {
-      final disabledGroups = targetProfile.groupSwitches.entries
-          .where((e) => !e.value)
-          .map((e) => e.key)
-          .toSet();
-      if (disabledGroups.isNotEmpty) {
-        final proxyGroups = rawConfig['proxy-groups'] as List;
-        proxyGroups.removeWhere((g) {
-          if (g is Map && g['name'] is String) {
-            return disabledGroups.contains(g['name']);
-          }
-          return false;
-        });
-        for (int i = 0; i < rules.length; i++) {
-          if (rules[i] is String) {
-            final parsed = ParsedRule.parseString(rules[i] as String);
-            if (parsed.ruleTarget != null &&
-                disabledGroups.contains(parsed.ruleTarget)) {
-              rules[i] = parsed.copyWith(ruleTarget: 'PASS').value;
-            }
-          }
-        }
-      }
-    }
+    applyGroupSwitches(
+      rawConfig,
+      rules,
+      groupSwitches: targetProfile.groupSwitches,
+      scriptActive: scriptActive,
+    );
 
     rawConfig.remove('rule');
     rawConfig['rules'] = rules;

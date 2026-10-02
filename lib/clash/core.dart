@@ -120,6 +120,18 @@ class ClashCore {
     Map proxies,
     String rawProvidersContent,
   ) {
+    return buildProxiesGroupsRaw(proxies, rawProvidersContent)
+        .map((e) => Group.fromJson(e))
+        .toList();
+  }
+
+  /// [buildProxiesGroups] 的原始形态：返回喂给 `Group.fromJson` 的分组 map。
+  ///
+  /// 单独暴露是为了能和 Rust 侧逐字段差分（typed 的 `Group` 会丢掉模型外的字段）。
+  static List<Map<String, dynamic>> buildProxiesGroupsRaw(
+    Map proxies,
+    String rawProvidersContent,
+  ) {
     final providers = rawProvidersContent.isEmpty
         ? const <ExternalProvider>[]
         : (json.decode(rawProvidersContent) as List<dynamic>)
@@ -175,7 +187,7 @@ class ClashCore {
           .toList();
       return group;
     }).whereType<Map<String, dynamic>>().toList();
-    return groupsRaw.map((e) => Group.fromJson(e)).toList();
+    return groupsRaw;
   }
 
   FutureOr<String> changeProxy(ChangeProxyParams changeProxyParams) async {
