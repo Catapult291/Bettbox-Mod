@@ -934,6 +934,19 @@ Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装�
 - Release 便携版已放在工作区根目录 `Bettbox-1.19.7-windows-x64-proxyupdate/`（`data/app.so` 与上一版
   不同，内含新代码）。
 
+**发布（v1.19.8）**：第 19、20、21 节随 v1.19.8 一并发布，CI run `37023111975` 四个 job（android arm64 /
+android universal / windows amd64 / release）全绿，Release 附件三件：`Bettbox-1.19.8-android-arm64-v8a.apk`、
+`Bettbox-1.19.8-android-universal.apk`、`Bettbox-1.19.8-windows-amd64-setup.exe`。取回产物复核：
+
+- Windows 安装包版本资源 `ProductVersion = 1.19.8`、`CompanyName = Catapult291`（Inno 包的 `FileVersion`
+  为空，各版一致）。
+- arm64 APK 的 `lib/arm64-v8a/libapp.so`：`proxy-update` 1 次、`Update via Proxy` 1 次，「代理更新」
+  （UTF-16LE，AOT 快照里的中文按此编码）1 次；已删除的 `updateSuccess` / `updateFailed` 键 0 次
+  —— 第 19、21 节的改动确已进入发布产物。
+- 本机 `flutter build windows --release` 的产出复制到工作区根 `Bettbox-1.19.8-windows-x64/`，
+  `Bettbox.exe` 版本资源 `FileVersion = 1.19.8+2026100201`，`data/app.so` 与上一版 `...-proxyupdate` 不同。
+- 第 20 节的剪贴板改动在运行器 C++ 层，APK 侧不适用；其真实键盘与 EcoPaste 实测仍需人工完成（见第 20 节「未验证」）。
+
 ---
 
 ## 附：上游已自行实现、本仓库不再单列的改动
