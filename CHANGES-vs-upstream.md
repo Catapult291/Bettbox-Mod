@@ -30,6 +30,9 @@
 | 16 | 更新 | 应用内「检查更新」指向本仓库 | v1.19.1 |
 | 17 | 更新 | 「更多」页入口与 Windows 安装包发布者链接指向本仓库 | v1.19.6 |
 | 18 | 界面 | 「关于」页去上游内容、名称改 Bettbox-mod、发布者字段改本仓库作者 | v1.19.7 |
+| 19 | 界面 | 去掉编辑页右上角的更新按钮（与卡片菜单「同步」重复） | 未发布 |
+| 20 | 稳定性 | 剪贴板工具（EcoPaste 双击粘贴等）注入的 Ctrl+V 无效：运行器在 IME 之前接管 | 未发布 |
+| 21 | 界面 | 配置编辑页新增「代理更新」开关：订阅更新可选走代理或直连 | 未发布 |
 
 ---
 
@@ -810,6 +813,128 @@ Windows 安装包的 `publisher_url` 由 Inno Setup 压缩存储，新旧安装�
   变成「另一个应用」（无法覆盖升级、配置目录分裂），需要单独一轮评估。
 - `Runner.rc` 的 `LegalCopyright` 保留上游署名（「Copyright (C) 2025 com.appshub」），属 GPL 归属，不随发布者字段一起改。
 - 覆盖安装后的界面与「应用列表里的发布者名」由用户在新安装包上复核；本轮只到「读安装包版本资源」这一层。
+
+## 19. 去掉编辑页右上角的更新按钮（与卡片菜单「同步」重复）
+
+**文件**：`lib/views/profiles/profiles.dart`、`lib/views/profiles/edit_profile.dart`、`arb/intl_*.arb`、`lib/l10n/*`
+
+**问题**：第 4 节为了让排除在「全部同步」之外的配置也能手动更新，在编辑页右上角加了一个更新按钮
+（带内联成功/失败提示）。配置卡片菜单里的「同步」本来就能单独更新该配置、且不看「跟随更新」开关，
+两者功能重复——想更新一条配置并不需要先进编辑二级页。
+
+**改动**：
+
+- `EditProfileView` 删除 `updateFromUrl()` 与整套内联更新提示（`_showUpdateTip` / `_buildUpdateTip` /
+  `_buildUpdateTipSlot`、1.6s 计时器及相关字段），编辑页列表间距回退为等距 24px 分隔。
+- 编辑页 sheet 的 actions 只保留「生成 Age 密钥」按钮，同步按钮移除。
+- 多语言删除随之无用的 `updateSuccess`、`updateFailed`（7 个 `arb` + 重新生成的 `lib/l10n/*`）。
+- 「跟随更新」开关保留：它仍然决定该配置是否参与配置页右上角的「全部同步」，单条「同步」始终可用。
+
+**验证**：`flutter analyze lib test` 无问题，`flutter test` 87 项通过（含本轮新增的 2 项剪贴板用例）。
+编辑页 UI 未做实机点击核对（见第 20 节的验证条件）。
+
+---
+
+## 20. 剪贴板工具注入的 Ctrl+V 无效（EcoPaste 双击粘贴等）
+
+**文件**：`windows/runner/flutter_window.cpp`、`windows/runner/flutter_window.h`、`windows/runner/main.cpp`、
+`test/plugins/clipboard_ext_test.dart`
+
+**问题**：EcoPaste 一类剪贴板工具双击条目后自动粘贴（用 `SendInput` 注入 Ctrl+V）到本应用输入框
+毫无反应；真实键盘的 Ctrl+V 一直正常。
+
+**排查（本机实测）**：
+
+- 向本应用注入普通字符与方向键：都生效（字符落进输入框、光标移动）；注入 Ctrl+A / Ctrl+C / Ctrl+V：
+  全部无效。同一段注入代码对记事本（Ctrl+A + Ctrl+C 读回剪贴板）有效，说明注入与焦点设置没有问题，
+  问题在 Flutter 侧。上一轮按「管理员模式 + UIPI 拦截 `WM_PASTE`」判断，方向不对：本应用以普通
+  完整性运行，注入走的是 `SendInput`，与窗口消息过滤无关。
+- 在运行器（消息循环出口、视图窗口过程）与 Dart（`HardwareKeyboard.addHandler`、`clipboard_ext`
+  通道）两侧加临时日志后复现，得到两种丢失路径：
+  - **输入法空闲**：注入的 Ctrl+V 以 `WM_KEYDOWN vk=0x11`（Ctrl）/`vk=0x56`（V）正常入队，但框架只
+    看到 `controlLeft` 的按下事件，紧接着引擎为它合成了 control 的抬起，随后 V 的按下带
+    `ctrl=false` —— 看起来是「没有 Ctrl 的 V」，快捷键匹配不上，粘贴动作根本不触发。
+  - **输入法正在组字**：更早一步就没了，连消息循环取到的按下都已被改写为 `VK_PROCESSKEY`（0xE5），
+    引擎把这类事件当「输入法已消费」直接丢弃。
+- 两种情形下框架都只看到「没有 Ctrl 的 V」。
+
+**改动**：
+
+- 消息循环（`windows/runner/main.cpp`）在 `TranslateMessage` **之前**调用新增的
+  `FlutterWindow::HandlePreTranslateMessage()`：自行跟踪 Ctrl（左右都算）的按下状态，遇到「Ctrl 按下
+  时的 V 键」就调用既有的剪贴板转发桥 `NotifyPaste()`，并吞掉这对按键（含随后的 V 抬起）。长按重复
+  只吞不重复粘贴；`Ctrl+Shift+V`、`Ctrl+Alt+V`、`Win+Ctrl+V` 与失去焦点时都会重置状态、不拦截。
+- 这样真实键盘与注入输入走同一条路：都在输入法与引擎之前被截获，交给 Dart 侧的
+  `lib/plugins/clipboard_ext.dart` —— 先问已注册的处理器（编辑器页 `lib/pages/editor.dart` 的原生粘贴
+  处理优先），否则派发 `PasteTextIntent`（与 Flutter 默认 Ctrl+V 同一意图，写入当前聚焦输入框）。
+- 保留上一轮加入的 `ChangeWindowMessageFilterEx(hwnd, WM_PASTE, MSGFLT_ALLOW)`：它不是本次问题的
+  成因，但对以管理员身份运行时仍靠 `WM_PASTE` 投递的粘贴源（剪贴板历史等）是有效放行。
+
+**验证**：
+
+- Dart 侧：`test/plugins/clipboard_ext_test.dart`（原生侧投递 `paste` → 剪贴板文本落进聚焦输入框；
+  无聚焦输入框时不抛异常）。
+- 原生侧（`--dart-define=APP_DEV=true` 的 Release 版 + 上述临时日志，同机对照）：
+  - 输入法空闲时注入 Ctrl+V：消息循环看到 `vk=0x11`/`vk=0x56`，日志出现 `BRIDGE paste invoked`，转发桥
+    拿到焦点上下文并派发粘贴意图；V 及其抬起都没有再进入 Flutter（框架侧无 V 事件，不会重复粘贴）。
+  - 把同样的注入打到未含本改动的旧构建：框架侧只收到 `controlLeft` 的按下与合成抬起，没有任何粘贴
+    动作 —— 与上面的机制一致。
+- **未验证**：本机只能用 `SendInput` 合成输入（无法产生硬件按键），也没有提权实例或低完整性进程；
+  「修复后真实键盘 Ctrl+V 仍然正常」与「EcoPaste 双击的真实流程」需要一次人工实测（合成输入与硬件
+  输入在消息层形态相同，见上方日志）。
+- **已知限制**：输入法正在组字时，注入的 Ctrl+V 会被输入法提前消费（消息循环拿到的是
+  `VK_PROCESSKEY`），此时应用侧拿不到这对按键，任何应用内改法都无效；先回车或 Esc 结束组字再操作即可。
+
+**构建备注**（本轮本机环境）：`flutter pub get` → `python tools/windows-build-junctions.py`（未入库，
+`.gitignore` 含 `/tools/`）→ `flutter build windows --release`；实测另出了
+`--dart-define=APP_DEV=true` 的 dev 身份版以便与在用实例并存（dev 版窗口标题不同，否则会被
+`Win32Window::SendAppLinkToInstance` 当成已运行实例而直接退出）。
+
+---
+
+## 21. 配置编辑页新增「代理更新」开关（订阅更新可选直连）
+
+**文件**：`lib/models/profile.dart`、`lib/models/generated/profile.freezed.dart`、
+`lib/models/generated/profile.g.dart`、`lib/common/request.dart`、`lib/views/profiles/edit_profile.dart`、
+`arb/intl_*.arb`、`lib/l10n/*`　**测试**：`test/models/profile_proxy_update_test.dart`、
+`test/views/profiles/edit_profile_proxy_switch_test.dart`、`test/common/request_proxy_switch_test.dart`
+
+**问题**：订阅配置的更新请求一律经本机内核的 mixed-port 出站
+（`BettboxHttpOverrides.handleFindProxy`）。订阅域名被规则判成走代理、或代理链路本身不通时，
+直连本可成功的更新会失败，且用户没有绕过的入口。
+
+**改动**：
+
+- `Profile` 新增 `proxyUpdate`（JSON 键 `proxy-update`，缺省 `true`，老配置行为不变）。
+- `request` 新增 `_directDio`（`findProxy` 固定返回 `DIRECT`），`getFileResponseForUrl` /
+  `getTextResponseForUrl` 增加 `proxy` 参数（默认 `true`，其他调用点行为不变）；
+  `Profile.update()` 按 `proxyUpdate` 选择走内核代理还是直连，于是手动「同步」、
+  配置页「全部同步」与后台自动更新走同一条路径、统一生效。选直连时显式 `DIRECT`，
+  连系统代理设置一并绕过。
+- 编辑页在 Age 私钥与「自动更新」之间加入「代理更新」开关（7 个 `arb` + 重新生成的 `lib/l10n/*`）。
+
+**验证**：
+
+- `test/models/profile_proxy_update_test.dart`：JSON 往返键名为 `proxy-update`、老配置缺该字段默认
+  开启、`copyWith` 切换开关不影响其他字段；整份 `Config` 序列化后开关仍在（设置落盘的正是这条链）。
+- `test/views/profiles/edit_profile_proxy_switch_test.dart`：渲染编辑页，「代理更新」开关初值取自
+  `profile.proxyUpdate`；点它只翻转该开关，「自动更新」开关保持不变（确认两个开关各自接线）。
+  测试里用 `path_provider_platform_interface` 的假实现顶掉 `AppPath` 构造时取的目录
+  （该包因此进了 `dev_dependencies`）。
+- `test/common/request_proxy_switch_test.dart`：用一个假的本机 mixed-port（本机 HTTP 服务）做 A/B ——
+  同一个 URL，`proxy=true` 时请求真的递到该端口，`proxy=false` 时不再经过它、改为直连目标。
+  这两条用例要真发本机请求，所以显式把 flutter_test 默认的 `HttpOverrides`（一律回 400）置空。
+- **桌面构建实机核对**（`flutter build windows --debug --dart-define=APP_DEV=true`，与在用实例并存）：
+  添加配置 → 从 URL 导入，表单里「代理更新」位于 Age 私钥与「自动更新」之间、默认打开；订阅
+  （本机起了一个临时 HTTP 订阅服务）拉取成功；保存后重开同一配置的编辑页，开关仍是保存时的状态；
+  勾掉再保存，界面回到列表，卡片正常。**未验证**：磁盘上 `proxy-update` 的最终落盘没有直接观察到 ——
+  prefs 只在应用自身的退出路径（`handleExit`）写，而测试实例是关窗后留在托盘、随后被我直接结束的；
+  其序列化链路由上面那条 `Config` 往返用例覆盖。
+- `flutter analyze lib test` 无问题；`flutter test` 95 项全通过。
+- Release 便携版已放在工作区根目录 `Bettbox-1.19.7-windows-x64-proxyupdate/`（`data/app.so` 与上一版
+  不同，内含新代码）。
+
+---
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 
