@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -12,6 +13,7 @@ import 'package:bett_box/plugins/app.dart';
 import 'package:bett_box/plugins/service.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/providers/state.dart' as providers_state;
+import 'package:bett_box/rust/bettbox_config.dart';
 
 import 'package:bett_box/widgets/dialog.dart';
 import 'package:flutter/material.dart';
@@ -707,7 +709,6 @@ class GlobalState {
     final profileId = targetProfile.id;
     final configMap = await getProfileConfig(profileId);
     final rawConfig = await handleEvaluate(configMap, profile: targetProfile);
-    final originalProxyGroups = rawConfig['proxy-groups'];
 
     final realPatchConfig = patchConfig.copyWith(
       dns: patchConfig.dns.copyWith(
@@ -725,402 +726,35 @@ class GlobalState {
             config.networkProps.realBypassPrivateRouteAddress,
       ),
     );
-    rawConfig['external-controller'] = realPatchConfig.allowLan
-        ? realPatchConfig.externalController.value.replaceAll(
-            '127.0.0.1',
-            '0.0.0.0',
-          )
-        : realPatchConfig.externalController.value;
-    if (realPatchConfig.externalController == ExternalControllerStatus.open) {
-      final secret = realPatchConfig.secret;
-      if (secret != null && secret.isNotEmpty) {
-        rawConfig['secret'] = secret;
-      }
-    }
-    rawConfig['external-ui'] = await appPath.uiPath;
-    rawConfig['external-ui-url'] =
-        'https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip';
-    rawConfig.remove('external-ui-name');
-    if (rawConfig['interface-name'] == null) {
-      rawConfig['interface-name'] = '';
-    }
-    rawConfig['tcp-concurrent'] = realPatchConfig.tcpConcurrent;
-    rawConfig['unified-delay'] = realPatchConfig.unifiedDelay;
-    rawConfig['ipv6'] = realPatchConfig.ipv6;
-    rawConfig['log-level'] = realPatchConfig.logLevel.name;
-    rawConfig['port'] = 0;
-    rawConfig['socks-port'] = 0;
-    rawConfig['keep-alive-interval'] = realPatchConfig.keepAliveInterval;
-    rawConfig['mixed-port'] = realPatchConfig.mixedPort;
-    rawConfig['port'] = realPatchConfig.port;
-    rawConfig['socks-port'] = realPatchConfig.socksPort;
-    rawConfig['redir-port'] = realPatchConfig.redirPort;
-    rawConfig['tproxy-port'] = realPatchConfig.tproxyPort;
-    rawConfig['find-process-mode'] = realPatchConfig.findProcessMode.name;
-    rawConfig['allow-lan'] = realPatchConfig.allowLan;
-    rawConfig['mode'] = realPatchConfig.mode.name;
-    if (rawConfig['tun'] == null) {
-      rawConfig['tun'] = {};
-    }
-    rawConfig['tun']['enable'] = realPatchConfig.tun.enable;
-    rawConfig['tun']['device'] = realPatchConfig.tun.device;
-    final dnsHijack = realPatchConfig.tun.dnsHijack;
-    rawConfig['tun']['dns-hijack'] = dnsHijack.isEmpty
-        ? const ['any:53']
-        : dnsHijack;
-    rawConfig['tun']['stack'] = realPatchConfig.tun.stack.name;
-    rawConfig['tun']['route-address'] = realPatchConfig.tun.routeAddress;
-    rawConfig['tun']['route-exclude-address'] =
-        realPatchConfig.tun.routeExcludeAddress;
-    rawConfig['tun']['auto-route'] = !system.isAndroid;
-    rawConfig['tun']['auto-detect-interface'] = !system.isAndroid;
-    rawConfig['tun']['auto-redirect'] = system.isLinux;
-    rawConfig['tun']['strict-route'] = realPatchConfig.tun.strictRoute;
-    rawConfig['tun']['endpoint-independent-nat'] =
-        realPatchConfig.tun.endpointIndependentNat;
-    rawConfig['tun']['disable-icmp-forwarding'] =
-        realPatchConfig.tun.disableIcmpForwarding;
-    rawConfig['tun']['mtu'] = realPatchConfig.tun.mtu;
-    rawConfig['geodata-loader'] = realPatchConfig.geodataLoader.name;
-    rawConfig['geodata-mode'] = false;
-    if (rawConfig['sniffer']?['sniff'] != null) {
-      for (final value in (rawConfig['sniffer']?['sniff'] as Map).values) {
-        if (value['ports'] != null && value['ports'] is List) {
-          value['ports'] =
-              value['ports']?.map((item) => item.toString()).toList() ?? [];
-        }
-      }
-    }
-    if (rawConfig['profile'] == null) {
-      rawConfig['profile'] = {};
-    }
-    if (rawConfig['proxy-providers'] != null) {
-      final proxyProviders = rawConfig['proxy-providers'] as Map;
-      for (final key in proxyProviders.keys) {
-        final proxyProvider = proxyProviders[key];
-        if (proxyProvider['type'] != 'http') {
-          continue;
-        }
-        if (proxyProvider['url'] != null) {
-          proxyProvider['path'] = await appPath.getProvidersFilePath(
-            targetProfile.id,
-            'proxies',
-            proxyProvider['url'],
-          );
-        }
-      }
-    }
-
-    if (rawConfig['rule-providers'] != null) {
-      final ruleProviders = rawConfig['rule-providers'] as Map;
-      for (final key in ruleProviders.keys) {
-        final ruleProvider = ruleProviders[key];
-        if (ruleProvider['type'] != 'http') {
-          continue;
-        }
-        if (ruleProvider['url'] != null) {
-          ruleProvider['path'] = await appPath.getProvidersFilePath(
-            targetProfile.id,
-            'rules',
-            ruleProvider['url'],
-          );
-        }
-      }
-    }
-
-    if (rawConfig['profile']['store-selected'] == null) {
-      rawConfig['profile']['store-selected'] = true;
-    }
-    if (rawConfig['profile']['store-fake-ip'] == null) {
-      rawConfig['profile']['store-fake-ip'] = true;
-    }
-    rawConfig['geox-url'] = realPatchConfig.geoXUrl.toJson();
-    rawConfig['global-ua'] = realPatchConfig.globalUa;
-    if (rawConfig['hosts'] == null) {
-      rawConfig['hosts'] = {};
-    }
-    for (final host in realPatchConfig.hosts.entries) {
-      rawConfig['hosts'][host.key] = host.value.splitByMultipleSeparators;
-    }
-
-    rawConfig['hosts']['dns.msftncsi.com'] = [
-      '131.107.255.255',
-      'fd3e:4f5a:5b81::1',
-    ];
-
-    if (rawConfig['dns'] == null) {
-      rawConfig['dns'] = {};
-    }
-    final isEnableDns = rawConfig['dns']['enable'] == true;
-    final overrideDns = globalState.config.overrideDns;
-    if (overrideDns || !isEnableDns) {
-      final originalDns = rawConfig['dns'] is Map
-          ? (rawConfig['dns'] as Map).cast<String, dynamic>()
-          : null;
-      final originalHosts = rawConfig['hosts'] is Map
-          ? (rawConfig['hosts'] as Map).cast<String, dynamic>()
-          : null;
-      final dns = switch (!isEnableDns) {
-        true => realPatchConfig.dns.copyWith(
-          nameserver: [...realPatchConfig.dns.nameserver, 'system://'],
-        ),
-        false => realPatchConfig.dns,
-      };
-      rawConfig['dns'] = dns.toJson();
-      rawConfig['dns']['nameserver-policy'] = {};
-      for (final entry in dns.nameserverPolicy.entries) {
-        rawConfig['dns']['nameserver-policy'][entry.key] =
-            entry.value.splitByMultipleSeparators;
-      }
-      applyDnsNodeOverride(
-        rawConfig,
-        originalDns: originalDns,
-        originalHosts: originalHosts,
-      );
-    }
-
-    if (rawConfig['dns'] != null &&
-        rawConfig['dns']['fallback-filter'] != null) {
-      if (rawConfig['dns']['fallback-filter'] is Map) {
-        (rawConfig['dns']['fallback-filter'] as Map).remove('geosite');
-      }
-    }
-
-    if (system.isAndroid && rawConfig['dns']['listen'] != null) {
-      final listen = rawConfig['dns']['listen'] as String;
-      if (listen.endsWith(':53')) {
-        rawConfig['dns']['listen'] = listen.replaceAll(':53', ':10053');
-      }
-      final noProviders =
-          rawConfig['proxy-providers'] == null &&
-          rawConfig['rule-providers'] == null;
-      final proxyServerNameserver = rawConfig['dns']['proxy-server-nameserver'];
-      final hasLocalProxyServerNameserver = switch (proxyServerNameserver) {
-        List list => list.any((e) => e.toString().startsWith('127.0.0.1')),
-        String str => str.startsWith('127.0.0.1'),
-        _ => false,
-      };
-      if (noProviders &&
-          hasLocalProxyServerNameserver &&
-          listen.startsWith('0.0.0.0')) {
-        rawConfig['dns']['listen'] =
-            '127.0.0.1${listen.substring('0.0.0.0'.length)}';
-      }
-    }
-
-    if (rawConfig['ntp'] == null) {
-      rawConfig['ntp'] = {};
-    }
-    final overrideNtp = globalState.config.overrideNtp;
-    if (overrideNtp) {
-      final ntp = realPatchConfig.ntp;
-      rawConfig['ntp'] = ntp.toJson();
-    }
-    if (system.isAndroid) {
-      rawConfig['ntp']['write-to-system'] = false;
-    }
-    if (rawConfig['sniffer'] == null) {
-      rawConfig['sniffer'] = {};
-    }
-    final overrideSniffer = globalState.config.overrideSniffer;
-    if (overrideSniffer) {
-      final sniffer = realPatchConfig.sniffer;
-      rawConfig['sniffer'] = sniffer.toJson();
-    }
-    final guiTunnels = realPatchConfig.tunnels;
-    if (guiTunnels.isNotEmpty) {
-      final existingTunnels = rawConfig['tunnels'] as List? ?? [];
-      final allTunnels = [
-        ...existingTunnels,
-        ...guiTunnels.map((t) => t.toClashJson()),
-      ];
-      rawConfig['tunnels'] = allTunnels;
-    }
-    if (rawConfig['experimental'] == null) {
-      rawConfig['experimental'] = {};
-    }
-    final overrideExperimental = globalState.config.overrideExperimental;
-    if (overrideExperimental) {
-      final experimental = realPatchConfig.experimental;
-      rawConfig['experimental'] = experimental.toJson();
-    }
-
-    final nodeExcludeFilter = globalState.config.nodeExcludeFilter;
-    final healthCheckTimeout = globalState.config.healthCheckTimeout;
-    if ((nodeExcludeFilter.isNotEmpty || healthCheckTimeout != 5000) &&
-        rawConfig['proxy-groups'] is List) {
-      RegExp? filterRegex;
-      if (nodeExcludeFilter.isNotEmpty) {
-        try {
-          filterRegex = RegExp(nodeExcludeFilter);
-        } catch (_) {}
-      }
-
-      final proxyGroups = rawConfig['proxy-groups'] as List;
-
-      final Set<String> protectedNames = {
-        'DIRECT',
-        'REJECT',
-        'REJECT-DROP',
-        'COMPATIBLE',
-        'PASS',
-      };
-      for (final g in proxyGroups) {
-        if (g is Map && g['name'] is String) {
-          protectedNames.add(g['name'] as String);
-        }
-      }
-
-      for (final group in proxyGroups) {
-        if (group is! Map) continue;
-
-        if (filterRegex != null && group['use'] != null) {
-          final existing = group['exclude-filter'];
-          if (existing is String && existing.isNotEmpty) {
-            group['exclude-filter'] = '$existing|$nodeExcludeFilter';
-          } else {
-            group['exclude-filter'] = nodeExcludeFilter;
-          }
-        }
-
-        if (filterRegex != null && group['proxies'] is List) {
-          final proxiesList = group['proxies'] as List;
-          final filtered = proxiesList.where((item) {
-            if (item is! String || protectedNames.contains(item)) return true;
-            return !filterRegex!.hasMatch(item);
-          }).toList();
-
-          if (filtered.isEmpty &&
-              (group['use'] == null ||
-                  (group['use'] is List && group['use'].isEmpty))) {
-            filtered.add('DIRECT');
-          }
-          group['proxies'] = filtered;
-        }
-
-        if (healthCheckTimeout != 5000) {
-          group['timeout'] ??= healthCheckTimeout;
-        }
-      }
-
-      if (filterRegex != null && rawConfig['proxy-providers'] is Map) {
-        final proxyProviders = rawConfig['proxy-providers'] as Map;
-        for (final provider in proxyProviders.values) {
-          if (provider is! Map) continue;
-          final existing = provider['exclude-filter'];
-          if (existing is String && existing.isNotEmpty) {
-            provider['exclude-filter'] = '$existing|$nodeExcludeFilter';
-          } else {
-            provider['exclude-filter'] = nodeExcludeFilter;
-          }
-        }
-      }
-    }
-
-    if (rawConfig['proxy-groups'] is List) {
-      final proxyGroups = rawConfig['proxy-groups'] as List;
-      for (final group in proxyGroups) {
-        if (group is! Map) continue;
-        final tolerance = group['tolerance'];
-        if (tolerance != null) {
-          if (tolerance is double) {
-            group['tolerance'] = tolerance.toInt();
-          } else if (tolerance is String) {
-            group['tolerance'] = int.tryParse(tolerance) ?? tolerance;
-          }
-        }
-      }
-    }
-
-    var rules = [];
-    if (rawConfig['rules'] != null) {
-      rules = rawConfig['rules'];
-      rawConfig.remove('rules');
-    } else if (rawConfig['rule'] != null) {
-      rules = rawConfig['rule'];
-      rawConfig.remove('rule');
-    }
-
-    final scriptOverride = targetProfile.useScriptOverride;
-    final addedRules = config.scriptProps.addedRules;
-    final scriptActive =
-        (config.scriptProps.currentScript != null || addedRules.isNotEmpty) &&
-        scriptOverride;
-
-    final overrideData = targetProfile.overrideData;
-    if (overrideData.enable && !scriptActive) {
-      if (overrideData.rule.type == OverrideRuleType.override) {
-        rules = overrideData.runningRule;
-      } else {
-        rules = [...overrideData.runningRule, ...rules];
-      }
-    }
-
-    // UI-added rules act as a global override: once script override is
-    // enabled for the profile, prepend them so they take precedence over
-    // every rule of the effective config.
-    if (scriptOverride && addedRules.isNotEmpty) {
-      rules = [...addedRules, ...rules];
-    }
-
-    if (config.vpnProps.disableQuic) {
-      final isRussian =
-          config.appSetting.locale?.toLowerCase().startsWith('ru') ?? false;
-      final quicRules = config.vpnProps.excludeChina && !isRussian
-          ? [
-              'AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((GEOSITE,geolocation-cn),(GEOIP,CN,no-resolve)))))),REJECT',
-            ]
-          : ['AND,((NETWORK,UDP),(DST-PORT,443)),REJECT'];
-      rules = [...quicRules, ...rules];
-    }
-
-    if (rawConfig['proxy-groups'] == null && originalProxyGroups != null) {
-      rawConfig['proxy-groups'] = originalProxyGroups;
-    }
-
-    final globalClientFingerprint = rawConfig['global-client-fingerprint'];
-    if (rawConfig['proxies'] is List) {
-      final proxiesList = rawConfig['proxies'] as List;
-      for (final proxy in proxiesList) {
-        if (proxy is! Map) continue;
-
-        final type = proxy['type']?.toString().toLowerCase();
-        final isTls = proxy['tls'] == true;
-
-        bool supportClientFingerprint = false;
-        if (type == 'trojan' || type == 'anytls') {
-          supportClientFingerprint = true;
-        } else if ((type == 'vmess' || type == 'vless') && isTls) {
-          supportClientFingerprint = true;
-        }
-
-        if (supportClientFingerprint) {
-          if (globalClientFingerprint != null &&
-              proxy['client-fingerprint'] == null) {
-            proxy['client-fingerprint'] = globalClientFingerprint;
-          }
-        }
-
-        final realityOpts = proxy['reality-opts'];
-        if (realityOpts is Map) {
-          final shortId = realityOpts['short-id'];
-          if (shortId is num) {
-            realityOpts['short-id'] = shortId.toString();
-          }
-        }
-      }
-    }
-
-    applyGroupSwitches(
-      rawConfig,
-      rules,
-      groupSwitches: targetProfile.groupSwitches,
-      scriptActive: scriptActive,
+    final input = buildConfigPatchInput(
+      rawConfig: rawConfig,
+      patch: realPatchConfig,
+      profile: targetProfile,
+      isAndroid: system.isAndroid,
+      isLinux: system.isLinux,
+      uiPath: await appPath.uiPath,
+      profilesPath: await appPath.profilesPath,
+      overrideDns: config.overrideDns,
+      overrideNtp: config.overrideNtp,
+      overrideSniffer: config.overrideSniffer,
+      overrideExperimental: config.overrideExperimental,
+      nodeExcludeFilter: config.nodeExcludeFilter,
+      healthCheckTimeout: config.healthCheckTimeout,
+      scriptAddedRules: config.scriptProps.addedRules,
+      hasCurrentScript: config.scriptProps.currentScript != null,
+      disableQuic: config.vpnProps.disableQuic,
+      excludeChina: config.vpnProps.excludeChina,
+      locale: config.appSetting.locale,
     );
 
-    rawConfig.remove('rule');
-    rawConfig['rules'] = rules;
-    return rawConfig;
+    if (useRustConfigPipeline) {
+      final output = BettboxConfig.patchConfig(jsonEncode(input));
+      if (output != null) {
+        return (jsonDecode(output) as Map).cast<String, dynamic>();
+      }
+      commonPrint.log('Rust 配置管道不可用，回退 Dart 路径');
+    }
+    return applyConfigPatch(input);
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {

@@ -1,6 +1,8 @@
 export 'android.dart';
 export 'app_localizations.dart';
 export 'color.dart';
+export 'config_patch.dart';
+export 'config_patch_input.dart';
 export 'constant.dart';
 export 'context.dart';
 export 'converter.dart';
