@@ -63,7 +63,12 @@ SECRET_KEYS = {
     "age-secret-key",
 }
 TRAFFIC_KEYS = {"upload", "download", "total", "expire", "Upload", "Download", "Total", "Expire"}
-FIXED_HOSTS = {"example.com": ["203.0.113.10"]}
+# 值必须是字符串：`ClashConfig.hosts` 是 `Map<String, String>`，列表值会让模型解析失败。
+# 其中一条故意带多个分隔符，用来覆盖 `splitByMultipleSeparators` 的切分路径。
+FIXED_HOSTS = {
+    "example.com": "203.0.113.10",
+    "cdn.example.net": "203.0.113.11, 203.0.113.12",
+}
 REPLACEMENT_DOMAIN = "example.com"
 
 

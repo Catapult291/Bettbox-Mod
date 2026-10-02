@@ -398,9 +398,8 @@
     "external-ui-name": null,
     "external-ui-url": null,
     "hosts": {
-      "example.com": [
-        "203.0.113.10"
-      ]
+      "example.com": "203.0.113.10",
+      "cdn.example.net": "203.0.113.11, 203.0.113.12"
     }
   },
   "scriptProps": {
