@@ -53,6 +53,10 @@ char *bb_apply_group_switches(const char *proxy_groups_json,
  * 返回改写后的配置 JSON。失败返回 NULL。 */
 char *bb_patch_config(const char *input_json);
 
+/* 节点过滤用的最小正则匹配：命中返回 1，未命中返回 0，
+ * 模式用了子集之外的写法返回 -1（此时配置管道会整条回退 Dart）。 */
+int bb_node_filter_match(const char *pattern, const char *text);
+
 /* 释放本库返回的字符串。 */
 void bb_string_free(char *ptr);
 

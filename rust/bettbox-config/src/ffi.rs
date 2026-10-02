@@ -169,6 +169,25 @@ pub unsafe extern "C" fn bb_patch_config(input_json: *const c_char) -> *mut c_ch
     }
 }
 
+/// 节点过滤用的最小正则匹配：命中返回 1，未命中返回 0，模式不支持返回 -1。
+///
+/// # Safety
+///
+/// 两个入参都必须是 NUL 结尾的 UTF-8 C 字符串或 NULL。
+#[no_mangle]
+pub unsafe extern "C" fn bb_node_filter_match(pattern: *const c_char, text: *const c_char) -> i32 {
+    let Some(pattern) = (unsafe { borrow_str(pattern) }) else {
+        return -1;
+    };
+    let Some(text) = (unsafe { borrow_str(text) }) else {
+        return -1;
+    };
+    match crate::mini_regex::compile(pattern) {
+        Ok(regex) => i32::from(regex.is_match(text)),
+        Err(_) => -1,
+    }
+}
+
 /// 释放本库返回的字符串。
 ///
 /// # Safety

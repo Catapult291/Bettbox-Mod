@@ -752,7 +752,9 @@ class GlobalState {
       if (output != null) {
         return (jsonDecode(output) as Map).cast<String, dynamic>();
       }
-      commonPrint.log('Rust 配置管道不可用，回退 Dart 路径');
+      commonPrint.log(
+        'Rust 配置管道未接管（动态库缺失、输入含未支持的写法或内部出错），回退 Dart 路径',
+      );
     }
     return applyConfigPatch(input);
   }

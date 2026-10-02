@@ -165,6 +165,22 @@ class BettboxConfigFFI {
   late final _bb_patch_config = _bb_patch_configPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
 
+  int bb_node_filter_match(
+    ffi.Pointer<ffi.Char> pattern,
+    ffi.Pointer<ffi.Char> text,
+  ) {
+    return _bb_node_filter_match(pattern, text);
+  }
+
+  late final _bb_node_filter_matchPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)
+        >
+      >('bb_node_filter_match');
+  late final _bb_node_filter_match = _bb_node_filter_matchPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Char>, ffi.Pointer<ffi.Char>)>();
+
   void bb_string_free(ffi.Pointer<ffi.Char> ptr) {
     return _bb_string_free(ptr);
   }

@@ -49,6 +49,24 @@ abstract final class BettboxConfig {
     return _call(_require().bb_rule_round_trip, rule);
   }
 
+  /// 节点过滤用的最小正则匹配：命中返回 true，未命中返回 false，
+  /// 模式用了 Rust 子集之外的写法返回 null（此时配置管道会整条回退 Dart）。
+  static bool? nodeFilterMatch(String pattern, String text) {
+    final bindings = _require();
+    final patternPtr = pattern.toNativeUtf8();
+    final textPtr = text.toNativeUtf8();
+    try {
+      final result = bindings.bb_node_filter_match(
+        patternPtr.cast<Char>(),
+        textPtr.cast<Char>(),
+      );
+      return switch (result) { 1 => true, 0 => false, _ => null };
+    } finally {
+      malloc.free(patternPtr);
+      malloc.free(textPtr);
+    }
+  }
+
   /// 跑完整条配置改写管道，返回改写后的配置 JSON 文本。
   ///
   /// 输入结构见 `lib/common/config_patch.dart` 的 `applyConfigPatch`。

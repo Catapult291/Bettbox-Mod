@@ -8,18 +8,18 @@
 //! `ClashConfig`、取应用数据目录）留在 Dart，这里只做对配置 map 的手术。
 //!
 //! 与 Dart 的已知差异（只在畸形输入上体现）：
-//! - `nodeExcludeFilter` 用的是 `regex` crate，Dart 用的是 ECMAScript 风格 `RegExp`；
-//!   常见写法一致，带反向引用等 ECMAScript 独有语法时可能不同。
+//! - `nodeExcludeFilter` 用本 crate 的 [`crate::mini_regex`]（手写最小子集）；用了子集之外的
+//!   写法时整条管道返回错误，由 Dart 侧回退，行为仍与 Dart 一致。
 //! - `tun` 不是对象、`proxy-groups` 元素不是对象等情形，这里返回错误（FFI 侧得到 NULL），
 //!   Dart 会直接抛异常。
 
 use std::collections::HashSet;
 
-use regex::Regex;
 use serde_json::{json, Map, Value};
 
 use crate::dns_override::apply_dns_node_override;
 use crate::group_switch::apply_group_switches;
+use crate::mini_regex;
 
 const EXTERNAL_UI_URL: &str =
     "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip";
@@ -392,7 +392,14 @@ fn apply_node_filter(
     let filter_regex = if node_exclude_filter.is_empty() {
         None
     } else {
-        Regex::new(&node_exclude_filter).ok()
+        // 子集之外的写法直接放弃整条 Rust 路径（返回 Err → FFI 得到 NULL → Dart 兜底），
+        // 而不是猜着当字面量处理，否则两端行为会悄悄分叉。
+        match mini_regex::compile(&node_exclude_filter) {
+            Ok(regex) => Some(regex),
+            Err(error) => {
+                return Err(format!("nodeExcludeFilter 用了未支持的写法：{error}"));
+            }
+        }
     };
 
     let mut protected_names: HashSet<String> =
@@ -750,6 +757,26 @@ mod tests {
             json!(["203.0.113.10", "203.0.113.11"])
         );
         assert!(output.get("rule").is_none());
+    }
+
+    #[test]
+    fn node_filter_is_applied_when_supported() {
+        let mut input = minimal_input();
+        input["env"]["nodeExcludeFilter"] = json!("节点2");
+        // 关掉分组开关，否则 `自动选择` 会被移除、看不到过滤结果。
+        input["profile"]["groupSwitches"] = json!({});
+        let output = patch_config(&input).unwrap();
+        let members = output["proxy-groups"][0]["proxies"].as_array().unwrap();
+        assert_eq!(members, &vec![json!("节点1")]);
+    }
+
+    #[test]
+    fn unsupported_node_filter_aborts_so_dart_can_take_over() {
+        // `{}` 量词在最小匹配器子集之外：整条管道返回错误（FFI 得到 NULL），
+        // Dart 侧据此回退到自己的 RegExp 路径，两端行为不会分叉。
+        let mut input = minimal_input();
+        input["env"]["nodeExcludeFilter"] = json!("节点{2}");
+        assert!(patch_config(&input).is_err());
     }
 
     #[test]
