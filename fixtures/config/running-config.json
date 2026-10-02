@@ -1,0 +1,1006 @@
+{
+  "port": 0,
+  "socks-port": 0,
+  "redir-port": 0,
+  "tproxy-port": 0,
+  "mixed-port": 7890,
+  "ss-config": "",
+  "vmess-config": "",
+  "inbound-tfo": false,
+  "inbound-mptcp": false,
+  "authentication": [],
+  "skip-auth-prefixes": null,
+  "lan-allowed-ips": [
+    "0.0.0.0/0",
+    "::/0"
+  ],
+  "lan-disallowed-ips": null,
+  "allow-lan": false,
+  "bind-address": "*",
+  "mode": "rule",
+  "unified-delay": true,
+  "log-level": "error",
+  "ipv6": true,
+  "external-controller": "",
+  "external-controller-routing-mark": 0,
+  "external-controller-pipe": "",
+  "external-controller-unix": "",
+  "external-controller-tls": "",
+  "external-controller-cors": {
+    "allow-origins": [
+      "*"
+    ],
+    "allow-private-network": true
+  },
+  "external-ui": "C:\\Users\\bypassnro\\AppData\\Roaming\\Catapult291\\Bettbox\\ui",
+  "external-ui-url": "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip",
+  "external-doh-server": "",
+  "secret": "",
+  "interface-name": "",
+  "routing-mark": 0,
+  "tunnels": null,
+  "geodata-loader": "memconservative",
+  "geosite-matcher": "",
+  "tcp-concurrent": true,
+  "find-process-mode": "off",
+  "global-client-fingerprint": "",
+  "global-ua": null,
+  "etag-support": true,
+  "keep-alive-idle": 0,
+  "keep-alive-interval": 30,
+  "disable-keep-alive": false,
+  "proxy-providers": {},
+  "rule-providers": {
+    "category-ads-all": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX-XXX-XXX.XXX",
+      "interval": 86400
+    },
+    "private": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXX.XXX",
+      "interval": 86400
+    },
+    "google-cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXX-XX.XXX",
+      "interval": 86400
+    },
+    "synology": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX.XXX",
+      "interval": 86400
+    },
+    "microsoft@cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXX@XX.XXX",
+      "interval": 86400
+    },
+    "category-game-platforms-download@cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX-XXXX-XXXXXXXXX-XXXXXXXX@XX.XXX",
+      "interval": 86400
+    },
+    "category-ai-!cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX-XX-!XX.XXX",
+      "interval": 86400
+    },
+    "telegram": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX.XXX",
+      "interval": 86400
+    },
+    "gfw": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXX.XXX",
+      "interval": 86400
+    },
+    "cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XX.XXX",
+      "interval": 86400
+    },
+    "googlefcm": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXX.XXX",
+      "interval": 86400
+    },
+    "epicgames": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXX.XXX",
+      "interval": 86400
+    },
+    "nvidia@cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXX@XX.XXX",
+      "interval": 86400
+    },
+    "cloudflare@cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXXX@XX.XXX",
+      "interval": 86400
+    },
+    "steam@cn": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXX@XX.XXX",
+      "interval": 86400
+    },
+    "category-ntp": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXX-XXX.XXX",
+      "interval": 86400
+    },
+    "connectivity-check": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXXXXX-XXXXX.XXX",
+      "interval": 86400
+    },
+    "apple": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXX.XXX",
+      "interval": 86400
+    },
+    "spotify": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXX.XXX",
+      "interval": 86400
+    },
+    "microsoft": {
+      "type": "http",
+      "behavior": "domain",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXXXX/XXXXXXXXX.XXX",
+      "interval": 86400
+    },
+    "private-ip": {
+      "type": "http",
+      "behavior": "ipcidr",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXX/XXXXXXX.XXX",
+      "interval": 86400
+    },
+    "cn-ip": {
+      "type": "http",
+      "behavior": "ipcidr",
+      "format": "mrs",
+      "path": "X:\\XXXXX\\XXXXXXXXX\\XXXXXXX\\XXXXXXX\\XXXXXXXXXXX\\XXXXXXX\\XXXXXXXX\\XXXXXXXXX\\XXXXXXXXXXXXX\\XXXXX\\XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "url": "XXXXX://XXXXXX.XXXXXXXX.XXX/XX/XXXXXXXXX/XXXX-XXXXX-XXX@XXXX/XXX/XXXXX/XX.XXX",
+      "interval": 86400
+    },
+    "cloudflare": {
+      "type": "inline",
+      "behavior": "classical",
+      "payload": [
+        "DOMAIN,challenges.example.com",
+        "DOMAIN-SUFFIX,cloudflarechallenge.com"
+      ]
+    }
+  },
+  "proxies": [
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇭🇰香港 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 61001,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇯🇵日本 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 61002,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇸🇬新加坡 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 61003,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇨🇳台湾 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 61004,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇺🇸美国 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 61005,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "cipher": "2022-blake3-aes-256-gcm",
+      "name": "🇩🇪德国 BGP",
+      "password": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX=",
+      "port": 60007,
+      "server": "node1.example.com",
+      "type": "ss",
+      "udp": true
+    },
+    {
+      "alpn": [
+        "h2",
+        "http/1.1"
+      ],
+      "client-fingerprint": "chrome",
+      "name": "🇩🇪德国 9929",
+      "password": "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX",
+      "port": 80,
+      "server": "node2.example.com",
+      "skip-cert-verify": false,
+      "sni": "",
+      "type": "anytls",
+      "udp": true
+    }
+  ],
+  "proxy-groups": [
+    {
+      "name": "fcm",
+      "type": "select",
+      "proxies": [
+        "DIRECT"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Google_Search.png",
+      "hidden": true
+    },
+    {
+      "name": "main",
+      "type": "select",
+      "proxies": [
+        "All",
+        "HK",
+        "TW_SG_JP_KR",
+        "US",
+        "Other"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Available.png"
+    },
+    {
+      "name": "final",
+      "type": "select",
+      "proxies": [
+        "main",
+        "ai",
+        "tg",
+        "HK",
+        "TW_SG_JP_KR",
+        "US",
+        "Other",
+        "DIRECT"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Final.png"
+    },
+    {
+      "name": "URL Test - All",
+      "type": "url-test",
+      "proxies": [
+        "🇭🇰香港 BGP",
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP",
+        "🇺🇸美国 BGP",
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Auto.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "All",
+      "type": "select",
+      "proxies": [
+        "URL Test - All",
+        "🇭🇰香港 BGP",
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP",
+        "🇺🇸美国 BGP",
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Auto.png"
+    },
+    {
+      "name": "ai",
+      "type": "select",
+      "proxies": [
+        "All-ai",
+        "TW_SG_JP_KR",
+        "US",
+        "Other"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png"
+    },
+    {
+      "name": "URL Test - All-ai",
+      "type": "url-test",
+      "proxies": [
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP",
+        "🇺🇸美国 BGP",
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "All-ai",
+      "type": "select",
+      "proxies": [
+        "URL Test - All-ai",
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP",
+        "🇺🇸美国 BGP",
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/ChatGPT.png"
+    },
+    {
+      "name": "tg - Fallback",
+      "type": "fallback",
+      "proxies": [
+        "TW_SG_JP_KR",
+        "main"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Telegram.png",
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "tg",
+      "type": "select",
+      "proxies": [
+        "tg - Fallback",
+        "TW_SG_JP_KR",
+        "main"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Telegram.png"
+    },
+    {
+      "name": "URL Test - HK",
+      "type": "url-test",
+      "proxies": [
+        "🇭🇰香港 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Hong_Kong.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "HK",
+      "type": "select",
+      "proxies": [
+        "URL Test - HK",
+        "🇭🇰香港 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Hong_Kong.png"
+    },
+    {
+      "name": "URL Test - TW_SG_JP_KR",
+      "type": "url-test",
+      "proxies": [
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Asia_Map.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "TW_SG_JP_KR",
+      "type": "select",
+      "proxies": [
+        "URL Test - TW_SG_JP_KR",
+        "🇯🇵日本 BGP",
+        "🇸🇬新加坡 BGP",
+        "🇨🇳台湾 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Asia_Map.png"
+    },
+    {
+      "name": "URL Test - US",
+      "type": "url-test",
+      "proxies": [
+        "🇺🇸美国 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/United_States.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "US",
+      "type": "select",
+      "proxies": [
+        "URL Test - US",
+        "🇺🇸美国 BGP"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/United_States.png"
+    },
+    {
+      "name": "URL Test - Other",
+      "type": "url-test",
+      "proxies": [
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Available.png",
+      "hidden": true,
+      "url": "XXXXX://XXX.X.XX/XXXXXXXX_XXX",
+      "interval": 900,
+      "tolerance": 100,
+      "lazy": true,
+      "timeout": 1000,
+      "max-failed-times": 1
+    },
+    {
+      "name": "Other",
+      "type": "select",
+      "proxies": [
+        "URL Test - Other",
+        "🇩🇪德国 BGP",
+        "🇩🇪德国 9929"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Available.png"
+    },
+    {
+      "name": "GLOBAL",
+      "type": "select",
+      "proxies": [
+        "main",
+        "All",
+        "ai",
+        "All-ai",
+        "tg",
+        "HK",
+        "TW_SG_JP_KR",
+        "US",
+        "Other",
+        "final"
+      ],
+      "icon": "https://example.com/gh/Koolson/Qure@master/IconSet/Color/Global.png"
+    }
+  ],
+  "sub-rules": null,
+  "listeners": null,
+  "hosts": {
+    "example.com": [
+      "203.0.113.10"
+    ]
+  },
+  "dns": {
+    "enable": true,
+    "prefer-h3": false,
+    "ipv6": true,
+    "ipv6-timeout": 100,
+    "use-hosts": true,
+    "use-system-hosts": true,
+    "respect-rules": true,
+    "nameserver": [
+      "https://1.1.1.1/dns-query#main",
+      "https://8.8.8.8/dns-query#main"
+    ],
+    "fallback": [
+      "https://doh.dns.sb/dns-query",
+      "https://dns.example.com/dns-query",
+      "https://dns.twnic.tw/dns-query",
+      "tls://8.8.4.4:853",
+      "tls://1.1.1.1:853"
+    ],
+    "fallback-filter": {
+      "geoip": true,
+      "geoip-code": "CN",
+      "ipcidr": [
+        "240.0.0.0/4",
+        "0.0.0.0/32",
+        "127.0.0.1/32",
+        "100.64.0.0/10"
+      ],
+      "domain": null
+    },
+    "fallback-lazy-query": false,
+    "listen": "127.0.0.1:1053",
+    "listen-routing-mark": 0,
+    "enhanced-mode": "fake-ip",
+    "fake-ip-range": "198.18.0.1/16",
+    "fake-ip-range6": "2001:2::1/48",
+    "fake-ip-filter": [
+      "+.cn",
+      "rule-set:cloudflare",
+      "rule-set:private",
+      "rule-set:cn",
+      "rule-set:google-cn",
+      "rule-set:synology",
+      "rule-set:googlefcm",
+      "rule-set:epicgames",
+      "rule-set:nvidia@cn",
+      "rule-set:microsoft@cn",
+      "rule-set:cloudflare@cn",
+      "rule-set:steam@cn",
+      "rule-set:category-game-platforms-download@cn",
+      "rule-set:category-ntp",
+      "rule-set:connectivity-check",
+      "rule-set:apple",
+      "rule-set:spotify",
+      "rule-set:microsoft",
+      "+.lan",
+      "+.local",
+      "+.localhost",
+      "+.localdomain",
+      "+.home.arpa",
+      "+.arpa",
+      "time.*.com",
+      "ntp.*.com",
+      "example.com",
+      "time-ios.example.com",
+      "+.ntp.orexample.com",
+      "+.pool.ntp.org",
+      "+.push.example.com",
+      "+.msftconnecttest.com",
+      "+.msftncsi.com",
+      "+.connectivitycheck.gstatic.com",
+      "captive.example.com",
+      "router.asus.com",
+      "routerlogin.net",
+      "+.cline.bot",
+      "+.commandcode.ai"
+    ],
+    "fake-ip-filter-mode": "blacklist",
+    "fake-ip-ttl": 1,
+    "default-nameserver": [
+      "223.5.5.5",
+      "119.29.29.29"
+    ],
+    "cache-algorithm": "arc",
+    "cache-max-size": 0,
+    "nameserver-policy": {
+      "rule-set:category-ai-!cn": [
+        "https://1.1.1.1/dns-query#ai",
+        "https://8.8.8.8/dns-query#ai"
+      ],
+      "+.cline.bot": [
+        "https://dns.alidns.com/dns-query#DIRECT",
+        "https://doh.pub/dns-query#DIRECT"
+      ],
+      "+.commandcode.ai": [
+        "https://dns.alidns.com/dns-query#DIRECT",
+        "https://doh.pub/dns-query#DIRECT"
+      ]
+    },
+    "proxy-server-nameserver": [
+      "https://doh.pub/dns-query#DIRECT",
+      "https://dns.alidns.com/dns-query#DIRECT"
+    ],
+    "proxy-server-nameserver-policy": null,
+    "direct-nameserver": [
+      "system",
+      "https://dns.alidns.com/dns-query",
+      "https://doh.pub/dns-query"
+    ],
+    "direct-nameserver-follow-policy": false
+  },
+  "ntp": {
+    "enable": false,
+    "server": "node94.example.com",
+    "port": 123,
+    "interval": 30,
+    "dialer-proxy": "",
+    "write-to-system": false
+  },
+  "tun": {
+    "enable": false,
+    "device": "Bettbox",
+    "stack": "mixed",
+    "dns-hijack": [
+      "any:53"
+    ],
+    "auto-route": true,
+    "auto-detect-interface": true,
+    "inet6-address": [
+      "fdfe:dcba:9876::1/126"
+    ],
+    "file-descriptor": 0,
+    "recvmsgx": true,
+    "strict-route": false,
+    "route-address": [],
+    "route-exclude-address": [
+      "127.0.0.0/8",
+      "::1/128",
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "192.168.0.0/16",
+      "169.254.0.0/16",
+      "fd00::/8",
+      "fe80::/10"
+    ],
+    "auto-redirect": false,
+    "endpoint-independent-nat": false,
+    "disable-icmp-forwarding": true,
+    "mtu": 9000
+  },
+  "tuic-server": {
+    "enable": false,
+    "listen": "",
+    "token": null,
+    "certificate": "",
+    "private-key": "",
+    "max-idle-time": 15000,
+    "authentication-timeout": 1000,
+    "alpn": [
+      "h3"
+    ],
+    "max-udp-relay-packet-size": 1500
+  },
+  "iptables": {
+    "enable": false,
+    "inbound-interface": "lo",
+    "bypass": [],
+    "dns-redirect": true
+  },
+  "experimental": {
+    "fingerprints": null,
+    "quic-go-disable-gso": false,
+    "quic-go-disable-ecn": true,
+    "dialer-ip4p-convert": false
+  },
+  "profile": {
+    "store-selected": true,
+    "store-fake-ip": false
+  },
+  "sniffer": {
+    "enable": true,
+    "override-destination": true,
+    "sniffing": null,
+    "force-domain": [],
+    "skip-src-address": null,
+    "skip-dst-address": null,
+    "skip-domain": [],
+    "port-whitelist": [],
+    "force-dns-mapping": true,
+    "parse-pure-ip": true,
+    "sniff": {
+      "HTTP": {
+        "ports": [
+          "80",
+          "8080-8880"
+        ],
+        "override-destination": true
+      },
+      "TLS": {
+        "ports": [
+          "443",
+          "8443"
+        ]
+      },
+      "QUIC": {
+        "ports": [
+          "443",
+          "8443"
+        ]
+      }
+    }
+  },
+  "tls": {
+    "certificate": "",
+    "private-key": "",
+    "client-auth-type": "",
+    "client-auth-cert": "",
+    "ech-key": "",
+    "custom-certifactes": null
+  },
+  "clash-for-android": {
+    "append-system-dns": false,
+    "ui-subtitle-pattern": ""
+  },
+  "geodata-mode": false,
+  "geox-url": {
+    "mmdb": "https://github.com/appshubcc/bett-rules/releases/download/latest/geoip.metadb",
+    "asn": "https://github.com/appshubcc/bett-rules/releases/download/latest/GeoLite2-ASN.mmdb",
+    "geosite": "https://github.com/appshubcc/bett-rules/releases/download/latest/geosite.dat"
+  },
+  "rules": [
+    "DOMAIN-SUFFIX,linux.do,main",
+    "DOMAIN-SUFFIX,mineru.net,DIRECT",
+    "RULE-SET,category-ads-all,REJECT",
+    "DOMAIN,api.ip.sb,main",
+    "DOMAIN,example.com,main",
+    "DOMAIN,www.example.com,main",
+    "DOMAIN,example.com,main",
+    "DOMAIN,api.ipify.org,main",
+    "DOMAIN,api.ipinfo.io,main",
+    "RULE-SET,cloudflare,DIRECT",
+    "RULE-SET,private,DIRECT",
+    "RULE-SET,private-ip,DIRECT,no-resolve",
+    "RULE-SET,googlefcm,DIRECT",
+    "RULE-SET,google-cn,DIRECT",
+    "RULE-SET,synology,DIRECT",
+    "DOMAIN-SUFFIX,sharepoint.com,DIRECT",
+    "RULE-SET,microsoft@cn,DIRECT",
+    "RULE-SET,category-game-platforms-download@cn,DIRECT",
+    "RULE-SET,category-ai-!cn,ai",
+    "RULE-SET,telegram,tg",
+    "RULE-SET,gfw,main",
+    "RULE-SET,cn,DIRECT",
+    "RULE-SET,cn-ip,DIRECT,no-resolve",
+    "DOMAIN,safebrowsing.urlsec.qq.com,DIRECT",
+    "DOMAIN,safebrowsing.googleapis.com,DIRECT",
+    "DOMAIN,developer.example.com,DIRECT",
+    "DOMAIN-SUFFIX,digicert.com,DIRECT",
+    "DOMAIN,ocsp.example.com,DIRECT",
+    "DOMAIN,ocsp.comodoca.com,DIRECT",
+    "DOMAIN,ocsp.usertrust.com,DIRECT",
+    "DOMAIN,ocsp.sectigo.com,DIRECT",
+    "DOMAIN,ocsp.verisign.net,DIRECT",
+    "DOMAIN-SUFFIX,apple-dns.net,DIRECT",
+    "DOMAIN,testflight.example.com,DIRECT",
+    "DOMAIN,sandbox.itunes.example.com,DIRECT",
+    "DOMAIN,itunes.example.com,DIRECT",
+    "DOMAIN-SUFFIX,apps.example.com,DIRECT",
+    "DOMAIN-SUFFIX,blobstore.example.com,DIRECT",
+    "DOMAIN,cvws.icloud-content.com,DIRECT",
+    "DOMAIN-SUFFIX,mzstatic.com,DIRECT",
+    "DOMAIN-SUFFIX,itunes.example.com,DIRECT",
+    "DOMAIN-SUFFIX,icloud.com,DIRECT",
+    "DOMAIN-SUFFIX,icloud-content.com,DIRECT",
+    "DOMAIN-SUFFIX,me.com,DIRECT",
+    "DOMAIN-SUFFIX,aaplimg.com,DIRECT",
+    "DOMAIN-SUFFIX,cdn20.com,DIRECT",
+    "DOMAIN-SUFFIX,cdn-example.com,DIRECT",
+    "DOMAIN-SUFFIX,akadns.net,DIRECT",
+    "DOMAIN-SUFFIX,akamaiedge.net,DIRECT",
+    "DOMAIN-SUFFIX,edgekey.net,DIRECT",
+    "DOMAIN-SUFFIX,mwcloudcdn.com,DIRECT",
+    "DOMAIN-SUFFIX,mwcname.com,DIRECT",
+    "DOMAIN-SUFFIX,example.com,DIRECT",
+    "DOMAIN-SUFFIX,apple-cloudkit.com,DIRECT",
+    "DOMAIN-SUFFIX,apple-mapkit.com,DIRECT",
+    "DOMAIN-SUFFIX,126.com,DIRECT",
+    "DOMAIN-SUFFIX,126.net,DIRECT",
+    "DOMAIN-SUFFIX,127.net,DIRECT",
+    "DOMAIN-SUFFIX,163.com,DIRECT",
+    "DOMAIN-SUFFIX,360buyimg.com,DIRECT",
+    "DOMAIN-SUFFIX,36kr.com,DIRECT",
+    "DOMAIN-SUFFIX,acfun.tv,DIRECT",
+    "DOMAIN-SUFFIX,air-matters.com,DIRECT",
+    "DOMAIN-SUFFIX,aixifan.com,DIRECT",
+    "DOMAIN-KEYWORD,alicdn,DIRECT",
+    "DOMAIN-KEYWORD,alipay,DIRECT",
+    "DOMAIN-KEYWORD,taobao,DIRECT",
+    "DOMAIN-SUFFIX,amap.com,DIRECT",
+    "DOMAIN-SUFFIX,autonavi.com,DIRECT",
+    "DOMAIN-KEYWORD,baidu,DIRECT",
+    "DOMAIN-SUFFIX,bdimg.com,DIRECT",
+    "DOMAIN-SUFFIX,bdstatic.com,DIRECT",
+    "DOMAIN-SUFFIX,bilibili.com,DIRECT",
+    "DOMAIN-SUFFIX,bilivideo.com,DIRECT",
+    "DOMAIN-SUFFIX,caiyunapp.com,DIRECT",
+    "DOMAIN-SUFFIX,clouddn.com,DIRECT",
+    "DOMAIN-SUFFIX,cnbeta.com,DIRECT",
+    "DOMAIN-SUFFIX,cnbetacdn.com,DIRECT",
+    "DOMAIN-SUFFIX,cootekservice.com,DIRECT",
+    "DOMAIN-SUFFIX,csdn.net,DIRECT",
+    "DOMAIN-SUFFIX,ctrip.com,DIRECT",
+    "DOMAIN-SUFFIX,dgtle.com,DIRECT",
+    "DOMAIN-SUFFIX,dianping.com,DIRECT",
+    "DOMAIN-SUFFIX,douban.com,DIRECT",
+    "DOMAIN-SUFFIX,doubanio.com,DIRECT",
+    "DOMAIN-SUFFIX,duokan.com,DIRECT",
+    "DOMAIN-SUFFIX,easou.com,DIRECT",
+    "DOMAIN-SUFFIX,ele.me,DIRECT",
+    "DOMAIN-SUFFIX,feng.com,DIRECT",
+    "DOMAIN-SUFFIX,fir.im,DIRECT",
+    "DOMAIN-SUFFIX,frdic.com,DIRECT",
+    "DOMAIN-SUFFIX,g-cores.com,DIRECT",
+    "DOMAIN-SUFFIX,godic.net,DIRECT",
+    "DOMAIN-SUFFIX,gtimg.com,DIRECT",
+    "DOMAIN,cdn.hockeyapp.net,DIRECT",
+    "DOMAIN-SUFFIX,hongxiu.com,DIRECT",
+    "DOMAIN-SUFFIX,hxcdn.net,DIRECT",
+    "DOMAIN-SUFFIX,iciba.com,DIRECT",
+    "DOMAIN-SUFFIX,ifeng.com,DIRECT",
+    "DOMAIN-SUFFIX,ifengimg.com,DIRECT",
+    "DOMAIN-SUFFIX,ipip.net,DIRECT",
+    "DOMAIN-SUFFIX,iqiyi.com,DIRECT",
+    "DOMAIN-SUFFIX,jd.com,DIRECT",
+    "DOMAIN-SUFFIX,jianshu.com,DIRECT",
+    "DOMAIN-SUFFIX,knewone.com,DIRECT",
+    "DOMAIN-SUFFIX,le.com,DIRECT",
+    "DOMAIN-SUFFIX,lecloud.com,DIRECT",
+    "DOMAIN-SUFFIX,lemicp.com,DIRECT",
+    "DOMAIN-SUFFIX,licdn.com,DIRECT",
+    "DOMAIN-SUFFIX,luoo.net,DIRECT",
+    "DOMAIN-SUFFIX,meituan.com,DIRECT",
+    "DOMAIN-SUFFIX,meituan.net,DIRECT",
+    "DOMAIN-SUFFIX,mi.com,DIRECT",
+    "DOMAIN-SUFFIX,miaopai.com,DIRECT",
+    "DOMAIN-SUFFIX,microsoft.com,DIRECT",
+    "DOMAIN-SUFFIX,microsoftonline.com,DIRECT",
+    "DOMAIN-SUFFIX,miui.com,DIRECT",
+    "DOMAIN-SUFFIX,miwifi.com,DIRECT",
+    "DOMAIN-SUFFIX,mob.com,DIRECT",
+    "DOMAIN-SUFFIX,netease.com,DIRECT",
+    "DOMAIN-SUFFIX,office.com,DIRECT",
+    "DOMAIN-SUFFIX,office365.com,DIRECT",
+    "DOMAIN-KEYWORD,officecdn,DIRECT",
+    "DOMAIN-SUFFIX,oschina.net,DIRECT",
+    "DOMAIN-SUFFIX,ppsimg.com,DIRECT",
+    "DOMAIN-SUFFIX,pstatp.com,DIRECT",
+    "DOMAIN-SUFFIX,qcloud.com,DIRECT",
+    "DOMAIN-SUFFIX,qdaily.com,DIRECT",
+    "DOMAIN-SUFFIX,qdmm.com,DIRECT",
+    "DOMAIN-SUFFIX,qhimg.com,DIRECT",
+    "DOMAIN-SUFFIX,qhres.com,DIRECT",
+    "DOMAIN-SUFFIX,qidian.com,DIRECT",
+    "DOMAIN-SUFFIX,qihucdn.com,DIRECT",
+    "DOMAIN-SUFFIX,qiniu.com,DIRECT",
+    "DOMAIN-SUFFIX,qiniucdn.com,DIRECT",
+    "DOMAIN-SUFFIX,qiyipic.com,DIRECT",
+    "DOMAIN-SUFFIX,qq.com,DIRECT",
+    "DOMAIN-SUFFIX,qqurl.com,DIRECT",
+    "DOMAIN-SUFFIX,rarbg.to,DIRECT",
+    "DOMAIN-SUFFIX,ruguoapp.com,DIRECT",
+    "DOMAIN-SUFFIX,segmentfault.com,DIRECT",
+    "DOMAIN-SUFFIX,sinaapp.com,DIRECT",
+    "DOMAIN-SUFFIX,smzdm.com,DIRECT",
+    "DOMAIN-SUFFIX,snapdrop.net,DIRECT",
+    "DOMAIN-SUFFIX,sogou.com,DIRECT",
+    "DOMAIN-SUFFIX,sogoucdn.com,DIRECT",
+    "DOMAIN-SUFFIX,sohu.com,DIRECT",
+    "DOMAIN-SUFFIX,soku.com,DIRECT",
+    "DOMAIN-SUFFIX,speedtest.net,DIRECT",
+    "DOMAIN-SUFFIX,sspai.com,DIRECT",
+    "DOMAIN-SUFFIX,suning.com,DIRECT",
+    "DOMAIN-SUFFIX,taobao.com,DIRECT",
+    "DOMAIN-SUFFIX,tencent.com,DIRECT",
+    "DOMAIN-SUFFIX,tenpay.com,DIRECT",
+    "DOMAIN-SUFFIX,tianyancha.com,DIRECT",
+    "DOMAIN-SUFFIX,tmall.com,DIRECT",
+    "DOMAIN-SUFFIX,tudou.com,DIRECT",
+    "DOMAIN-SUFFIX,umetrip.com,DIRECT",
+    "DOMAIN-SUFFIX,upaiyun.com,DIRECT",
+    "DOMAIN-SUFFIX,upyun.com,DIRECT",
+    "DOMAIN-SUFFIX,veryzhun.com,DIRECT",
+    "DOMAIN-SUFFIX,weather.com,DIRECT",
+    "DOMAIN-SUFFIX,weibo.com,DIRECT",
+    "DOMAIN-SUFFIX,xiami.com,DIRECT",
+    "DOMAIN-SUFFIX,xiami.net,DIRECT",
+    "DOMAIN-SUFFIX,xiaomicp.com,DIRECT",
+    "DOMAIN-SUFFIX,ximalaya.com,DIRECT",
+    "DOMAIN-SUFFIX,xmcdn.com,DIRECT",
+    "DOMAIN-SUFFIX,xunlei.com,DIRECT",
+    "DOMAIN-SUFFIX,yhd.com,DIRECT",
+    "DOMAIN-SUFFIX,yihaodianimg.com,DIRECT",
+    "DOMAIN-SUFFIX,yinxiang.com,DIRECT",
+    "DOMAIN-SUFFIX,ykimg.com,DIRECT",
+    "DOMAIN-SUFFIX,youdao.com,DIRECT",
+    "DOMAIN-SUFFIX,youku.com,DIRECT",
+    "DOMAIN-SUFFIX,zealer.com,DIRECT",
+    "DOMAIN-SUFFIX,zhihu.com,DIRECT",
+    "DOMAIN-SUFFIX,zhimg.com,DIRECT",
+    "DOMAIN-SUFFIX,zimuzu.tv,DIRECT",
+    "DOMAIN-SUFFIX,zoho.com,DIRECT",
+    "DOMAIN,injections.adguard.org,DIRECT",
+    "DOMAIN,local.adguard.org,DIRECT",
+    "DOMAIN-SUFFIX,local,DIRECT",
+    "IP-CIDR,127.0.0.0/8,DIRECT",
+    "IP-CIDR,172.16.0.0/12,DIRECT",
+    "IP-CIDR,192.168.0.0/16,DIRECT",
+    "IP-CIDR,10.0.0.0/8,DIRECT",
+    "IP-CIDR,17.0.0.0/8,DIRECT",
+    "IP-CIDR,100.64.0.0/10,DIRECT",
+    "IP-CIDR,224.0.0.0/4,DIRECT",
+    "IP-CIDR6,fe80::/10,DIRECT",
+    "DOMAIN-SUFFIX,cn,DIRECT",
+    "DOMAIN-KEYWORD,-cn,DIRECT",
+    "GEOIP,CN,DIRECT",
+    "MATCH,final"
+  ]
+}

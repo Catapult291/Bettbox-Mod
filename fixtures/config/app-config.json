@@ -1,0 +1,424 @@
+{
+  "appSetting": {
+    "locale": "zh_CN",
+    "dashboardWidgets": [
+      "networkSpeed",
+      "systemProxyButton",
+      "tunButton",
+      "outboundMode",
+      "networkDetection",
+      "intranetIp",
+      "trafficUsage",
+      "memoryInfo",
+      "connectionsCount",
+      "startButton"
+    ],
+    "mobileDashboardWidgets": [
+      "outboundModeV2",
+      "networkSpeed",
+      "trafficUsage",
+      "networkDetection",
+      "connectionsCount",
+      "memoryInfo",
+      "startButton"
+    ],
+    "desktopDashboardWidgets": [
+      "networkSpeed",
+      "systemProxyButton",
+      "tunButton",
+      "outboundMode",
+      "networkDetection",
+      "intranetIp",
+      "trafficUsage",
+      "memoryInfo",
+      "connectionsCount",
+      "startButton"
+    ],
+    "onlyStatisticsProxy": true,
+    "autoLaunch": true,
+    "silentLaunch": false,
+    "smartDelayLaunch": false,
+    "autoRun": false,
+    "openLogs": true,
+    "closeConnections": true,
+    "testUrl": "https://www.example.com/library/test/success.html",
+    "showStartSwitch": false,
+    "enableNavBarHapticFeedback": true,
+    "autoCheckUpdate": true,
+    "showLabel": false,
+    "disclaimerAccepted": true,
+    "minimizeOnExit": true,
+    "hidden": false,
+    "developerMode": false,
+    "enableHighRefreshRate": false,
+    "recoveryStrategy": "compatible",
+    "enableHighPriority": false
+  },
+  "profiles": [
+    {
+      "id": "1790933713761",
+      "label": "fixture-a",
+      "currentGroupName": "final",
+      "url": "XXXXX://XXXXXXXXXXXXX.XXXXXX.XXX/XXXXXXXXXX?XXXXX=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "lastUpdateDate": "2026-10-02T22:50:10.213653",
+      "autoUpdateDuration": 86400000000,
+      "subscriptionInfo": {
+        "upload": 0,
+        "download": 0,
+        "total": 0,
+        "expire": 0
+      },
+      "autoUpdate": true,
+      "follow-update": true,
+      "proxy-update": false,
+      "selectedMap": {
+        "GLOBAL": "main",
+        "main": "HK",
+        "final": "main"
+      },
+      "unfoldSet": [],
+      "overrideData": {
+        "enable": false,
+        "rule": {
+          "type": "override",
+          "overrideRules": [],
+          "addedRules": []
+        }
+      },
+      "useScriptOverride": true,
+      "ageSecretKey": null,
+      "group-switches": {}
+    },
+    {
+      "id": "1790933895907",
+      "label": "fixture-b",
+      "currentGroupName": "main",
+      "url": "XXXXX://XX.XXXX.XXXXX/XXX/XXX?XXXXX=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      "lastUpdateDate": "2026-10-02T17:38:28.046394",
+      "autoUpdateDuration": 86400000000,
+      "subscriptionInfo": {
+        "upload": 0,
+        "download": 0,
+        "total": 0,
+        "expire": 0
+      },
+      "autoUpdate": false,
+      "follow-update": false,
+      "proxy-update": true,
+      "selectedMap": {
+        "main": "All",
+        "final": "DIRECT"
+      },
+      "unfoldSet": [],
+      "overrideData": {
+        "enable": false,
+        "rule": {
+          "type": "override",
+          "overrideRules": [],
+          "addedRules": []
+        }
+      },
+      "useScriptOverride": true,
+      "ageSecretKey": null,
+      "group-switches": {}
+    }
+  ],
+  "hotKeyActions": [],
+  "currentProfileId": "1790933713761",
+  "overrideDns": false,
+  "overrideNtp": false,
+  "overrideSniffer": false,
+  "overrideTunnel": false,
+  "overrideExperimental": false,
+  "overrideTestUrl": true,
+  "dav": null,
+  "networkProps": {
+    "systemProxy": true,
+    "bypassDomain": [
+      "*jd.com",
+      "*zhihu.com",
+      "*zhimg.com",
+      "*360buyimg.com",
+      "localhost",
+      "*.local",
+      "127.*",
+      "10.*",
+      "172.16.*",
+      "172.17.*",
+      "172.18.*",
+      "172.19.*",
+      "172.20.*",
+      "172.21.*",
+      "172.22.*",
+      "172.23.*",
+      "172.24.*",
+      "172.25.*",
+      "172.26.*",
+      "172.27.*",
+      "172.28.*",
+      "172.29.*",
+      "172.30.*",
+      "172.31.*",
+      "192.168.*"
+    ],
+    "bypassPrivateRoute": true,
+    "bypassPrivateRouteAddress": [],
+    "autoSetSystemDns": true
+  },
+  "vpnProps": {
+    "enable": true,
+    "systemProxy": false,
+    "allowBypass": false,
+    "bypassPrivateRoute": true,
+    "dozeSuspend": true,
+    "smartAutoStop": false,
+    "smartAutoStopNetworks": "",
+    "storeFix": false,
+    "networkFix": false,
+    "disableQuic": false,
+    "highPriorityNotification": false,
+    "networkSpeedNotification": false,
+    "excludeChina": false,
+    "trayEnhancement": false,
+    "trayLeftClickBehavior": "showPanel",
+    "trayRightClickBehavior": "showMenu",
+    "enableTraySpeed": false,
+    "alwaysShowTitleBar": true,
+    "quickResponse": true,
+    "accessControl": {
+      "enable": false,
+      "mode": "rejectSelected",
+      "acceptList": [],
+      "rejectList": [],
+      "manualList": [],
+      "sort": "none",
+      "isFilterSystemApp": false,
+      "isFilterNonInternetApp": false
+    }
+  },
+  "themeProps": {
+    "primaryColor": 4278225275,
+    "primaryColors": [
+      4280166715,
+      4279858898,
+      4278225275,
+      4293467747,
+      4286259106,
+      4292441862,
+      4281549141
+    ],
+    "themeMode": "system",
+    "schemeVariant": "content",
+    "pureBlack": false,
+    "textScale": {
+      "enable": false,
+      "scale": 1.0
+    },
+    "useDarkIcon": false,
+    "useHarmonyFont": false,
+    "invertTrayIcon": false
+  },
+  "proxiesStyle": {
+    "type": "tab",
+    "sortType": "delay",
+    "layout": "standard",
+    "iconStyle": "icon",
+    "cardType": "shrink",
+    "delayAnimation": "none",
+    "iconMap": {},
+    "concurrencyLimit": 250,
+    "showHiddenItems": false,
+    "hasCustomizedStyle": true
+  },
+  "windowProps": {
+    "width": 910.0,
+    "height": 620.0,
+    "top": 96.0,
+    "left": 236.0,
+    "isPinned": false
+  },
+  "patchClashConfig": {
+    "mixed-port": 7890,
+    "socks-port": 0,
+    "port": 0,
+    "redir-port": 0,
+    "tproxy-port": 0,
+    "mode": "rule",
+    "allow-lan": false,
+    "log-level": "error",
+    "ipv6": true,
+    "find-process-mode": "off",
+    "keep-alive-interval": 30,
+    "unified-delay": true,
+    "tcp-concurrent": true,
+    "tun": {
+      "enable": false,
+      "device": "Bettbox",
+      "auto-route": false,
+      "stack": "mixed",
+      "dns-hijack": [
+        "any:53"
+      ],
+      "route-address": [],
+      "route-exclude-address": [],
+      "strict-route": false,
+      "disable-icmp-forwarding": true,
+      "mtu": 9000,
+      "endpoint-independent-nat": false,
+      "auto-redirect": false
+    },
+    "dns": {
+      "enable": true,
+      "listen": "0.0.0.0:10053",
+      "prefer-h3": false,
+      "cache-algorithm": "arc",
+      "use-hosts": true,
+      "use-system-hosts": true,
+      "respect-rules": false,
+      "ipv6": false,
+      "default-nameserver": [
+        "114.114.114.114"
+      ],
+      "enhanced-mode": "fake-ip",
+      "fake-ip-range": "198.18.0.1/15",
+      "fake-ip-range6": "",
+      "fake-ip-filter-mode": "blacklist",
+      "fake-ip-filter": [
+        "*",
+        "geosite:private",
+        "geosite:category-ntp",
+        "geosite:geolocation-cn",
+        "geosite:connectivity-check"
+      ],
+      "fake-ip-ttl": 1,
+      "nameserver-policy": {
+        "+.internal.corp.com": "10.0.0.1",
+        "geosite:cn": "119.29.29.29",
+        "geosite:private": "system",
+        "*": "system"
+      },
+      "nameserver": [
+        "1.1.1.1"
+      ],
+      "fallback": [],
+      "proxy-server-nameserver": [
+        "https://120.53.53.53/dns-query#DIRECT"
+      ],
+      "direct-nameserver": [],
+      "direct-nameserver-follow-policy": false,
+      "fallback-filter": {
+        "geoip": false,
+        "geoip-code": "CN",
+        "ipcidr": [],
+        "domain": []
+      },
+      "fallback-lazy-query": false
+    },
+    "ntp": {
+      "enable": true,
+      "write-to-system": false,
+      "server": "node94.example.com",
+      "port": 123,
+      "interval": 60
+    },
+    "sniffer": {
+      "enable": true,
+      "override-destination": false,
+      "sniffing": [],
+      "force-domain": [
+        "+.v2ex.com"
+      ],
+      "skip-src-address": [
+        "192.168.0.3/32"
+      ],
+      "skip-dst-address": [
+        "91.108.56.0/22",
+        "91.108.4.0/22",
+        "91.108.8.0/22",
+        "91.108.16.0/22",
+        "91.108.12.0/22",
+        "149.154.160.0/20",
+        "91.105.192.0/23",
+        "91.108.20.0/22",
+        "185.76.151.0/24",
+        "2001:b28:f23d::/48",
+        "2001:b28:f23f::/48",
+        "2001:67c:4e8::/48",
+        "2001:b28:f23c::/48",
+        "2a0a:f280::/32"
+      ],
+      "skip-domain": [
+        "Mijia Cloud",
+        "+.push.example.com"
+      ],
+      "port-whitelist": [],
+      "force-dns-mapping": true,
+      "parse-pure-ip": true,
+      "sniff": {
+        "HTTP": {
+          "ports": [
+            "80",
+            "8080-8880"
+          ],
+          "override-destination": true
+        },
+        "TLS": {
+          "ports": [
+            "443",
+            "8443"
+          ],
+          "override-destination": null
+        },
+        "QUIC": {
+          "ports": [
+            "443",
+            "8443"
+          ],
+          "override-destination": null
+        }
+      }
+    },
+    "tunnels": [],
+    "experimental": {
+      "quic-go-disable-gso": true,
+      "quic-go-disable-ecn": true,
+      "dialer-ip4p-convert": false
+    },
+    "geox-url": {
+      "mmdb": "https://github.com/appshubcc/bett-rules/releases/download/latest/geoip.metadb",
+      "asn": "https://github.com/appshubcc/bett-rules/releases/download/latest/GeoLite2-ASN.mmdb",
+      "geosite": "https://github.com/appshubcc/bett-rules/releases/download/latest/geosite.dat"
+    },
+    "geodata-loader": "memconservative",
+    "proxy-groups": [],
+    "rule": [],
+    "global-ua": null,
+    "external-controller": "",
+    "secret": null,
+    "external-ui-name": null,
+    "external-ui-url": null,
+    "hosts": {
+      "example.com": [
+        "203.0.113.10"
+      ]
+    }
+  },
+  "scriptProps": {
+    "currentId": "fbde8827-b63a-4a28-92d6-8e7bd1125315",
+    "scripts": [
+      {
+        "id": "fbde8827-b63a-4a28-92d6-8e7bd1125315",
+        "label": "dns",
+        "content": "/**\n * The sing-mix project\n * Sakyvo Present\n * 仓库地址：https://github.com/Sakyvo/sing-mix\n * 脚本链接：https://example.com/Sakyvo/sing-mix/refs/heads/main/sing-mix_origin\n * mihomo客户端推荐：https://github.com/appshubcc/Bettbox\n *\n * 本地修改版（基于 sing-mix_origin）：\n * 1. TW/SG/JP/KR 合并为单一分组 TW_SG_JP_KR，删除独立 AS 分组（东南亚节点落入 Other 组）\n * 2. DNS 防泄漏增强：境外 DoH 双服务器冗余；AI 域名 DNS 锁定 ai 组出口\n * 3. 关键链路域名（*.cline.bot / *.commandcode.ai）固定走直连公共 DoH，且不参与 fake-ip：\n *    境外 nameserver 是 `#main`（经代理组出站），节点全挂时会把全机境外解析一起拖死，\n *    这两个域名落到 MATCH,final、默认仍在 main 上，正是受害面；实测它们不是污染目标\n *    （系统 DNS 与 223.5.5.5 给出的都是同一个真实 IP），直连解析既不被污染也不依赖节点。\n * 4. DNS 监听收窄到 127.0.0.1:1053（原 0.0.0.0:1053）；TUN dns-hijack 不依赖对外监听。\n * 5. 清掉 BYPASS_DOMAINS / FORCE_PROXY_DOMAINS / CUSTOM_FILTER 里的示例占位符。\n * 6. 修 mergeRules 里的大小写比较 bug：`toUpperCase() === \"MATCH,main\"` 恒为 false，\n *    导致订阅里保留下来的直连规则被追加到 MATCH 之后、永不生效（现改为 \"MATCH,FINAL\"）。\n * 7. 新增 final 兜底组：MATCH 指向 final，兜底流量可在「前面各策略组 + DIRECT」里选出口，\n *    而不是只能跟着 main 组走。final 默认指向 main，行为与旧版 MATCH,main 一致。\n * 8. 可选 IPv6（ENABLE_IPV6）：DNS 打开 ipv6 并给出 fake-ip-range6。与顶层 ipv6 是\n *    「与」关系（内核 ipv6 := dns.ipv6 && general.ipv6），客户端没开 IPv6 时自动失效。\n * 9. IP 检测域名钉在 main（FORCE_PROXY_DOMAINS 默认值）：Bettbox 首页「网络检测」按序探测\n *    api.ip.sb → Cloudflare trace → api.ipify.org → api.ipinfo.io，这些域名既不在 gfw 也不在 cn，\n *    规则全落空后走 MATCH,final。final 组一旦选 DIRECT，检测请求就直连、显示国内出口 IP，\n *    看着像代理没生效。钉到 main 后检测结果与 final 的取值解耦：final 选什么都仍从 main 出站。\n *    main 是 select 组且不含 DIRECT，做锚点不会被选成直连。\n */\n\n// ====================\n// 0. 特殊处理\n// ====================\n\n// 强制直连（按需填域名，留空即不启用）\nconst BYPASS_DOMAINS = [];\n\n// 强制代理（按需填域名，留空即不启用）\n// 默认已带上 Bettbox 首页「网络检测」的探测域名，见文件头第 9 条。\n// 一律用精确域名（DOMAIN），不用 DOMAIN-SUFFIX：后者会把\n// challenges.example.com 一并拽进代理，而它本来由 RULE-SET,cloudflare 判直连。\nconst FORCE_PROXY_DOMAINS = [\n  \"api.ip.sb\",\n  \"example.com\",\n  \"www.example.com\",\n  \"example.com\",\n  \"api.ipify.org\",\n  \"api.ipinfo.io\"\n];\n\n// 自定义节点过滤（用 | 分割；null = 不过滤任何节点）\nconst CUSTOM_FILTER = null;\n\n// IPv6 支持。内核里 AAAA 放行条件是 dns.ipv6 与顶层 ipv6 同时为真（ipv6 := dns.ipv6 && general.ipv6），\n// 所以客户端整体没开 IPv6 时，这里打开也不会带来任何变化。\n// Bettbox 中顶层 ipv6 由应用内「IPv6」开关在脚本之后强制覆写，脚本管不到它；\n// 脚本能决定的是 DNS 侧：不打开这里，即使应用开了 IPv6，域名也永远解析不到 AAAA。\nconst ENABLE_IPV6 = true;\n\n// IPv6 fake-ip 池。fake-ip 模式下 v6 池要单独给出，缺失时 AAAA 一律回空应答。\n// 与 Bettbox 的 fakeIpRangeV6 默认值保持一致。\nconst FAKE_IP_RANGE6 = \"2001:2::1/48\";\n\n// 关键链路域名：本机中转链路的入口（cline 渠道 + commandcode 渠道）。\n// 见文件头第 3 条：解析必须与代理组可用性解耦，且不能拿 fake-ip。\nconst CRITICAL_DOMAINS = [\"+.cline.bot\", \"+.commandcode.ai\"];\nconst CRITICAL_DIRECT_DNS = [\n  \"https://dns.alidns.com/dns-query#DIRECT\",\n  \"https://doh.pub/dns-query#DIRECT\"\n];\n\n// ====================\n// 1. 常量配置\n// ====================\nconst SETTINGS = {\n  ICON_BASE: \"https://example.com/gh/Koolson/Qure@master/IconSet/Color/\",\n  RULE_PROVIDER_URL_BASE: \"https://example.com/gh/MetaCubeX/meta-rules-dat@meta/geo\",\n\n  // TW/SG/JP/KR 合并为 TW_SG_JP_KR 单一分组；原 AS 分组（东南亚）已移除\n  REGION_ORDER: [\"HK\", \"TW_SG_JP_KR\", \"US\"],\n\n  URL_TEST_EXTRA: {\n    hidden: true,\n    url: \"https://example.com/generate_204\",\n    interval: 900,\n    tolerance: 100,\n    lazy: true,\n    timeout: 1000,\n    \"max-failed-times\": 1,\n  },\n\n  FALLBACK_TEST_EXTRA: {\n    url: \"https://example.com/generate_204\",\n    interval: 900,\n    lazy: true,\n    timeout: 1000,\n    \"max-failed-times\": 1,\n  },\n\n  INFO_FILTER: /tg|telegram|倒卖|到期|电报|订阅|发布|防止|返利|购买|官方|官网|工单|过期|规则|建议|客服|联系|流量|剩余|失联|网址|邮箱|续费|邀请|重置|梯子|群/i\n};\n\n// ====================\n// 2. 基础工具\n// ====================\nconst uniq = (arr = []) => [...new Set(arr.filter(Boolean))];\n\nconst escapeRegex = (s = \"\") =>\n  String(s).replace(/[.*+?^${}()|[\\]\\\\]/g, \"\\\\$&\");\n\nconst normalizeName = (name = \"\") =>\n  String(name)\n    .replace(/(IEPL|IPLC|BGP|RELAY|PRO|V\\d+)/ig, \" $1 \")\n    .replace(/[【】\\[\\]（）()|_\\-.,/:~]/g, \" \")\n    .replace(/🇭🇰/g, \" HK \")\n    .replace(/🇹🇼/g, \" TW \")\n    .replace(/🇸🇬/g, \" SG \")\n    .replace(/🇯🇵/g, \" JP \")\n    .replace(/🇰🇷/g, \" KR \")\n    .replace(/🇺🇸/g, \" US \")\n    .toUpperCase()\n    .replace(/\\s+/g, \" \")\n    .trim();\n\nconst buildRegex = (arr = []) =>\n  new RegExp(\n    arr\n      .map((raw) => {\n        const token = String(raw).trim().toUpperCase();\n        const escaped = escapeRegex(token);\n        return /^[A-Z]{2,3}$/.test(token)\n          ? `(?:^|[^A-Z])${escaped}(?:[^A-Z]|$)`\n          : escaped;\n      })\n      .join(\"|\"),\n    \"i\"\n  );\n\nconst buildRegions = () =>\n  ([\n    { name: \"HK\", pattern: [\"香港\", \"HK\", \"HKG\", \"HONGKONG\", \"HONG KONG\"], icon: \"Hong_Kong.png\" },\n    // 合并组：台湾/新加坡/日本/韩国四地关键词合入同一 pattern\n    {\n      name: \"TW_SG_JP_KR\",\n      pattern: [\n        \"台湾\", \"台北\", \"新北\", \"TW\", \"TWN\", \"TAIWAN\", \"TAIPEI\",\n        \"新加坡\", \"狮城\", \"SG\", \"SGP\", \"SINGAPORE\",\n        \"日本\", \"东京\", \"大阪\", \"JP\", \"JPN\", \"JAPAN\", \"TOKYO\", \"OSAKA\",\n        \"韩国\", \"首尔\", \"KR\", \"KOR\", \"KOREA\", \"SEOUL\"\n      ],\n      icon: \"Asia_Map.png\"\n    },\n    {\n      name: \"US\",\n      pattern: [\n        \"美国\", \"纽约\", \"旧金山\", \"洛杉矶\", \"西雅图\", \"芝加哥\",\n        \"US\", \"USA\",\n        \"NEWYORK\", \"NEW YORK\",\n        \"SANFRANCISCO\", \"SAN FRANCISCO\",\n        \"LOSANGELES\", \"LOS ANGELES\",\n        \"SEATTLE\", \"CHICAGO\"\n      ],\n      icon: \"United_States.png\"\n    }\n  ]).map((r) => ({ ...r, regex: buildRegex(r.pattern) }));\n\nconst REGIONS = buildRegions();\n\nconst buildFakeIpFilter = (bypass = []) =>\n  uniq([\n    \"rule-set:private\",\n    \"rule-set:google-cn\",\n    \"rule-set:synology\",\n    \"rule-set:cn\",\n    ...uniq(\n      bypass.flatMap((domain) => {\n        const d = String(domain || \"\").trim();\n        if (!d) return [];\n        return d.includes(\"*\") || d.startsWith(\"+.\") ? [d] : [`+.${d}`];\n      })\n    )\n  ]);\n\nconst mergeRules = (baseRules = [], extraRules = []) => {\n  const extra = Array.isArray(extraRules) ? extraRules.filter(Boolean) : [];\n  if (!extra.length) return baseRules.slice();\n\n  const matchIndex = baseRules.findIndex(\n    // 注意：左侧已 toUpperCase，右侧也必须是全大写——旧写法的 \"MATCH,main\" 永远不相等，\n    // 于是保留下来的 profile 直连规则被追加到 MATCH 之后，成为永不生效的死规则。\n    (rule) => String(rule).trim().toUpperCase() === \"MATCH,FINAL\"\n  );\n\n  if (matchIndex === -1) return uniq([...baseRules, ...extra]);\n\n  return uniq([\n    ...baseRules.slice(0, matchIndex),\n    ...extra,\n    ...baseRules.slice(matchIndex)\n  ]);\n};\n\nconst pickDirectRules = (rules = []) =>\n  rules.filter((rule) => {\n    const r = String(rule || \"\").trim();\n    if (!r || r.startsWith(\"#\")) return false;\n    return /,DIRECT(?:,|$)/i.test(r);\n  });\n\n// ====================\n// 3. 规则集与固定规则\n// ====================\nconst RULE_PROVIDERS_DOMAINS = [\n  \"category-ads-all\", \"private\", \"google-cn\", \"synology\", \"microsoft@cn\",\n  \"category-game-platforms-download@cn\", \"category-ai-!cn\", \"telegram\", \"gfw\", \"cn\",\n  \"googlefcm\", \"epicgames\", \"nvidia@cn\", \"cloudflare@cn\", \"steam@cn\",\n  \"category-ntp\", \"connectivity-check\", \"apple\", \"spotify\", \"microsoft\"\n];\n\nconst RULE_PROVIDERS_IPS = [\n  \"private\", \"cn\"\n];\n\nconst buildRuleProviders = () => {\n  const providers = {};\n\n  RULE_PROVIDERS_DOMAINS.forEach(name => {\n    providers[name] = {\n      type: \"http\",\n      behavior: \"domain\",\n      format: \"mrs\",\n      path: `./rules/${name}.mrs`,\n      url: `${SETTINGS.RULE_PROVIDER_URL_BASE}/geosite/${name}.mrs`,\n      interval: 86400\n    };\n  });\n\n  RULE_PROVIDERS_IPS.forEach(name => {\n    providers[`${name}-ip`] = {\n      type: \"http\",\n      behavior: \"ipcidr\",\n      format: \"mrs\",\n      path: `./rules/${name}-ip.mrs`,\n      url: `${SETTINGS.RULE_PROVIDER_URL_BASE}/geoip/${name}.mrs`,\n      interval: 86400\n    };\n  });\n\n  // Cloudflare 人机验证规则集\n  providers.cloudflare = {\n    type: \"inline\",\n    behavior: \"classical\",\n    payload: [\n      \"DOMAIN,challenges.example.com\",\n      \"DOMAIN-SUFFIX,cloudflarechallenge.com\"\n    ]\n  };\n\n  return providers;\n};\n\nconst STATIC_RULES = [\n  \"RULE-SET,category-ads-all,REJECT\",\n\n  ...uniq(BYPASS_DOMAINS).map((d) => `DOMAIN-SUFFIX,${d},DIRECT`),\n  ...uniq(FORCE_PROXY_DOMAINS).map((d) => `DOMAIN,${d},main`),\n\n  \"RULE-SET,cloudflare,DIRECT\",\n  \"RULE-SET,private,DIRECT\",\n  \"RULE-SET,private-ip,DIRECT,no-resolve\",\n  \"RULE-SET,googlefcm,DIRECT\",\n  \"RULE-SET,google-cn,DIRECT\",\n  \"RULE-SET,synology,DIRECT\",\n  \"DOMAIN-SUFFIX,sharepoint.com,DIRECT\",\n  \"RULE-SET,microsoft@cn,DIRECT\",\n  \"RULE-SET,category-game-platforms-download@cn,DIRECT\",\n  \"RULE-SET,category-ai-!cn,ai\",\n  \"RULE-SET,telegram,tg\",\n  \"RULE-SET,gfw,main\",\n  \"RULE-SET,cn,DIRECT\",\n  \"RULE-SET,cn-ip,DIRECT,no-resolve\",\n  \"MATCH,final\"\n];\n\nconst STATIC_FAKE_IP_FILTER = buildFakeIpFilter(BYPASS_DOMAINS);\n\n// ====================\n// 4. 节点处理\n// ====================\nconst ensureConfigObject = (input) =>\n  input && typeof input === \"object\" ? input : {};\n\nconst getOriginalProxies = (input) =>\n  Array.isArray(input.proxies) ? input.proxies : [];\n\nconst makeProxyNamesUnique = (proxies = []) => {\n  const used = new Set();\n  const nextIdx = new Map();\n\n  proxies.forEach((p) => {\n    if (!p || !p.name) return;\n\n    const base = String(p.name);\n\n    if (!used.has(base)) {\n      used.add(base);\n      nextIdx.set(base, 1);\n      return;\n    }\n\n    let idx = nextIdx.get(base) ?? 1;\n    let candidate = `${base}_${idx}`;\n\n    while (used.has(candidate)) candidate = `${base}_${++idx}`;\n\n    p.name = candidate;\n    used.add(candidate);\n    nextIdx.set(base, idx + 1);\n  });\n};\n\nconst filterCustomProxies = (proxies = [], customFilter) => {\n  if (!customFilter) return proxies.slice();   // 未配置过滤器：全保留\n  return proxies.filter((proxy) => {\n    if (!proxy || !proxy.name) return false;\n    return !customFilter.test(proxy.name);\n  });\n};\n\nconst splitInfoAndNormalProxies = (proxies = [], infoFilter) =>\n  proxies.reduce(\n    (acc, proxy) => {\n      if (!proxy || !proxy.name) return acc;\n      (infoFilter.test(proxy.name) ? acc.infoProxies : acc.normalProxies).push(proxy);\n      return acc;\n    },\n    { infoProxies: [], normalProxies: [] }\n  );\n\nconst classifyProxiesByRegion = (normalProxies = [], regions = []) => {\n  const regionGroupsData = regions.map((r) => ({ name: r.name, icon: r.icon, proxies: [] }));\n  const regionGroupMap = new Map(regionGroupsData.map((r) => [r.name, r]));\n  const regionSeen = new Map(regionGroupsData.map((r) => [r.name, new Set()]));\n  const otherProxyNames = [];\n  const otherSeen = new Set();\n\n  normalProxies.forEach((proxy) => {\n    const proxyName = proxy.name;\n    const normName = normalizeName(proxyName);\n    const matchedRegion = regions.find((r) => r.regex.test(normName));\n\n    if (matchedRegion) {\n      const group = regionGroupMap.get(matchedRegion.name);\n      const seen = regionSeen.get(matchedRegion.name);\n      if (group && seen && !seen.has(proxyName)) {\n        group.proxies.push(proxyName);\n        seen.add(proxyName);\n      }\n    } else if (!otherSeen.has(proxyName)) {\n      otherProxyNames.push(proxyName);\n      otherSeen.add(proxyName);\n    }\n  });\n\n  const activeRegions = regionGroupsData\n    .map((r) => ({ ...r, proxies: uniq(r.proxies) }))\n    .filter((r) => r.proxies.length > 0);\n\n  const activeRegionNameSet = new Set(activeRegions.map((r) => r.name));\n  const activeRegionMap = new Map(activeRegions.map((r) => [r.name, r]));\n\n  return {\n    activeRegions,\n    activeRegionNameSet,\n    activeRegionMap,\n    otherProxyNames: uniq(otherProxyNames)\n  };\n};\n\nconst buildAllAiProxyList = (activeRegions = [], otherProxyNames = [], allNames = []) => {\n  const nonHk = uniq([\n    ...activeRegions.filter((r) => r.name !== \"HK\").flatMap((r) => r.proxies),\n    ...otherProxyNames\n  ]);\n  return nonHk.length ? nonHk : allNames;\n};\n\n// ====================\n// 5. 策略组\n// ====================\nconst buildProxyGroups = ({\n  allNames,\n  allAiNames,\n  activeRegionMap,\n  activeRegionNameSet,\n  otherProxyNames,\n  infoNames\n}) => {\n  const groups = [];\n\n  const add = (name, type, proxies, icon = \"Available.png\", extra = {}) => {\n    proxies = uniq(proxies);\n    if (name && proxies.length) {\n      groups.push({\n        name,\n        type,\n        proxies,\n        icon: SETTINGS.ICON_BASE + icon,\n        ...extra\n      });\n    }\n  };\n\n  add(\"fcm\", \"select\", [\"DIRECT\"], \"Google_Search.png\", { hidden: true });\n\n  const regionEntries = SETTINGS.REGION_ORDER.filter((rName) => activeRegionNameSet.has(rName));\n\n  // main 组\n  if (allNames.length) {\n    const mainEntries = [\"All\", ...regionEntries];\n    if (otherProxyNames.length) mainEntries.push(\"Other\");\n    add(\"main\", \"select\", mainEntries, \"Available.png\");\n  }\n\n  // final 组：规则全部落空后的兜底出口（MATCH,final）。可选「前面各策略组」+ DIRECT，\n  // 想改兜底走向时不用动规则；默认第一项是 main，与旧版 MATCH,main 行为一致。\n  // 该组永远存在（至少含 DIRECT），因此无可用节点时也不会出现悬空的 MATCH 目标。\n  const finalEntries = [\n    ...(allNames.length ? [\"main\"] : []),\n    ...(allAiNames.length ? [\"ai\"] : []),\n    ...(allNames.length ? [\"tg\"] : []),\n    ...regionEntries,\n    ...(otherProxyNames.length ? [\"Other\"] : []),\n    \"DIRECT\"\n  ];\n  add(\"final\", \"select\", finalEntries, \"Final.png\");\n\n  // All 组\n  if (allNames.length) {\n    add(\"URL Test - All\", \"url-test\", allNames, \"Auto.png\", SETTINGS.URL_TEST_EXTRA);\n    add(\"All\", \"select\", [\"URL Test - All\", ...allNames], \"Auto.png\");\n  }\n\n  // ai 组（包含地区子分组，排除 HK）\n  if (allAiNames.length) {\n    const aiRegionEntries = SETTINGS.REGION_ORDER.filter(\n      (rName) => rName !== \"HK\" && activeRegionNameSet.has(rName)\n    );\n    const aiEntries = [\"All-ai\", ...aiRegionEntries];\n    if (otherProxyNames.length) aiEntries.push(\"Other\");\n    add(\"ai\", \"select\", aiEntries, \"ChatGPT.png\");\n  }\n\n  // All-ai 组（排除 HK 的所有节点）\n  if (allAiNames.length) {\n    add(\"URL Test - All-ai\", \"url-test\", allAiNames, \"ChatGPT.png\", SETTINGS.URL_TEST_EXTRA);\n    add(\"All-ai\", \"select\", [\"URL Test - All-ai\", ...allAiNames], \"ChatGPT.png\");\n  }\n\n  // tg 组（原优先 SG，SG 已并入 TW_SG_JP_KR，改为优先合并组）\n  if (allNames.length) {\n    const hasAsia4 = activeRegionNameSet.has(\"TW_SG_JP_KR\");\n\n    add(\n      \"tg - Fallback\",\n      \"fallback\",\n      hasAsia4 ? [\"TW_SG_JP_KR\", \"main\"] : [\"main\"],\n      \"Telegram.png\",\n      SETTINGS.FALLBACK_TEST_EXTRA\n    );\n\n    add(\n      \"tg\",\n      \"select\",\n      [\"tg - Fallback\", ...(hasAsia4 ? [\"TW_SG_JP_KR\"] : []), \"main\"],\n      \"Telegram.png\"\n    );\n  }\n\n  // 地区分组\n  SETTINGS.REGION_ORDER.forEach((rName) => {\n    const region = activeRegionMap.get(rName);\n    if (!region) return;\n\n    add(`URL Test - ${region.name}`, \"url-test\", region.proxies, region.icon, SETTINGS.URL_TEST_EXTRA);\n    add(region.name, \"select\", [`URL Test - ${region.name}`, ...region.proxies], region.icon);\n  });\n\n  // Other 组（未匹配任何地区的节点，含原 AS 组的东南亚节点）\n  if (otherProxyNames.length) {\n    add(\"URL Test - Other\", \"url-test\", otherProxyNames, \"Available.png\", SETTINGS.URL_TEST_EXTRA);\n    add(\"Other\", \"select\", [\"URL Test - Other\", ...otherProxyNames], \"Available.png\");\n  }\n\n  // info 组\n  if (infoNames.length) {\n    add(\"info\", \"select\", infoNames, \"Available.png\");\n  }\n\n  // GLOBAL 组\n  add(\n    \"GLOBAL\",\n    \"select\",\n    [\n      ...(allNames.length ? [\"main\", \"All\"] : []),\n      ...(allAiNames.length ? [\"ai\", \"All-ai\"] : []),\n      ...(allNames.length ? [\"tg\"] : []),\n      ...regionEntries,\n      ...(otherProxyNames.length ? [\"Other\"] : []),\n      ...(infoNames.length ? [\"info\"] : []),\n      \"final\"\n    ],\n    \"Global.png\"\n  );\n\n  return groups;\n};\n\n// ====================\n// 6. 网络配置\n// ====================\nconst removeGeoDataConfig = (cfg) => {\n  delete cfg[\"geodata-mode\"];\n  delete cfg[\"geo-auto-update\"];\n  delete cfg[\"geo-update-interval\"];\n  delete cfg[\"geox-url\"];\n};\n\nconst applySniffer = (cfg) => {\n  cfg.sniffer = {\n    ...(cfg.sniffer || {}),\n    enable: true,\n    \"force-dns-mapping\": true,\n    \"parse-pure-ip\": true,\n    \"override-destination\": true,\n    sniff: {\n      HTTP: { ports: [80, \"8080-8880\"], \"override-destination\": true },\n      TLS: { ports: [443, 8443] },\n      QUIC: { ports: [443, 8443] }\n    }\n  };\n};\n\nconst applyTun = (cfg) => {\n  cfg.tun = {\n    ...(cfg.tun || {}),\n    enable: true,\n    stack: \"system\",\n    \"auto-route\": true,\n    \"auto-detect-interface\": true,\n    \"strict-route\": true,\n    \"dns-hijack\": [\"any:53\", \"tcp://any:53\"]\n  };\n};\n\nconst applyDns = (cfg) => {\n  const dns = cfg.dns || {};\n  const fakeIpFilterFromCfg = Array.isArray(dns[\"fake-ip-filter\"]) ? dns[\"fake-ip-filter\"] : [];\n\n  // 直连出口域名解析：国内公共 DoH，保留 system 作兜底\n  const chinaDNS = [\n    \"system\",\n    \"https://dns.alidns.com/dns-query\",\n    \"https://doh.pub/dns-query\"\n  ];\n\n  // 境外域名解析：双 DoH 并发互为冗余（任一故障不影响解析），\n  // 均为 IP 直连形式无需引导解析，且锁定 main 组经代理出站，防泄漏防污染\n  const foreignDNS = [\n    \"https://1.1.1.1/dns-query#main\",\n    \"https://8.8.8.8/dns-query#main\"\n  ];\n\n  // AI 域名 DNS 锁定 ai 组出口，保证解析出口与实际流量出口地理位置一致，降低风控\n  const aiDNS = [\n    \"https://1.1.1.1/dns-query#ai\",\n    \"https://8.8.8.8/dns-query#ai\"\n  ];\n\n  // 关键链路域名的 nameserver-policy（见文件头第 3 条）\n  const criticalNameserverPolicy = CRITICAL_DOMAINS.reduce((acc, domain) => {\n    acc[domain] = CRITICAL_DIRECT_DNS;\n    return acc;\n  }, {});\n\n  const directRuleSetsForChinaDNS = [\n    \"rule-set:cn\",\n    \"rule-set:google-cn\",\n    \"rule-set:synology\",\n    \"rule-set:googlefcm\",\n    \"rule-set:epicgames\",\n    \"rule-set:nvidia@cn\",\n    \"rule-set:microsoft@cn\",\n    \"rule-set:cloudflare@cn\",\n    \"rule-set:steam@cn\",\n    \"rule-set:category-game-platforms-download@cn\",\n    \"rule-set:category-ntp\",\n    \"rule-set:connectivity-check\",\n    \"rule-set:apple\",\n    \"rule-set:spotify\",\n    \"rule-set:microsoft\"\n  ];\n\n  const fullFakeIpFilter = uniq([\n    \"+.cn\",\n    \"rule-set:cloudflare\",\n    \"rule-set:private\",\n\n    ...directRuleSetsForChinaDNS,\n    ...STATIC_FAKE_IP_FILTER,\n    ...fakeIpFilterFromCfg\n  ]);\n\n  cfg.dns = {\n    ...dns,\n    enable: true,\n    // 只服务本机的 DNS 模块（TUN dns-hijack 走内核内部转发，不依赖对外监听）\n    listen: \"127.0.0.1:1053\",\n    // 顶层 ipv6 为假时，内核会把 AAAA 查询回成空应答（withResolver），\n    // 顶层为真而这一项为假时，域名解析同样拿不到 AAAA——只有 IPv6 字面量流量能走通。\n    ipv6: ENABLE_IPV6,\n    // fake-ip 模式下 AAAA 由独立的 v6 池分配，池为空时内核只回空应答（withFakeIP）。\n    \"fake-ip-range6\": ENABLE_IPV6 ? FAKE_IP_RANGE6 : \"\",\n    \"cache-algorithm\": \"arc\",\n    \"prefer-h3\": false,\n    \"use-hosts\": true,\n    \"use-system-hosts\": true,\n    \"respect-rules\": true,\n    \"enhanced-mode\": \"fake-ip\",\n    \"fake-ip-filter-mode\": \"blacklist\",\n    // 关键链路域名必须拿真实 IP：fake-ip 映射不落盘（store-fake-ip=false），\n    // 内核重启后旧 fake-ip 失配会让客户端连到失效地址（表现为超时/重置）\n    \"fake-ip-filter\": uniq([...fullFakeIpFilter, ...CRITICAL_DOMAINS]),\n    \"default-nameserver\": [\"223.5.5.5\", \"119.29.29.29\"],\n    \"nameserver-policy\": {\n      \"rule-set:category-ai-!cn\": aiDNS,\n      ...criticalNameserverPolicy\n    },\n    nameserver: foreignDNS,\n    \"proxy-server-nameserver\": [\n      \"https://doh.pub/dns-query#DIRECT\",\n      \"https://dns.alidns.com/dns-query#DIRECT\"\n    ],\n    \"direct-nameserver\": chinaDNS\n  };\n\n  cfg.hosts = {\n    \"dns.alidns.com\": [\"223.5.5.5\", \"223.6.6.6\"],\n    \"doh.pub\": [\"1.12.12.12\", \"120.53.53.53\"],\n    \"services.googleapis.cn\": [\"services.googleapis.com\"],\n    \"+.mcdn.bilivideo.com\": [\"0.0.0.0\"],\n    \"+.mcdn.bilivideo.cn\": [\"0.0.0.0\"]\n  };\n};\n\nconst applyProfile = (cfg) => {\n  cfg.profile = {\n    ...(cfg.profile || {}),\n    \"store-selected\": true,\n    \"store-fake-ip\": false\n  };\n};\n\nconst applyIPv6 = (cfg) => {\n  // 顶层开关。Bettbox 会在脚本跑完之后用应用内「IPv6」开关覆写这一项，\n  // 所以这里主要是给其它 mihomo 客户端的默认值，也是本脚本 dns.ipv6 生效的前提。\n  cfg.ipv6 = ENABLE_IPV6;\n};\n\nconst applyRuntime = (cfg) => {\n  cfg.mode = \"rule\";\n  cfg[\"log-level\"] = \"warning\";\n};\n\n// ====================\n// 7. 主流程\n// ====================\nfunction main(config) {\n  config = ensureConfigObject(config);\n\n  const originalProxies = getOriginalProxies(config);\n  const existingRules = Array.isArray(config.rules) ? config.rules : [];\n\n  config[\"rule-providers\"] = {\n    ...(config[\"rule-providers\"] || {}),\n    ...buildRuleProviders()\n  };\n\n  config.rules = mergeRules(STATIC_RULES, pickDirectRules(existingRules));\n\n  if (originalProxies.length) {\n    makeProxyNamesUnique(originalProxies);\n\n    // 1. 先用 CUSTOM_FILTER 过滤掉不想要的节点\n    const filteredProxies = filterCustomProxies(originalProxies, CUSTOM_FILTER);\n\n    // 2. 再用 INFO_FILTER 分离信息节点和正常节点\n    const { infoProxies, normalProxies } = splitInfoAndNormalProxies(\n      filteredProxies,\n      SETTINGS.INFO_FILTER\n    );\n\n    const baseProxies = normalProxies;\n    const allNames = uniq(baseProxies.map((p) => p.name));\n    const infoNames = uniq(infoProxies.map((p) => p.name));\n\n    const {\n      activeRegions,\n      activeRegionNameSet,\n      activeRegionMap,\n      otherProxyNames\n    } = classifyProxiesByRegion(baseProxies, REGIONS);\n\n    const allAiNames = buildAllAiProxyList(activeRegions, otherProxyNames, allNames);\n\n    config[\"proxy-groups\"] = buildProxyGroups({\n      allNames,\n      allAiNames,\n      activeRegionMap,\n      activeRegionNameSet,\n      otherProxyNames,\n      infoNames\n    });\n\n    // 保留所有原始节点（包括被 CUSTOM_FILTER 过滤的）\n    config.proxies = originalProxies;\n  } else {\n    config[\"proxy-groups\"] = buildProxyGroups({\n      allNames: [],\n      allAiNames: [],\n      activeRegionMap: new Map(),\n      activeRegionNameSet: new Set(),\n      otherProxyNames: [],\n      infoNames: []\n    });\n  }\n\n  removeGeoDataConfig(config);\n  applyRuntime(config);\n  applyIPv6(config);\n  applySniffer(config);\n  applyTun(config);\n  applyDns(config);\n  applyProfile(config);\n\n  return config;\n}\n",
+        "url": "XXXXX://XXX.XXXXXXXXXXXXXXXXX.XXX/XXXXXXXXXXX/XXXXXXX/XXXX/XXXX-XXX_XXXXXX.XXX",
+        "custom-options": null
+      }
+    ],
+    "added-rules": [
+      "DOMAIN-SUFFIX,linux.do,main",
+      "DOMAIN-SUFFIX,mineru.net,DIRECT"
+    ]
+  },
+  "nodeExcludeFilter": "",
+  "healthCheckTimeout": 5000
+}

@@ -50,6 +50,7 @@ migrate_working_dir/
 !.vscode/launch.json
 !.vscode/tasks.json
 /services/helper/target/
+/rust/target/
 
 # Symbolication related
 app.*.symbols

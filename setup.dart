@@ -275,6 +275,27 @@ class Build {
     await File(outPath).copy(targetPath);
   }
 
+  /// 构建 Rust 配置管道动态库，放进 `libclash/windows/`，由 CMake 打进安装包。
+  ///
+  /// 只支持 Windows：本仓库只出 Windows/Android 构建，而这个 crate 是桌面专用的。
+  static Future<void> buildConfigLib(Target target) async {
+    if (target != Target.windows) return;
+    await exec(
+      ['cargo', 'build', '--release'],
+      name: 'build config lib',
+      workingDirectory: join(current, 'rust'),
+    );
+    final outPath = join(
+      current,
+      'rust',
+      'target',
+      'release',
+      'bettbox_config.dll',
+    );
+    final targetPath = join(Build.outDir, target.name, 'bettbox_config.dll');
+    await File(outPath).copy(targetPath);
+  }
+
   static List<String> getExecutable(String command) {
     return command.split(' ');
   }
@@ -671,6 +692,7 @@ class BuildCommand extends Command {
       if (target == Target.windows) {
         final token = await Build.calcSha256(corePaths.first);
         await Build.buildHelper(target, token);
+        await Build.buildConfigLib(target);
       }
       return;
     }
@@ -706,6 +728,7 @@ class BuildCommand extends Command {
             ? await Build.calcSha256(corePaths.first)
             : null;
         Build.buildHelper(target, token!);
+        await Build.buildConfigLib(target);
         _buildDistributor(
           target: target,
           targets: 'exe',

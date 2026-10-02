@@ -114,6 +114,14 @@ install(PROGRAMS "${CLASH_DIR}/BettboxHelperService.exe" DESTINATION "${INSTALL_
 install(FILES "WindowsLoopbackManager.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Rust 配置管道动态库。由 `dart setup.dart windows --out core` 构建到 libclash/windows/；
+# 用 EXISTS 守卫，避免没有该产物的旧工作区在配置/安装阶段直接失败（此时 Dart 侧会退回
+# 仓库内的 cargo 产物，打包版本则要求它存在）。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_config.dll")
+  install(FILES "${CLASH_DIR}/bettbox_config.dll" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
