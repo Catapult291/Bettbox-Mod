@@ -129,6 +129,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   ::MSG msg;
   while (::GetMessage(&msg, nullptr, 0, 0)) {
+    // Ctrl+V has to be caught before TranslateMessage: the IME collapses the
+    // injected key pair into VK_PROCESSKEY, which the engine ignores.
+    if (window.HandlePreTranslateMessage(msg)) {
+      continue;
+    }
     ::TranslateMessage(&msg);
     ::DispatchMessage(&msg);
   }

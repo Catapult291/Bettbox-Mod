@@ -15,6 +15,12 @@ class FlutterWindow : public Win32Window {
   explicit FlutterWindow(const flutter::DartProject& project);
   virtual ~FlutterWindow();
 
+ public:
+  // Runs on every message the runner's loop pulls out of the queue, before
+  // TranslateMessage, and returns true when the message must not be dispatched.
+  // Ctrl+V is handled here because it has to be caught before the IME sees it.
+  bool HandlePreTranslateMessage(const MSG& message);
+
  protected:
   bool OnCreate() override;
   void OnDestroy() override;
@@ -31,6 +37,11 @@ class FlutterWindow : public Win32Window {
   void SubclassViewWindow();
   void RestoreViewWindow();
   void NotifyPaste();
+  static void AllowPasteFromLowerIntegrity(HWND window);
+
+  bool IsCtrlVPaste() const;
+  bool ctrl_down_ = false;
+  bool swallow_v_keyup_ = false;
 
   flutter::DartProject project_;
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

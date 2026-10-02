@@ -193,6 +193,7 @@ void FlutterWindow::SubclassViewWindow() {
     return;
   }
   view_window_ = view;
+  AllowPasteFromLowerIntegrity(view);
 }
 
 void FlutterWindow::RestoreViewWindow() {
@@ -213,6 +214,88 @@ void FlutterWindow::NotifyPaste() {
     clipboard_channel_->InvokeMethod(
         kPasteMethod, std::make_unique<flutter::EncodableValue>());
   }
+}
+
+// UIPI drops window messages that a lower-integrity process sends to a window
+// owned by an elevated process, which silently breaks every WM_PASTE-based
+// paste source (clipboard history, IME insertion, clipboard managers) while
+// this app runs as administrator. Allowing the message explicitly keeps the
+// paste bridge above working in admin mode.
+void FlutterWindow::AllowPasteFromLowerIntegrity(HWND window) {
+  if (window == nullptr) {
+    return;
+  }
+  ::ChangeWindowMessageFilterEx(window, WM_PASTE, MSGFLT_ALLOW, nullptr);
+}
+
+// Ctrl+V is turned into the same paste notification the native WM_PASTE path
+// uses, and the key pair is taken out of the queue before TranslateMessage.
+//
+// Injected input needs this. With the IME consuming keys, the queue already
+// delivers the injected key downs as VK_PROCESSKEY, which the Flutter engine
+// drops as IME input; with the IME out of the way, the engine's own modifier
+// bookkeeping can still synthesize a control key up between the injected
+// control key down and the V key down. Either way the framework sees V without
+// control pressed, so the paste shortcut never fires, while the same key pair
+// typed on a real keyboard pastes normally. Handling the message before the
+// IME and before the engine puts both sources on one path: Dart receives the
+// paste notification and the focused editor writes the clipboard text.
+bool FlutterWindow::HandlePreTranslateMessage(const MSG& message) {
+  if (message.hwnd != nullptr && message.hwnd != GetHandle() &&
+      message.hwnd != view_window_) {
+    return false;
+  }
+
+  const UINT vk = static_cast<UINT>(message.wParam);
+  const bool is_ctrl_key =
+      vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL;
+  switch (message.message) {
+    case WM_KEYDOWN:
+    case WM_SYSKEYDOWN:
+      if (is_ctrl_key) {
+        ctrl_down_ = true;
+        return false;
+      }
+      if (vk == 'V' && IsCtrlVPaste()) {
+        // Key repeats only need to be swallowed, not pasted again.
+        if ((message.lParam & 0x40000000) == 0) {
+          NotifyPaste();
+        }
+        swallow_v_keyup_ = true;
+        return true;
+      }
+      break;
+    case WM_KEYUP:
+    case WM_SYSKEYUP:
+      if (is_ctrl_key) {
+        ctrl_down_ = false;
+        return false;
+      }
+      if (vk == 'V' && swallow_v_keyup_) {
+        swallow_v_keyup_ = false;
+        return true;
+      }
+      break;
+    case WM_KILLFOCUS:
+    case WM_ACTIVATEAPP:
+      ctrl_down_ = false;
+      swallow_v_keyup_ = false;
+      break;
+    default:
+      break;
+  }
+  return false;
+}
+
+bool FlutterWindow::IsCtrlVPaste() const {
+  if ((::GetKeyState(VK_SHIFT) & 0x8000) != 0 ||
+      (::GetKeyState(VK_MENU) & 0x8000) != 0 ||
+      (::GetKeyState(VK_LWIN) & 0x8000) != 0 ||
+      (::GetKeyState(VK_RWIN) & 0x8000) != 0) {
+    // Ctrl+Shift+V, Ctrl+Alt+V, Win+Ctrl+V keep their usual meaning.
+    return false;
+  }
+  return ctrl_down_ || (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
 }
 
 // static
@@ -262,6 +345,7 @@ bool FlutterWindow::OnCreate() {
 
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   SubclassViewWindow();
+  AllowPasteFromLowerIntegrity(GetHandle());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
 
