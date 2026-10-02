@@ -147,13 +147,35 @@ pub unsafe extern "C" fn bb_apply_group_switches(
     into_c_string(&serde_json::json!({"proxy-groups": groups, "rules": rules}).to_string())
 }
 
+/// 跑完整条配置改写管道，返回改写后的配置 JSON。
+///
+/// 输入结构见 [`crate::patch_config::patch_config`]。
+///
+/// # Safety
+///
+/// `input_json` 必须是 NUL 结尾的 UTF-8 C 字符串或 NULL；返回的指针所有权归调用方，
+/// 用完必须传给 [`bb_string_free`]。
+#[no_mangle]
+pub unsafe extern "C" fn bb_patch_config(input_json: *const c_char) -> *mut c_char {
+    let Some(raw) = (unsafe { borrow_str(input_json) }) else {
+        return ptr::null_mut();
+    };
+    let Ok(input) = serde_json::from_str::<Value>(raw) else {
+        return ptr::null_mut();
+    };
+    match crate::patch_config::patch_config(&input) {
+        Ok(config) => into_c_string(&config.to_string()),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 /// 释放本库返回的字符串。
 ///
 /// # Safety
 ///
 /// `value` 必须是本库通过 [`bb_rule_parse`] / [`bb_rule_round_trip`] / [`bb_apply_dns_node_override`] /
-/// [`bb_parse_provider_meta`] / [`bb_build_proxies_groups`] / [`bb_apply_group_switches`] 返回、
-/// 且尚未释放的指针，或为 NULL。
+/// [`bb_parse_provider_meta`] / [`bb_build_proxies_groups`] / [`bb_apply_group_switches`] /
+/// [`bb_patch_config`] 返回、且尚未释放的指针，或为 NULL。
 #[no_mangle]
 pub unsafe extern "C" fn bb_string_free(value: *mut c_char) {
     if value.is_null() {

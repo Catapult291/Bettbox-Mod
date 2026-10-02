@@ -7,6 +7,15 @@ import 'package:path/path.dart' as p;
 
 import 'package:bett_box/rust/generated/bettbox_config_ffi.dart';
 
+/// 是否让 Rust 侧接管配置改写管道（`GlobalState.patchRawConfig`）。
+///
+/// 默认关闭，用 `--dart-define=USE_RUST_CONFIG_PIPELINE=true` 打开；Rust 动态库
+/// 缺失或调用失败时自动回退 Dart 路径。差分验证见
+/// `test/rust/patch_config_diff_test.dart`。
+const bool useRustConfigPipeline = bool.fromEnvironment(
+  'USE_RUST_CONFIG_PIPELINE',
+);
+
 /// Rust 侧配置管道（`rust/bettbox-config`）的窄 C ABI 封装。
 ///
 /// ABI 见 `rust/bettbox-config/include/bettbox_config.h`，Dart 绑定由 ffigen 生成
@@ -38,6 +47,13 @@ abstract final class BettboxConfig {
   /// 解析后再序列化回配置字符串。动态库缺失时抛错；输入非法时返回 null。
   static String? roundTripRule(String rule) {
     return _call(_require().bb_rule_round_trip, rule);
+  }
+
+  /// 跑完整条配置改写管道，返回改写后的配置 JSON 文本。
+  ///
+  /// 输入结构见 `lib/common/config_patch.dart` 的 `applyConfigPatch`。
+  static String? patchConfig(String inputJson) {
+    return _call(_require().bb_patch_config, inputJson);
   }
 
   /// 解析 provider 列表原文，返回元数据数组 JSON（已剥掉全节点列表）。

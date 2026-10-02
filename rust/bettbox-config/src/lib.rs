@@ -8,5 +8,6 @@
 pub mod dns_override;
 pub mod ffi;
 pub mod group_switch;
+pub mod patch_config;
 pub mod provider;
 pub mod rule;

@@ -49,6 +49,10 @@ char *bb_apply_group_switches(const char *proxy_groups_json,
                               const char *group_switches_json,
                               bool script_active);
 
+/* 跑完整条配置改写管道：input_json 见 src/patch_config.rs 的输入结构说明，
+ * 返回改写后的配置 JSON。失败返回 NULL。 */
+char *bb_patch_config(const char *input_json);
+
 /* 释放本库返回的字符串。 */
 void bb_string_free(char *ptr);
 

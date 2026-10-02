@@ -152,6 +152,19 @@ class BettboxConfigFFI {
         )
       >();
 
+  ffi.Pointer<ffi.Char> bb_patch_config(ffi.Pointer<ffi.Char> input_json) {
+    return _bb_patch_config(input_json);
+  }
+
+  late final _bb_patch_configPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)
+        >
+      >('bb_patch_config');
+  late final _bb_patch_config = _bb_patch_configPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
+
   void bb_string_free(ffi.Pointer<ffi.Char> ptr) {
     return _bb_string_free(ptr);
   }
