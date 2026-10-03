@@ -122,6 +122,13 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_config.dll")
     COMPONENT Runtime)
 endif()
 
+# Rust 覆写脚本引擎动态库。同样由 `dart setup.dart windows --out config` 产出；
+# 缺它时 `GlobalState.handleEvaluate` 会自动回退 qjs 路径，只慢不错，故用 EXISTS 守卫。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_script.dll")
+  install(FILES "${CLASH_DIR}/bettbox_script.dll" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

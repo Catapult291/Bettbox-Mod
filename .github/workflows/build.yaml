@@ -222,7 +222,18 @@ jobs:
             Write-Error "app.so has no Rust pipeline marker - the enabled wrapper may have been tree-shaken"
             exit 1
           }
-          Write-Host "dll matches the cargo artifact; app.so marker count = $marker"
+          $scriptBundled = "$bundleDir/bettbox_script.dll"
+          if (-not (Test-Path $scriptBundled)) {
+            Write-Error "bundle is missing $scriptBundled - the Rust script engine would silently fall back"
+            exit 1
+          }
+          $c = (Get-FileHash $scriptBundled -Algorithm SHA256).Hash
+          $d = (Get-FileHash rust/target/release/bettbox_script.dll -Algorithm SHA256).Hash
+          if ($c -ne $d) {
+            Write-Error "bundled script dll differs from the cargo artifact ($c vs $d)"
+            exit 1
+          }
+          Write-Host "config dll matches (marker count = $marker); script dll matches"
 
       - name: Ensure Inno Setup (Windows)
         if: matrix.platform == 'windows'

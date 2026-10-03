@@ -278,22 +278,19 @@ class Build {
   /// 构建 Rust 配置管道动态库，放进 `libclash/windows/`，由 CMake 打进安装包。
   ///
   /// 只支持 Windows：本仓库只出 Windows/Android 构建，而这个 crate 是桌面专用的。
-  static Future<void> buildConfigLib(Target target) async {
+  static Future<void> buildRustLibs(Target target) async {
     if (target != Target.windows) return;
     await exec(
       ['cargo', 'build', '--release'],
-      name: 'build config lib',
+      name: 'build rust libs',
       workingDirectory: join(current, 'rust'),
     );
-    final outPath = join(
-      current,
-      'rust',
-      'target',
-      'release',
-      'bettbox_config.dll',
-    );
-    final targetPath = join(Build.outDir, target.name, 'bettbox_config.dll');
-    await File(outPath).copy(targetPath);
+    // 配置管道与覆写脚本引擎各一个 cdylib，都随包发出去。
+    for (final name in ['bettbox_config.dll', 'bettbox_script.dll']) {
+      final outPath = join(current, 'rust', 'target', 'release', name);
+      final targetPath = join(Build.outDir, target.name, name);
+      await File(outPath).copy(targetPath);
+    }
   }
 
   static List<String> getExecutable(String command) {
@@ -672,7 +669,7 @@ class BuildCommand extends Command {
       if (target != Target.windows) {
         throw '--out config is only supported for windows';
       }
-      await Build.buildConfigLib(target);
+      await Build.buildRustLibs(target);
       return;
     }
 
@@ -702,7 +699,7 @@ class BuildCommand extends Command {
       if (target == Target.windows) {
         final token = await Build.calcSha256(corePaths.first);
         await Build.buildHelper(target, token);
-        await Build.buildConfigLib(target);
+        await Build.buildRustLibs(target);
       }
       return;
     }
@@ -738,7 +735,7 @@ class BuildCommand extends Command {
             ? await Build.calcSha256(corePaths.first)
             : null;
         Build.buildHelper(target, token!);
-        await Build.buildConfigLib(target);
+        await Build.buildRustLibs(target);
         _buildDistributor(
           target: target,
           targets: 'exe',

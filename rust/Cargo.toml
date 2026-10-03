@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["bettbox-config"]
+members = ["bettbox-config", "bettbox-script"]
 
 [workspace.package]
 version = "0.1.0"

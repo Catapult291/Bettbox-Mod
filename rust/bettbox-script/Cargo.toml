@@ -1,0 +1,18 @@
+[package]
+name = "bettbox-script"
+description = "Bettbox-Mod 覆写脚本引擎的 Rust 实现（内嵌 QuickJS）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "bettbox_script"
+# cdylib 供 Dart 通过 FFI 加载；rlib 让 Rust 测试与后续 crate 能正常链接。
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde_json = "1"
+
+[build-dependencies]
+# 编译仓库里那份 vendored QuickJS（见 build.rs 的说明）。
+cc = "1"
