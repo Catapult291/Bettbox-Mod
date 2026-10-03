@@ -235,6 +235,36 @@ jobs:
           }
           Write-Host "config dll matches (marker count = $marker); script dll matches"
 
+      # Rust vs Dart/qjs 的差分套件（test/rust/）。脚本引擎的差分需要一个 qjs 参考实现：
+      # `flutter test` 下 flutter_qjs 只从 `test/build/Debug/ffiquickjs.dll` 加载引擎
+      # （plugins/flutter_qjs/lib/src/ffi.dart 按 FLUTTER_TEST 分支），而那个 dll 链了
+      # flutter_windows.dll，所以把 runner 目录一并放进 PATH。test/build/ 在 .gitignore 里，
+      # 这个拷贝不会弄脏工作区。缺 fixtures 或 Rust dll 都会直接失败，不会静默跳过。
+      - name: Differential tests Rust vs Dart (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $runner = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$runner/flutter_qjs_plugin.dll")) {
+            Write-Error "$runner/flutter_qjs_plugin.dll is missing - flutter build windows should have produced it"
+            exit 1
+          }
+          foreach ($dll in @("bettbox_config.dll", "bettbox_script.dll")) {
+            if (-not (Test-Path "rust/target/release/$dll")) {
+              Write-Error "rust/target/release/$dll is missing - Build ConfigLib should have produced it"
+              exit 1
+            }
+          }
+          New-Item -ItemType Directory -Force -Path test/build/Debug | Out-Null
+          Copy-Item "$runner/flutter_qjs_plugin.dll" test/build/Debug/ffiquickjs.dll -Force
+          $env:PATH = "$((Resolve-Path $runner).Path);$env:PATH"
+          flutter test test/rust
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "differential tests failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host "differential tests passed"
+
       - name: Ensure Inno Setup (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh

@@ -1044,6 +1044,12 @@ qjs 同样形状（含异常栈与行号）的 `JS Script Error: …`。
 客户端本轮明确不动；整份配置仍有一次 JSON encode/decode 往返（脚本引擎这轮未消除）；Android 仍走 Dart
 镜像路径（与改造前行为一致，参照比对覆盖）。
 
+**差分套件进了 CI（Windows job）**：`.github/workflows/build.yaml` 在 `flutter build windows` 之后新增一步，
+用该次构建产出的 `flutter_qjs_plugin.dll` 充当 qjs 参考实现——`flutter test` 下 flutter_qjs 只从
+`test/build/Debug/ffiquickjs.dll` 找引擎（`plugins/flutter_qjs/lib/src/ffi.dart` 按 `FLUTTER_TEST` 分支），
+而它链了 `flutter_windows.dll`，所以把 runner 目录一并放进 PATH——随后 `flutter test test/rust` 跑整套
+Rust vs Dart/qjs 差分。缺参考 dll、缺 fixtures 或缺任一 Rust 产物都会直接失败，不会静默 skip。
+
 **发布（v1.19.9）**：第 22 节随 v1.19.9 发布，CI run `37110314474` 四个 job（android arm64 /
 android universal / windows amd64 / release）全绿，Release 附件三件：
 `Bettbox-1.19.9-android-arm64-v8a.apk`（50,720,488 B）、
