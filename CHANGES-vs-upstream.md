@@ -1049,6 +1049,13 @@ qjs 同样形状（含异常栈与行号）的 `JS Script Error: …`。
 `test/build/Debug/ffiquickjs.dll` 找引擎（`plugins/flutter_qjs/lib/src/ffi.dart` 按 `FLUTTER_TEST` 分支），
 而它链了 `flutter_windows.dll`，所以把 runner 目录一并放进 PATH——随后 `flutter test test/rust` 跑整套
 Rust vs Dart/qjs 差分。缺参考 dll、缺 fixtures 或缺任一 Rust 产物都会直接失败，不会静默 skip。
+手动触发 run `37120165665` 已验证：三个 build job 全绿，Windows job 该步日志为 `36 tests passed`。
+
+**真机验收（2026-10-03）**：在隔离的 dev 身份数据目录（`--dart-define=APP_DEV=true`，Debug 配置的包）里跑真实
+覆写——profile 用 `fixtures/config/profile-a.json`、脚本用 `fixtures/scripts/dns.js`。应用自己写出的运行配置
+`config.yaml` 里出现脚本独有的痕迹：`dns.listen: 127.0.0.1:1053`（原 profile 没有这个键）、新增 `final` 分组、
+末条规则 `MATCH,final`（原为 `MATCH,fixture-a`），且 `bettbox_script.dll` 从 Bettbox.exe 同目录被加载进进程
+（该 dll 只在 Rust 脚本路径上懒加载，故可据此排除 qjs 回退）。
 
 **发布（v1.19.9）**：第 22 节随 v1.19.9 发布，CI run `37110314474` 四个 job（android arm64 /
 android universal / windows amd64 / release）全绿，Release 附件三件：
