@@ -994,13 +994,19 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
 - 真机验证（flag 开启的整包铺到实例目录）：`tasklist /m` 显示 `bettbox_config.dll` 已加载进
   `Bettbox.exe`、stdout 无回退日志、运行配置 `config.yaml` 被正常重写；**用户在自己的桌面会话双击
   启动后代理可用**。
-- 打包链路：不加任何 `dart-define` 的构建即走 Rust —— AOT 快照里 `bettbox_config.dll` 标记串 1 处，
-  显式传 `USE_RUST_CONFIG_PIPELINE=false` 时 0 处（标记随开关变化，不是恒定存在）；历史对照：
-  Rust 落地前的 APK 两个标记都是 0。
+- 打包链路（Windows）：不加任何 `dart-define` 的构建即走 Rust —— 本机 AOT 快照里
+  `bettbox_config.dll` 标记串 1 处，显式传 `USE_RUST_CONFIG_PIPELINE=false` 时 0 处
+  （标记随开关变化，不是恒定存在）。
 - 补一个发布链路的缺口：原先 CI 只跑 `--out core-only` 与 `--out helper`，两者都在 `buildConfigLib`
   之前返回，即 CI 产物不会带上该 dll（开关默认为开时表现为静默回退 Dart）。`.github/workflows/build.yaml`
   已补 `--out config` 步骤，并在打包前断言 bundle 里的 dll 与 cargo 产物逐字节一致、
   `data/app.so` 里存在标记串。
+- **CI 产物复核**（run `37104309866`，手动触发、不创建 Release）：三个 job 全绿；Windows job 的
+  `Verify Rust config pipeline` 输出 `dll matches the cargo artifact; app.so marker count = 1`；
+  ISCC 编译日志出现 `Compressing: ...\runner\Release\bettbox_config.dll`，即该 dll 确实被装进安装包。
+  安装包版本资源 `ProductVersion = 1.19.9`、`CompanyName = Catapult291`（Inno 包的 `FileVersion`
+  各版均为空）。arm64 APK 的 `lib/arm64-v8a/libapp.so` 含回退日志串 1 处（配置管道改动已进包）；
+  该包里 `bettbox_config.dll` 计数为 0 属预期 —— 平台分支在 Android 目标上被折叠，且 Android 不带该动态库。
 
 **已知残余差异**（有界，均已写进代码注释）：
 
