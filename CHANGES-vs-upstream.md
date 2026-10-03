@@ -3,9 +3,9 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.7`（tag `v1.19.7` 已发布 Release）
+- 本仓库当前版本：`1.19.9`（待发布；最新已发布 Release 为 `v1.19.8`）
 
-各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85）。
+各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
 
 ## 目录与发布版本对照
@@ -33,6 +33,7 @@
 | 19 | 界面 | 去掉编辑页右上角的更新按钮（与卡片菜单「同步」重复） | v1.19.8 |
 | 20 | 稳定性 | 剪贴板工具（EcoPaste 双击粘贴等）注入的 Ctrl+V 无效：运行器在 IME 之前接管 | v1.19.8 |
 | 21 | 界面 | 配置编辑页新增「代理更新」开关：订阅更新可选走代理或直连 | v1.19.8 |
+| 22 | 工程 | 配置改写管道改为 Rust 实现（仅 Windows，异常自动回退） | v1.19.9 |
 
 ---
 
@@ -946,6 +947,73 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
 - 本机 `flutter build windows --release` 的产出复制到工作区根 `Bettbox-1.19.8-windows-x64/`，
   `Bettbox.exe` 版本资源 `FileVersion = 1.19.8+2026100201`，`data/app.so` 与上一版 `...-proxyupdate` 不同。
 - 第 20 节的剪贴板改动在运行器 C++ 层，APK 侧不适用；其真实流程已由用户实测确认生效（见第 20 节）。
+
+## 22. 配置改写管道改为 Rust 实现（仅 Windows，异常自动回退）
+
+**文件**：`rust/`（cargo workspace 与 `bettbox-config` crate：`rule.rs`、`dns_override.rs`、`provider.rs`、
+`group_switch.rs`、`patch_config.rs`、`mini_regex.rs`、`ffi.rs`、`include/bettbox_config.h`）、
+`ffigen.bettbox_config.yaml`、`lib/rust/bettbox_config.dart`、`lib/rust/generated/bettbox_config_ffi.dart`、
+`lib/common/config_patch.dart`、`lib/common/config_patch_input.dart`、`lib/common/group_switch.dart`、
+`lib/common/common.dart`、`lib/clash/core.dart`、`lib/state.dart`、`fixtures/`、`setup.dart`、
+`windows/CMakeLists.txt`、`.github/workflows/rust.yml`、`.github/workflows/build.yaml`
+　**测试**：`test/rust/*`、`test/common/group_switch_test.dart`、
+`test/common/patch_config_reference.dart`、`test/common/patch_config_reference_test.dart`、
+`test/common/config_patch_input_test.dart`
+
+**问题**：`GlobalState.patchRawConfig` 原先是约 440 行的内联配置手术 —— 在无类型的
+`Map<String, dynamic>` 上读字段、改分组、拼规则、写运行配置。没有类型约束、没有可单测的入口，
+漏掉任何一个 `config.xxx` 读取都会静默产出错误配置，而这段代码每次启动、每次改配置都要跑。
+
+**改动**：
+
+- 新增 `rust/` cargo workspace 与 `bettbox-config` crate，整条管道收成一个入口
+  `bb_patch_config(input_json) -> config_json`。宿主职责（读 profile、跑 JS 覆写脚本、解析
+  `ClashConfig`、取应用数据目录）仍留在 Dart，Rust 只对配置 map 做手术。
+- 绑定用 **ffigen + 窄 C ABI**（字符串进、JSON 出；Rust 分配，Dart 用 `bb_string_free` 释放），
+  不引入 FRB 的代码生成与 cargokit 链路。共 9 个导出，另有 `bb_node_filter_match` 供外部查询
+  某个正则是否落在支持子集内。
+- 先抽 Dart 参照实现再移植，保留双路：`lib/common/config_patch.dart`（`applyConfigPatch`，与 Rust
+  逐行对应的纯函数镜像）、`lib/common/config_patch_input.dart`（两条路径唯一的输入装配）。
+  `patchRawConfig` 从 430 行内联缩到 28 行装配 + 分发。
+- `USE_RUST_CONFIG_PIPELINE` 是编译期开关，**默认开启**；动态库缺失（Android、未打包构建）或
+  Rust 返回失败时自动回退 Dart 路径，只在使用中打印一行回退原因。关闭方式：
+  `--dart-define=USE_RUST_CONFIG_PIPELINE=false`。
+- 手写最小匹配器 `mini_regex.rs` 替换 `regex` crate：只判定「是否匹配」，支持子集之外的写法一律
+  判定为不支持并让整条配置回退 Dart（绝不猜成字面量），发布版 dll 由 1 991 680 字节降到 457 216 字节。
+- 构建接入：`setup.dart` 新增 `buildConfigLib`（`cargo build --release` → `libclash/windows/`）与
+  只产出该库的 `--out config`；`windows/CMakeLists.txt` 用 `EXISTS` 守卫把它装进 bundle，再由 Inno
+  脚本整目录打包。
+
+**验证**：
+
+- Rust：`cargo fmt --all --check`、`clippy --all-targets -- -D warnings`、`cargo test --workspace` 全绿
+  （48 单测 + 3 fixture + 2 规则 = 53）。
+- Dart 侧三层校验：Dart 镜像 ≡ Rust 入口；**Dart 镜像 + 输入装配 ≡ 改造前的生产实现**（参照实现由
+  `git show HEAD:lib/state.dart` 机械还原，反向还原后与原文逐字符比对一致）；全量 `flutter test`
+  138/138 无退化。另有最小匹配器与 Dart `RegExp` 的逐例差分（33 个支持模式 × 41 段文本）。
+- 真机验证（flag 开启的整包铺到实例目录）：`tasklist /m` 显示 `bettbox_config.dll` 已加载进
+  `Bettbox.exe`、stdout 无回退日志、运行配置 `config.yaml` 被正常重写；**用户在自己的桌面会话双击
+  启动后代理可用**。
+- 打包链路：不加任何 `dart-define` 的构建即走 Rust —— AOT 快照里 `bettbox_config.dll` 标记串 1 处，
+  显式传 `USE_RUST_CONFIG_PIPELINE=false` 时 0 处（标记随开关变化，不是恒定存在）；历史对照：
+  Rust 落地前的 APK 两个标记都是 0。
+- 补一个发布链路的缺口：原先 CI 只跑 `--out core-only` 与 `--out helper`，两者都在 `buildConfigLib`
+  之前返回，即 CI 产物不会带上该 dll（开关默认为开时表现为静默回退 Dart）。`.github/workflows/build.yaml`
+  已补 `--out config` 步骤，并在打包前断言 bundle 里的 dll 与 cargo 产物逐字节一致、
+  `data/app.so` 里存在标记串。
+
+**已知残余差异**（有界，均已写进代码注释）：
+
+- `applyHostsToProxies` 在 hosts 条目多且 specificity 相同时排序可能与 Dart 不同（Dart `List.sort`
+  短列表稳定、长列表不稳定，Rust 侧统一用稳定排序对齐）。
+- `nodeExcludeFilter` 的正则只覆盖一个子集（字面量、`.`、`\d` `\w` `\s` 系列、字符类、分组、选择、
+  `* + ?`、锚点）；用到 `\d{2}`、`(?i)`、反向引用等写法时，该条配置整条回退 Dart —— 行为正确，
+  只是这条配置不走 Rust。
+- provider 对畸形输入的容错比 Dart 宽松（缺必需字段的 provider 跳过而非抛错）。
+
+**未决**：JS 覆写脚本引擎（`plugins/flutter_qjs`）与 Windows 原生能力（`lib/common/system.dart` 的
+Windows 段、`plugins/proxy`）尚未并入；内核 IPC 客户端本轮明确不动；整份配置仍有一次
+JSON encode/decode 往返；Android 仍走 Dart 镜像路径（与改造前行为一致，参照比对覆盖）。
 
 ---
 
