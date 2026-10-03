@@ -165,6 +165,14 @@ jobs:
           Write-Host "Core SHA256 (TOKEN for Helper): $coreHash"
           dart setup.dart windows --arch ${{ matrix.arch }} --out helper --core-hash $coreHash
 
+      # 必须在 flutter build 之前产出 libclash/windows/bettbox_config.dll，
+      # windows/CMakeLists.txt 才会把它装进 bundle（该文件在 .gitignore 里，只能现造）。
+      - name: Build ConfigLib (Windows)
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: |
+          dart setup.dart windows --arch ${{ matrix.arch }} --out config
+
       - name: Build Bettbox (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -188,6 +196,33 @@ jobs:
             $flutterArgs += "--dart-define=IPINFO_TOKEN=$env:IPINFO_TOKEN"
           }
           flutter @flutterArgs
+
+      # Rust 管道默认开启，缺 dll 只会静默回退 Dart、不报错，所以这里硬断言它真的在包里。
+      # 脚本内保持纯 ASCII：PowerShell 5.1 会把无 BOM 的 .ps1 按 ANSI 读，中文会让它解析失败。
+      - name: Verify Rust config pipeline (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $bundleDir = "build/windows/x64/runner/Release"
+          $bundled = "$bundleDir/bettbox_config.dll"
+          if (-not (Test-Path $bundled)) {
+            Write-Error "bundle is missing $bundled - the Rust config pipeline will not be active"
+            exit 1
+          }
+          $a = (Get-FileHash $bundled -Algorithm SHA256).Hash
+          $b = (Get-FileHash rust/target/release/bettbox_config.dll -Algorithm SHA256).Hash
+          if ($a -ne $b) {
+            Write-Error "bundled dll differs from the cargo artifact ($a vs $b)"
+            exit 1
+          }
+          $appSo = "$bundleDir/data/app.so"
+          $text = [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetString([System.IO.File]::ReadAllBytes($appSo))
+          $marker = ([regex]::Matches($text, 'bettbox_config\.dll')).Count
+          if ($marker -lt 1) {
+            Write-Error "app.so has no Rust pipeline marker - the enabled wrapper may have been tree-shaken"
+            exit 1
+          }
+          Write-Host "dll matches the cargo artifact; app.so marker count = $marker"
 
       - name: Ensure Inno Setup (Windows)
         if: matrix.platform == 'windows'

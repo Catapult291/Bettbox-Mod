@@ -666,6 +666,16 @@ class BuildCommand extends Command {
       }
     }
 
+    // 只产出 Rust 配置管道动态库。必须在 buildCore 之前返回：Go 内核构建不可复现
+    // （同机重跑 md5 会变），重建内核会让上一步按旧 hash 编出的 helper TOKEN 失配。
+    if (actualOut == 'config') {
+      if (target != Target.windows) {
+        throw '--out config is only supported for windows';
+      }
+      await Build.buildConfigLib(target);
+      return;
+    }
+
     final corePaths = await Build.buildCore(
       target: target,
       arch: arch,
@@ -823,7 +833,7 @@ class AutoBuildCommand extends Command {
     );
     argParser.addOption(
       'out',
-      valueHelp: ['app', 'core', 'core-only', 'helper'].join(','),
+      valueHelp: ['app', 'core', 'core-only', 'helper', 'config'].join(','),
       defaultsTo: 'core',
       help: 'Build output type',
     );
