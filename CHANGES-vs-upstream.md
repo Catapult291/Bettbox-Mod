@@ -1024,7 +1024,7 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
   只是这条配置不走 Rust。
 - provider 对畸形输入的容错比 Dart 宽松（缺必需字段的 provider 跳过而非抛错）。
 
-**覆写脚本引擎也已 Rust 化（同属本节范围，仅 Windows；未发布，随下个版本出）**：新增 crate `rust/bettbox-script`，用仓库里那份
+**覆写脚本引擎也已 Rust 化（同属本节范围，仅 Windows；随 v1.19.10 发布）**：新增 crate `rust/bettbox-script`，用仓库里那份
 vendored QuickJS 自编（与 Android qjs 同一份引擎），暴露 `bb_eval_script(script, config_json, options_json)`，
 契约与 `lib/common/js_runtime_manager.dart` 逐项对齐（console 垫片、`main(config)` 调用、customOptions 合并、
 30 s / 256 MB 上界、失败重试一次、返回值非对象时保留原配置）。Dart 侧由 `lib/rust/bettbox_script.dart` 接线，
