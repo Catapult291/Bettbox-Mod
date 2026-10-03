@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::ptr;
 
-use crate::eval::{self, EvalOutcome};
+use crate::eval::{self, EvalOutcome, ExtractOutcome};
 
 /// 执行覆写脚本，返回 JSON 信封（见头文件）。
 ///
@@ -50,11 +50,36 @@ pub unsafe extern "C" fn bb_eval_script(
     into_c_string(&envelope)
 }
 
+/// 抽取脚本声明的选项与图标（脚本页的 options/icons），返回 JSON 信封。
+///
+/// 信封形状见头文件：`{"ok":true,"result":{"options":…,"icons":…}}` /
+/// `{"ok":false,"error":"…"}`；NULL 仍表示 ABI 级失败（入参 NULL / 非 UTF-8）。
+///
+/// # Safety
+///
+/// `script` 必须是 NUL 结尾的 UTF-8 C 字符串。返回的指针所有权归调用方，
+/// 用完必须传给 [`bb_string_free`]。
+#[no_mangle]
+pub unsafe extern "C" fn bb_extract_script_options(script: *const c_char) -> *mut c_char {
+    let Some(script) = (unsafe { borrow_str(script) }) else {
+        return ptr::null_mut();
+    };
+
+    let envelope = match eval::extract_options(script) {
+        ExtractOutcome::Options(result) => format!("{{\"ok\":true,\"result\":{result}}}"),
+        ExtractOutcome::Error(message) => {
+            let escaped = serde_json::to_string(&message).unwrap_or_else(|_| "\"\"".to_string());
+            format!("{{\"ok\":false,\"error\":{escaped}}}")
+        }
+    };
+    into_c_string(&envelope)
+}
+
 /// 释放本库返回的字符串。
 ///
 /// # Safety
 ///
-/// `value` 必须是 [`bb_eval_script`] 返回、且尚未释放的指针，或为 NULL。
+/// `value` 必须是本库返回、且尚未释放的指针，或为 NULL。
 #[no_mangle]
 pub unsafe extern "C" fn bb_string_free(value: *mut c_char) {
     if value.is_null() {

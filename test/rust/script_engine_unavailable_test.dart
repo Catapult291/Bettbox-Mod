@@ -18,6 +18,10 @@ void main() {
         <String, dynamic>{'a': 1},
       );
       expect(result, isNull);
+      final options = await BettboxScript.extractScriptOptions(
+        'var ruleOptionsEnable = { a: true };',
+      );
+      expect(options, isNull);
     } finally {
       Directory.current = original;
       empty.deleteSync(recursive: true);

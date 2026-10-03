@@ -14,7 +14,6 @@ import 'package:bett_box/plugins/service.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/providers/state.dart' as providers_state;
 import 'package:bett_box/rust/bettbox_config.dart';
-import 'package:bett_box/rust/bettbox_script.dart';
 
 import 'package:bett_box/widgets/dialog.dart';
 import 'package:flutter/material.dart';
@@ -787,16 +786,7 @@ class GlobalState {
       config['proxy-providers'] ??= {};
 
       try {
-        if (useRustScriptEngine && BettboxScript.isAvailable) {
-          final rustResult = await BettboxScript.evaluateScript(
-            currentScript.content,
-            config,
-            customOptions: currentScript.customOptions,
-          );
-          if (rustResult != null) return rustResult;
-          commonPrint.log('Rust 脚本引擎未接管（ABI 级失败），回退 qjs 路径');
-        }
-        return await JavaScriptRuntimeManager.evaluateScript(
+        return await JavaScriptRuntimeManager.evaluateScriptPreferRust(
           currentScript.content,
           config,
           customOptions: currentScript.customOptions,

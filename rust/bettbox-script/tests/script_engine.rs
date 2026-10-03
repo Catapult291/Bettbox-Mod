@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use bettbox_script::eval::{self, EvalOutcome, Limits};
+use bettbox_script::eval::{self, EvalOutcome, ExtractOutcome, Limits};
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")
@@ -194,6 +194,71 @@ fn config_is_not_mutated_when_script_returns_nothing() {
     let config = "{\"a\":{\"b\":[1,2,3]}}";
     let outcome = eval::evaluate("function main(c){ return null; }", config, None);
     assert!(matches!(outcome, EvalOutcome::NotAMap), "{outcome:?}");
+}
+
+fn extract_value(outcome: &ExtractOutcome) -> serde_json::Value {
+    match outcome {
+        ExtractOutcome::Options(json) => serde_json::from_str(json).expect("结果不是合法 JSON"),
+        other => panic!("期望抽取成功，实际：{other:?}"),
+    }
+}
+
+#[test]
+fn extract_options_reads_options_and_icons() {
+    let script = "\
+var ruleOptionsEnable = { enableIPv6: false, fixBug: true };
+var serviceConfigs = [
+  { name: 'OpenAI', icon: 'https://example.com/openai.png' },
+  { name: 'NoIcon' },
+  { icon: 'https://example.com/orphan.png' },
+  'not-an-object',
+];
+function main(c) { return c; }
+";
+    let value = extract_value(&eval::extract_options(script));
+    assert_eq!(value["options"]["enableIPv6"], false);
+    assert_eq!(value["options"]["fixBug"], true);
+    let icons = value["icons"].as_object().expect("icons 不是对象");
+    // 只收「有 name 且 icon 是字符串」的项。
+    assert_eq!(icons.len(), 1);
+    assert_eq!(icons["OpenAI"], "https://example.com/openai.png");
+}
+
+#[test]
+fn extract_options_falls_back_to_empty_for_odd_declarations() {
+    for script in [
+        // 没声明任何东西。
+        "function main(c) { return c; }",
+        // ruleOptionsEnable 不是对象。
+        "var ruleOptionsEnable = 'nope'; function main(c) { return c; }",
+        // serviceConfigs 不是数组。
+        "var serviceConfigs = { name: 'x', icon: 'y' }; function main(c) { return c; }",
+    ] {
+        let value = extract_value(&eval::extract_options(script));
+        assert_eq!(
+            value["options"].as_object().map(serde_json::Map::len),
+            Some(0),
+            "{script}"
+        );
+        assert_eq!(
+            value["icons"].as_object().map(serde_json::Map::len),
+            Some(0),
+            "{script}"
+        );
+    }
+}
+
+#[test]
+fn extract_options_error_has_no_dart_style_prefix() {
+    // 注意必须是**顶层**抛错：这条路径不调用 `main`，只跑脚本正文。
+    let outcome = eval::extract_options("var x = 1;\nthrow new Error('boom');");
+    match outcome {
+        ExtractOutcome::Error(message) => {
+            assert!(!message.starts_with("JS Script Error: "), "{message}");
+            assert!(message.starts_with("Error: boom"), "{message}");
+        }
+        other => panic!("期望错误，实际：{other:?}"),
+    }
 }
 
 /// 回归闸门：排查阶段见过「同一份字节偶发解析失败」，失败率随 C 侧代码形态在

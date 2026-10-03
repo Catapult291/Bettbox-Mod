@@ -48,6 +48,21 @@ class BettboxScriptFFI {
         )
       >();
 
+  ffi.Pointer<ffi.Char> bb_extract_script_options(
+    ffi.Pointer<ffi.Char> script,
+  ) {
+    return _bb_extract_script_options(script);
+  }
+
+  late final _bb_extract_script_optionsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)
+        >
+      >('bb_extract_script_options');
+  late final _bb_extract_script_options = _bb_extract_script_optionsPtr
+      .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
+
   void bb_string_free(ffi.Pointer<ffi.Char> ptr) {
     return _bb_string_free(ptr);
   }

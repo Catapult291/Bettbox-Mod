@@ -108,6 +108,80 @@ var console = {
     program
 }
 
+/// `extractScriptOptions` 的求值结果（脚本页读 `ruleOptionsEnable` / `serviceConfigs`）。
+#[derive(Debug)]
+pub enum ExtractOutcome {
+    /// 成功：`{"options":…,"icons":…}` 的 JSON 文本。
+    Options(String),
+    /// 脚本抛错/超时/内存超限。错误串与 qjs 侧同形（含异常栈），
+    /// 但**不带** `JS Script Error: ` 前缀——那个前缀只有 `_evaluateWithRetry` 才加。
+    Error(String),
+}
+
+/// 抽取脚本声明的选项与图标。
+///
+/// 与 [`evaluate`] 的两处关键差别，都对齐 Dart 侧 `extractScriptOptions`：
+///   * **不重试**：Dart 侧这条路径没有重试循环，出错就交给调用方记日志并返回空表；
+///   * 错误串不加 `JS Script Error: ` 前缀（Dart 侧只记 `extractScriptOptions error: $e`）。
+pub fn extract_options(script: &str) -> ExtractOutcome {
+    extract_options_with_limits(script, &Limits::default())
+}
+
+pub fn extract_options_with_limits(script: &str, limits: &Limits) -> ExtractOutcome {
+    let program = build_extract_program(script);
+    match eval_once(&program, limits) {
+        Ok(EvalOutcome::Config(json)) => ExtractOutcome::Options(json),
+        Ok(EvalOutcome::NotAMap) => ExtractOutcome::Error("脚本未返回选项对象".to_string()),
+        Ok(EvalOutcome::Error(message)) => ExtractOutcome::Error(message),
+        Err(message) => ExtractOutcome::Error(message),
+    }
+}
+
+/// `extractScriptOptions` 用的程序，形状照 Dart 侧 `_extractOptionsViaQjs` 的模板：
+/// 跑脚本正文，再读全局 `ruleOptionsEnable` 与 `serviceConfigs`。
+///
+/// 行结构同样必须与 Dart 侧逐行对齐（理由见 [`build_program`]）：这条路径的错误串
+/// 也会带上 `<eval>:<行号>`。
+///
+/// 与 Dart 模板的唯一差别在末行：这里 `return { options: options, icons: icons };`
+/// 直接返回对象，由 C 侧的 `JS_JSONStringify` 序列化（`JSON.stringify` 内部用的就是它），
+/// 省掉「JSON 文本再套一层 JSON 字符串」的二次转义。行数不变，行号因此一致。
+fn build_extract_program(script: &str) -> String {
+    const CONSOLE_SHIM: &str = "\
+var console = {
+  log: function() {},
+  warn: function() {},
+  error: function() {},
+  info: function() {},
+  debug: function() {}
+};
+";
+
+    let mut program = String::with_capacity(script.len() + 1024);
+    program.push_str(CONSOLE_SHIM);
+    program.push_str("(function() {\n");
+    program.push_str(script);
+    program.push('\n');
+    program.push_str(EXTRACT_BODY);
+    program.push_str("})();\n");
+    program
+}
+
+/// `_extractOptionsViaQjs` 模板里 `$scriptContent` 之后的那一段，照抄（含注释里的缩进层级）。
+const EXTRACT_BODY: &str = "\
+var options = typeof ruleOptionsEnable !== 'undefined' && ruleOptionsEnable && typeof ruleOptionsEnable === 'object' ? ruleOptionsEnable : {};
+var icons = {};
+if (typeof serviceConfigs !== 'undefined' && Array.isArray(serviceConfigs)) {
+  for (var i = 0; i < serviceConfigs.length; i++) {
+    var svc = serviceConfigs[i];
+    if (svc && svc.name && typeof svc.icon === 'string') {
+      icons[svc.name] = svc.icon;
+    }
+  }
+}
+return { options: options, icons: icons };
+";
+
 fn eval_once(program: &str, limits: &Limits) -> Result<EvalOutcome, String> {
     // 必须交给引擎一个 NUL 结尾的缓冲区：见 c/quickjs_shim.c 的入参契约。
     let program = match std::ffi::CString::new(program) {

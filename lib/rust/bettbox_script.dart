@@ -69,6 +69,36 @@ abstract final class BettboxScript {
     return result.cast<String, dynamic>();
   }
 
+  /// 抽取脚本声明的选项与图标（脚本页的 options/icons）。
+  ///
+  /// 返回 null 表示 Rust 引擎**不接管**（开关关闭、动态库缺失、或 ABI 级失败），
+  /// 调用方回退 `JavaScriptRuntimeManager.extractOptionsViaQjs`。
+  /// 脚本抛错时抛出原始错误串（**不带** `JS Script Error: ` 前缀），
+  /// 与 qjs 路径一致——那条路径只记 `extractScriptOptions error: …` 并返回空表。
+  static Future<Map<String, dynamic>?> extractScriptOptions(
+    String scriptContent,
+  ) async {
+    if (!useRustScriptEngine) return null;
+    if (!isAvailable) return null;
+
+    final String? envelopeJson;
+    try {
+      envelopeJson = await Isolate.run(() => _extractEnvelope(scriptContent));
+    } catch (_) {
+      // 只在 isolate 启动/加载失败时走到这里；脚本错误走信封，不抛异常。
+      return null;
+    }
+    if (envelopeJson == null) return null;
+
+    final envelope = jsonDecode(envelopeJson) as Map<String, dynamic>;
+    if (envelope['ok'] != true) {
+      throw envelope['error'];
+    }
+    final result = envelope['result'];
+    if (result is! Map) return null;
+    return result.cast<String, dynamic>();
+  }
+
   /// 在后台 isolate 内执行的同步 FFI 调用，返回信封 JSON；null 表示 ABI 级失败。
   static String? _evalEnvelope(
     String script,
@@ -95,6 +125,25 @@ abstract final class BettboxScript {
       malloc.free(scriptPtr);
       malloc.free(configPtr);
       if (optionsPtr != null) malloc.free(optionsPtr);
+    }
+  }
+
+  /// [`extractScriptOptions`] 在后台 isolate 内执行的那一半。
+  static String? _extractEnvelope(String script) {
+    final bindings = _require();
+    final scriptPtr = script.toNativeUtf8();
+    try {
+      final outputPtr = bindings.bb_extract_script_options(
+        scriptPtr.cast<Char>(),
+      );
+      if (outputPtr == nullptr) return null;
+      try {
+        return outputPtr.cast<Utf8>().toDartString();
+      } finally {
+        bindings.bb_string_free(outputPtr);
+      }
+    } finally {
+      malloc.free(scriptPtr);
     }
   }
 

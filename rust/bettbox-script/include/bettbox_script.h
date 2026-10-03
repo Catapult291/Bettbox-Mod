@@ -40,6 +40,22 @@ char *bb_eval_script(const char *script,
                      const char *config_json,
                      const char *options_json);
 
+/* 抽取脚本声明的选项与图标（脚本页列的 options/icons）。
+ *
+ *   script  覆写脚本正文（UTF-8 C 字符串）。
+ *
+ * 信封形状：
+ *   {"ok":true,"result":{"options":{…},"icons":{…}}}
+ *   {"ok":false,"error":"…"}   脚本抛错 / 超时 / 内存超限；错误串**不带**
+ *                              `JS Script Error: ` 前缀（Dart 侧这条路径只记原始错误，
+ *                              前缀是 `_evaluateWithRetry` 才加的）
+ * NULL 仍表示 ABI 级失败（入参非法），语义是「本库不接管，回退 Dart 侧 qjs 路径」。
+ *
+ * 与 `bb_eval_script` 的两处差别：程序形状不同（跑脚本正文后读全局
+ * `ruleOptionsEnable` / `serviceConfigs`，不调用 `main`）；**不重试**
+ * （Dart 侧 `extractScriptOptions` 没有重试循环，出错就返回空表）。 */
+char *bb_extract_script_options(const char *script);
+
 /* 释放本库返回的字符串。 */
 void bb_string_free(char *ptr);
 

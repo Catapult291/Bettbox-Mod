@@ -279,7 +279,7 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
           globalState.config.currentProfile?.useScriptOverride ?? false;
       final currentScript = ref.read(scriptStateProvider).currentScript;
       if (useScriptOverride && currentScript != null) {
-        final result = await JavaScriptRuntimeManager.evaluateScript(
+        final result = await JavaScriptRuntimeManager.evaluateScriptPreferRust(
           currentScript.content,
           rawConfig,
           customOptions: currentScript.customOptions,

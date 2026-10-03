@@ -45,6 +45,32 @@ Future<String?> _firstDifference(
   return firstJsonDifference(qjs, rust, '');
 }
 
+/// 抽取选项这条路径的逐字段比对：Rust 与 qjs 参考实现。
+Future<String?> _firstExtractDifference(String script) async {
+  final rust = await BettboxScript.extractScriptOptions(script);
+  expect(rust, isNotNull, reason: 'Rust 引擎未接管 extractScriptOptions');
+  final qjs = await JavaScriptRuntimeManager.extractOptionsViaQjs(script);
+  return firstJsonDifference(qjs, rust, '');
+}
+
+/// 抽取路径出错时两侧的错误串（都抛原始错误，不带 `JS Script Error: ` 前缀）。
+Future<String> _extractErrorFromRust(String script) async {
+  final error = await BettboxScript.extractScriptOptions(
+    script,
+  ).then<Object?>((value) => value, onError: (Object error) => error);
+  expect(error, isA<String>(), reason: script);
+  return error.toString();
+}
+
+Future<String> _extractErrorFromQjs(String script) async {
+  // qjs 侧抛的是 JSError（`toString()` 同样是 `message\nstack`），Rust 侧抛的是
+  // 原始错误串——两边对外的文本一致，所以只比 `toString()`。
+  final error = await JavaScriptRuntimeManager.extractOptionsViaQjs(
+    script,
+  ).then<Object?>((value) => value, onError: (Object error) => error);
+  return error.toString();
+}
+
 void main() {
   // qjs 参考实现只在 flutter test 下从 `test/build/Debug/ffiquickjs.dll` 加载
   // （见 `plugins/flutter_qjs/lib/src/ffi.dart`），且该 dll 依赖 flutter_windows.dll。
@@ -74,6 +100,28 @@ void main() {
         _configFor('profile-b'),
       );
       expect(difference, isNull, reason: 'profile-b\n$difference');
+    });
+
+    test('evaluateScriptPreferRust 确实走 Rust，且与 qjs 同结果', () async {
+      final config = _configFor('profile-a');
+      final preferRust = await JavaScriptRuntimeManager.evaluateScriptPreferRust(
+        _realScript,
+        config,
+      );
+      final viaRustWrapper = await BettboxScript.evaluateScript(
+        _realScript,
+        config,
+      );
+      expect(
+        firstJsonDifference(viaRustWrapper, preferRust, ''),
+        isNull,
+        reason: 'evaluateScriptPreferRust 没有走 Rust 引擎',
+      );
+      final qjs = await JavaScriptRuntimeManager.evaluateScript(
+        _realScript,
+        config,
+      );
+      expect(firstJsonDifference(qjs, preferRust, ''), isNull);
     });
 
     test('customOptions 合并进 ruleOptionsEnable', () async {
@@ -157,6 +205,76 @@ function main(c) { return { flag: ruleOptionsEnable.flag, other: ruleOptionsEnab
         expect(rustError, isA<String>(), reason: script);
         expect(rustError.toString(), qjsError.toString(), reason: script);
       }
+    });
+  }, skip: skipReason);
+
+  group('extractScriptOptions：Rust vs qjs 的逐字段差分', () {
+    test('选项与图标（含该跳过的条目）', () async {
+      const script = '''
+var ruleOptionsEnable = { enableIPv6: false, fixBug: true };
+var serviceConfigs = [
+  { name: 'OpenAI', icon: 'https://example.com/openai.png' },
+  { name: 'NoIcon' },
+  { icon: 'https://example.com/orphan.png' },
+  'not-an-object',
+];
+function main(c) { return c; }
+''';
+      final difference = await _firstExtractDifference(script);
+      expect(difference, isNull, reason: '$difference');
+      final rust = await BettboxScript.extractScriptOptions(script);
+      expect((rust!['options'] as Map)['enableIPv6'], isFalse);
+      // 只收「有 name 且 icon 是字符串」的项。
+      expect((rust['icons'] as Map).keys.toList(), ['OpenAI']);
+    });
+
+    test('什么都没声明 / 声明形状不对都退化成空表', () async {
+      for (final script in [
+        'function main(c) { return c; }',
+        "var ruleOptionsEnable = 'nope'; function main(c) { return c; }",
+        "var serviceConfigs = { name: 'x', icon: 'y' }; function main(c) { return c; }",
+        'var ruleOptionsEnable = null; var serviceConfigs = []; function main(c) { return c; }',
+      ]) {
+        final difference = await _firstExtractDifference(script);
+        expect(difference, isNull, reason: script);
+      }
+    });
+
+    test('真实脚本（未声明选项）两侧一致', () async {
+      final difference = await _firstExtractDifference(_realScript);
+      expect(difference, isNull, reason: '$difference');
+    });
+
+    test('顶层抛错与语法错误的错误串一致', () async {
+      for (final script in [
+        "var x = 1;\nthrow new Error('boom');",
+        "throw 'plain';",
+        'var ruleOptionsEnable = { ;',
+      ]) {
+        expect(
+          await _extractErrorFromRust(script),
+          await _extractErrorFromQjs(script),
+          reason: script,
+        );
+      }
+    });
+
+    test('公共入口走 Rust 且结果进缓存', () async {
+      const script = '''
+var ruleOptionsEnable = { cached: true };
+function main(c) { return c; }
+''';
+      expect(JavaScriptRuntimeManager.hasCachedOptions(script), isFalse);
+      final result = await JavaScriptRuntimeManager.extractScriptOptions(
+        script,
+      );
+      expect((result['options'] as Map)['cached'], isTrue);
+      expect(JavaScriptRuntimeManager.hasCachedOptions(script), isTrue);
+      expect(
+        JavaScriptRuntimeManager.getCachedOptions(script),
+        result,
+        reason: '缓存里应是 Rust 路径的同一份结果',
+      );
     });
   }, skip: skipReason);
 }

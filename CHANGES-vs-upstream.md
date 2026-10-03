@@ -1028,16 +1028,21 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
 vendored QuickJS 自编（与 Android qjs 同一份引擎），暴露 `bb_eval_script(script, config_json, options_json)`，
 契约与 `lib/common/js_runtime_manager.dart` 逐项对齐（console 垫片、`main(config)` 调用、customOptions 合并、
 30 s / 256 MB 上界、失败重试一次、返回值非对象时保留原配置）。Dart 侧由 `lib/rust/bettbox_script.dart` 接线，
-只切 `GlobalState.handleEvaluate` 一处，`--dart-define=USE_RUST_SCRIPT_ENGINE=false` 可关；动态库缺失或
-ABI 级失败时回退 qjs，脚本自身出错仍抛与 qjs 同样形状（含异常栈与行号）的 `JS Script Error: …`。
-逐字段差分见 `test/rust/script_engine_diff_test.dart`（真实脚本 × 真实配置，与 qjs 输出对拍）。
+`--dart-define=USE_RUST_SCRIPT_ENGINE=false` 可关；动态库缺失或 ABI 级失败时回退 qjs，脚本自身出错仍抛与
+qjs 同样形状（含异常栈与行号）的 `JS Script Error: …`。
+**覆盖范围**：三处会跑用户脚本的地方都优先走 Rust —— 配置改写的 `GlobalState.handleEvaluate`、脚本页「加规则」
+取最终分组的 `_buildRuleSnippet`、脚本页读 options/icons 的 `extractScriptOptions`（第二个 C ABI 入口
+`bb_extract_script_options`，程序形状不同：跑脚本正文后读全局 `ruleOptionsEnable` / `serviceConfigs`，不调用
+`main`）。入口在 `JavaScriptRuntimeManager` 上收敛为 `evaluateScriptPreferRust` / `extractScriptOptions`；
+`evaluateScript` / `extractOptionsViaQjs` 退化为纯 qjs 实现，只用作回退路径与差分测试的参照。
+逐字段差分见 `test/rust/script_engine_diff_test.dart`（真实脚本 × 真实配置、customOptions、非对象返回、UTF-8、
+异常栈与语法错误行号、extract 的选项与图标，全部与 qjs 输出对拍）。
 **注意这一片没有消掉整份配置的 JSON 往返**：脚本结果仍以 JSON 回到 Dart，`patchRawConfig` 再把整份配置
 编码给 `bb_patch_config`；比起 qjs 路径，变的是求值不再经 `flutter_qjs` 的引擎与模板拼接。
 
-**未决**：Windows 原生能力（`lib/common/system.dart` 的 Windows 段、`plugins/proxy`）尚未并入；脚本侧的
-`extractScriptOptions`（脚本页读 options/icons）与脚本页预览那次求值仍走 qjs；内核 IPC 客户端本轮明确不动；
-整份配置仍有一次 JSON encode/decode 往返（脚本引擎这轮未消除）；Android 仍走 Dart 镜像路径（与改造前行为
-一致，参照比对覆盖）。
+**未决**：Windows 原生能力（`lib/common/system.dart` 的 Windows 段、`plugins/proxy`）尚未并入；内核 IPC
+客户端本轮明确不动；整份配置仍有一次 JSON encode/decode 往返（脚本引擎这轮未消除）；Android 仍走 Dart
+镜像路径（与改造前行为一致，参照比对覆盖）。
 
 **发布（v1.19.9）**：第 22 节随 v1.19.9 发布，CI run `37110314474` 四个 job（android arm64 /
 android universal / windows amd64 / release）全绿，Release 附件三件：
