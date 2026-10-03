@@ -1007,6 +1007,13 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
   安装包版本资源 `ProductVersion = 1.19.9`、`CompanyName = Catapult291`（Inno 包的 `FileVersion`
   各版均为空）。arm64 APK 的 `lib/arm64-v8a/libapp.so` 含回退日志串 1 处（配置管道改动已进包）；
   该包里 `bettbox_config.dll` 计数为 0 属预期 —— 平台分支在 Android 目标上被折叠，且 Android 不带该动态库。
+- **Android 真机冒烟（2026-10-03，PLK110 / Android 16 / arm64，装的是 Release 里的 arm64 包）**：应用以
+  VPN 身份运行、`tun0` 就位、内核在应用进程内（首页内存卡片显示内核 13.6 MB）；被改写后的运行配置里
+  `127.0.0.1:7890`（mixed-port）与 DNS 端口都在监听，活跃连接与流量统计正常。从设备侧经
+  `127.0.0.1:7890` 请求 `cp.cloudflare.com` 得到 `loc=HK`（`160.236.110.186`，归属查得
+  `country: Hong Kong` / ASN 202355），而同一域名直连为 `loc=CN` —— 即配置改写 → 规则链 → 代理出口
+  端到端可用；应用首页自身的出口检测显示同一地址。全程无应用崩溃记录（`crash` 缓冲区里的 FATAL
+  均属其它应用）。
 
 **已知残余差异**（有界，均已写进代码注释）：
 
