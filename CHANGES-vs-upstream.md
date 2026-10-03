@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.9`（待发布；最新已发布 Release 为 `v1.19.8`）
+- 本仓库当前版本：`1.19.9`（tag `v1.19.9` 已发布 Release）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
@@ -1020,6 +1020,18 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
 **未决**：JS 覆写脚本引擎（`plugins/flutter_qjs`）与 Windows 原生能力（`lib/common/system.dart` 的
 Windows 段、`plugins/proxy`）尚未并入；内核 IPC 客户端本轮明确不动；整份配置仍有一次
 JSON encode/decode 往返；Android 仍走 Dart 镜像路径（与改造前行为一致，参照比对覆盖）。
+
+**发布（v1.19.9）**：第 22 节随 v1.19.9 发布，CI run `37110314474` 四个 job（android arm64 /
+android universal / windows amd64 / release）全绿，Release 附件三件：
+`Bettbox-1.19.9-android-arm64-v8a.apk`（50,720,488 B）、
+`Bettbox-1.19.9-android-universal.apk`（120,458,870 B）、
+`Bettbox-1.19.9-windows-amd64-setup.exe`（39,605,518 B，sha256 `efb6af57…`）。本次运行的 Windows job
+同样输出 `dll matches the cargo artifact; app.so marker count = 1`，Inno 编译日志也出现
+`Compressing: ...\runner\Release\bettbox_config.dll`。
+
+发布前先用同一 tag 之前的手动触发（run `37104309866`，不创建 Release）验证过 CI 链路，并请用户实机确认
+那份产物（39,603,566 B，sha256 `92de919e…`）能正常启动、代理可用 —— 通过后才打 tag。两次构建的安装包
+相差 1 952 字节：Go 内核每次重建的产物不可复现（md5 会变），helper 又按内核 hash 重编，与配置管道无关。
 
 ---
 
