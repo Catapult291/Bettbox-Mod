@@ -9,11 +9,12 @@ import 'package:bett_box/rust/generated/bettbox_config_ffi.dart';
 
 /// 是否让 Rust 侧接管配置改写管道（`GlobalState.patchRawConfig`）。
 ///
-/// 默认关闭，用 `--dart-define=USE_RUST_CONFIG_PIPELINE=true` 打开；Rust 动态库
-/// 缺失或调用失败时自动回退 Dart 路径。差分验证见
-/// `test/rust/patch_config_diff_test.dart`。
+/// 默认开启，用 `--dart-define=USE_RUST_CONFIG_PIPELINE=false` 关闭回 Dart 路径。
+/// Rust 动态库缺失（如 Android）或调用失败时自动回退 Dart，不回退才是不正常。
+/// 差分验证见 `test/rust/patch_config_diff_test.dart`。
 const bool useRustConfigPipeline = bool.fromEnvironment(
   'USE_RUST_CONFIG_PIPELINE',
+  defaultValue: true,
 );
 
 /// Rust 侧配置管道（`rust/bettbox-config`）的窄 C ABI 封装。
@@ -70,8 +71,13 @@ abstract final class BettboxConfig {
   /// 跑完整条配置改写管道，返回改写后的配置 JSON 文本。
   ///
   /// 输入结构见 `lib/common/config_patch.dart` 的 `applyConfigPatch`。
+  ///
+  /// 动态库不可用时返回 null 交给调用方回退 Dart，而不是抛错——该管道是可选
+  /// 加速路径，缺失不算错误。
   static String? patchConfig(String inputJson) {
-    return _call(_require().bb_patch_config, inputJson);
+    final bindings = _tryLoad();
+    if (bindings == null) return null;
+    return _call(bindings.bb_patch_config, inputJson);
   }
 
   /// 解析 provider 列表原文，返回元数据数组 JSON（已剥掉全节点列表）。
