@@ -192,26 +192,21 @@ class System {
   Future<void> setProcessPriority(String processName, bool enable) async {
     if (!isWindows) return;
 
-    if (processName == '${AppIdentity.mainExecutableName}.exe') {
-      try {
-        windows?.setCurrentProcessPriority(enable);
-        return;
-      } catch (e) {
-        commonPrint.log('Failed to set current process priority: $e');
-      }
+    // 内核进程的优先级由 helper 的 `process.set_priority` 负责（见 `controller.dart`
+    // 的 `setProcessPriority`）；这里只处理应用自身进程。
+    // 旧实现对本进程还回退 `wmic ... call setpriority`，但新版 Win11 默认不带 wmic，
+    // 那条分支只会失败，已移除。
+    if (processName != '${AppIdentity.mainExecutableName}.exe') {
+      commonPrint.log(
+        'setProcessPriority ignored for $processName (handled by helper)',
+      );
+      return;
     }
 
-    final result = await Process.run('wmic', [
-      'process',
-      'where',
-      'name="$processName"',
-      'call',
-      'setpriority',
-      enable ? 'above normal' : 'normal',
-    ]);
-
-    if (result.exitCode != 0) {
-      throw Exception('Failed to set process priority: ${result.stderr}');
+    try {
+      windows?.setCurrentProcessPriority(enable);
+    } catch (e) {
+      commonPrint.log('Failed to set current process priority: $e');
     }
   }
 }

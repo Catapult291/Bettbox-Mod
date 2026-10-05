@@ -1151,6 +1151,23 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 
 ---
 
+## 25. 进程优先级不再依赖 wmic（Windows）
+
+**文件**：`lib/common/system.dart`（`System.setProcessPriority`）
+
+**问题**：设置进程优先级时，若目标是应用自身进程之外的场景，会走
+`Process.run('wmic', [... 'call', 'setpriority', ...])`。新版 Windows 11 默认不再自带 wmic，
+该分支在这些机器上只会失败；而内核进程的优先级本来就由 helper 的 `process.set_priority`
+（Toolhelp 快照 + `SetPriorityClass`）负责，Dart 侧另有一条调 `SetPriorityClass` 的 FFI 处理自身进程。
+
+**改动**：删除 wmic 分支。本进程继续走 FFI `windows.setCurrentProcessPriority`（`SetPriorityClass` +
+内存优先级），失败改为记日志、不再抛异常；传入的进程名不是主 exe 时记日志后返回
+（`controller.dart` 只对主 exe 调用它，内核进程始终走 helper）。
+
+**验证**：`flutter analyze lib test` 无问题；`flutter test` 151 项全过。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
