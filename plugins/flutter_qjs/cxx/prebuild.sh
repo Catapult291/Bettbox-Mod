@@ -1,5 +1,5 @@
 #!/bin/sh
-# iOS / macOS 侧的构建前准备：把 ffi 与本插件用到的 QuickJS 源码摊平到当前平台的 cxx/ 下。
+# podspec 构建路径的前置准备：把 ffi 与本插件用到的 QuickJS 源码摊平到当前平台的 cxx/ 下。
 #
 # QuickJS 源码在 Rust crate 内（唯一副本），见 rust/bettbox-native/vendor/README.txt。
 # 不按固定层数上溯：桌面端 Flutter 会把插件放到 <平台>/flutter/ephemeral/.plugin_symlinks/<name>，

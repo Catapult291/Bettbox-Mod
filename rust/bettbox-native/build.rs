@@ -1,8 +1,8 @@
 //! 编译 vendored QuickJS（`vendor/quickjs`）与本 crate 的薄封装。
 //!
-//! 用仓库里同一份 QuickJS 源码而不是 crates.io 上的绑定，是为了让 Windows 的
-//! Rust 路径与 Android/iOS 的 `plugins/flutter_qjs` 跑**同一份引擎**——否则两端
-//! 脚本语义可能漂移，而脚本正文由用户编写，回归很难在测试里穷举。
+//! 用仓库里同一份 QuickJS 源码而不是 crates.io 上的绑定，是为了让 Rust 路径与
+//! 插件 `plugins/flutter_qjs` 跑**同一份引擎**——否则两处脚本语义可能漂移，
+//! 而脚本正文由用户编写，回归很难在测试里穷举。
 //!
 //! 这份源码原本放在 `plugins/flutter_qjs/cxx/quickjs`，因为 `build.rs` 依赖插件目录，
 //! 删插件会连源码一起丢；2026-10-06 移进 crate 后它成为唯一副本，插件的
