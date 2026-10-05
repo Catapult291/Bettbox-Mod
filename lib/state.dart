@@ -80,6 +80,10 @@ class GlobalState {
 
   GlobalState._internal();
 
+  /// 测试用：绕过单例工厂构造独立实例，不影响 [globalState]。
+  @visibleForTesting
+  GlobalState.forTest();
+
   factory GlobalState() {
     _instance ??= GlobalState._internal();
     return _instance!;

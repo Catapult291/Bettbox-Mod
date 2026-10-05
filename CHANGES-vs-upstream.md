@@ -1274,8 +1274,8 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
   脚本生效、`customOptions` 合并进 `ruleOptionsEnable`、脚本失败回传 `scriptError`、非对象 `rawConfig`→null、
   非法 JSON→null）；`flutter test test/rust` 41 项、`flutter test` 156 项全过；`flutter analyze lib test` 干净。
 
-**未决**：`lib/state.dart` 的接线只过了静态检查与上述差分测试，**没在真实应用里跑过**
-（需要桌面构建或真机）——合并路径与回退路径的端到端行为待真机确认。
+**未决**：合并入口的端到端行为已在 v1.19.12 前补齐（真实 profile 原文 + 真实脚本 + 已安装 dll 验证；
+接线另有确定性测试，见 `.grok/stage-log.md` §85）；「合并入口返回 NULL → 回退两段式」仍未实机验证。
 
 ---
 

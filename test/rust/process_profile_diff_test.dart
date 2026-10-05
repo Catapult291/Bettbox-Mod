@@ -111,7 +111,7 @@ void main() {
       // 所以脚本正文要先声明它。
       final processed = BettboxConfig.processProfile(
         jsonEncode(_minimalInput()),
-        "var ruleOptionsEnable = {base: true};\n"
+        'var ruleOptionsEnable = {base: true};\n'
             "function main(c){ c['opt'] = ruleOptionsEnable; return c; }",
         customOptionsJson: jsonEncode({'add-quic': true}),
       );
