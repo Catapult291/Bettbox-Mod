@@ -1321,8 +1321,14 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 `通过：arm64-v8a armeabi-v7a x86_64`），说明 APK 内每条 ABI 都同时带了 `libclash.so` 与
 `libbettbox_native.so`；Windows job 的交叉编译、断言与 Rust/Dart 差分测试同样通过。
 
-**未决**：VPN/tun 的真机级端到端（tun0、mixed-port、出口地址对照）未做。`flutter_qjs` 仍在包里
-（作为 qjs 回退路径与差分测试参照），与 Dart 镜像一起删除属后续步骤。
+**真机验证**（arm64 手机 PLK110 / Android 16）：用本轮 CI 产出的 arm64 release 包覆盖安装（与已装包同签名，
+用户的订阅与配置保留），端到端可用——`tun0` UP（`198.51.100.1/30`，mtu 1280，`VPN CONNECTED` 且路由含
+`0.0.0.0/0` 切分与 `2000::/3`），先经内核 `mixed-port 7890` 测得出口 `178.83.206.151`，与 App「网络检测」
+在隧道内显示的出口一致、且不同于直连出口 `112.97.217.45`；规则模式下国内站点仍直连（baidu 200）；
+release 包的 logcat 中 `[APP]` 日志无「Rust 配置管道未接管…回退 Dart」；同一台机器上
+`integration_test/android_rust_pipeline_test.dart` 4 项全过。
+
+**未决**：`flutter_qjs` 仍在包里（作为 qjs 回退路径与差分测试参照），与 Dart 镜像一起删除属后续步骤。
 
 ---
 
