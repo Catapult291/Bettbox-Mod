@@ -1116,7 +1116,10 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 `Auth key initialized` 且无 `Failed to read auth key file`——即 SYSTEM 身份的服务进程确实读到了用户
 目录下的 key 文件。验证后已停用并删除该临时服务、清除测试 key 文件，现网服务配置实测未变。
 
-**发布**：随 v1.19.11 发布（真机迁移流程在现网服务上的验证留待正式升级时确认）。
+**发布**：随 v1.19.11 发布（2026-10-05，CI run `37301802233` 四个 job 全绿，Release 附件三件）。
+真机升级迁移已在现网实例上验证：注册表明文 key 消失、key 改由用户目录文件下发给 helper、
+管道 DACL 变为「SYSTEM + Administrators + 当前用户」、helper 鉴权与内核启停均可用，
+端到端经代理请求返回 204。
 
 ---
 
