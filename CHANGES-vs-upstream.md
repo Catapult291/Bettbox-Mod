@@ -1121,6 +1121,34 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 管道 DACL 变为「SYSTEM + Administrators + 当前用户」、helper 鉴权与内核启停均可用，
 端到端经代理请求返回 204。
 
+## 24. Rust FFI 边界加固：panic 兜底、JSON 输入上限、工具链锁定
+
+**文件**：`rust/bettbox-config/src/ffi.rs`、`rust/bettbox-script/src/ffi.rs`、`rust-toolchain.toml`（新增）
+
+**问题**：
+
+- Rust 1.81 起，`extern "C"` 函数内发生 unwind（panic）会直接 abort，表现为整个应用闪退；
+  两个 crate 的全部导出入口此前都没有 `catch_unwind`。
+- Rust 侧对 JSON 输入没有大小上限，异常订阅可以把内存撑爆（QuickJS 侧已有 256 MB 上限）。
+- CI 使用 `dtolnay/rust-toolchain@stable`，工具链随时间漂移，同一提交在不同时间构建出不同产物。
+
+**改动**：
+
+- 每个 `extern "C"` 导出入口包一层 `catch_panic`：panic 时返回兜底值（NULL / `-1` / 无操作），
+  交给既有回退或报错逻辑处理，不再 abort 整个进程。
+- 新增 `MAX_JSON_INPUT_BYTES`（64 MiB）：所有 JSON 字符串入参超限即视为 ABI 级失败返回 NULL，
+  由 Dart 侧回退。
+- 新增 `rust-toolchain.toml`：锁定 `1.98.0`，并列出 `rustfmt`、`clippy` 与四个 Android target，
+  rustup 依据该文件自动安装时会一次装齐，CI 与本地无需再单独 `rustup component add` / `rustup target add`。
+
+**验证**：
+
+- `cargo fmt --all --check` 干净；`cargo clippy --all-targets -- -D warnings` 无告警；
+  `cargo test --workspace` 全绿（含新增 `catch_panic_returns_fallback`、`oversized_json_input_is_rejected`、
+  `oversized_config_input_returns_null`）。
+- `cargo build --workspace --release` 两份 cdylib 正常链接。
+- Dart↔Rust 差分套件 `flutter test test/rust` 36 项全过（加载新构建的 release dll）。
+
 ---
 
 ## 附：上游已自行实现、本仓库不再单列的改动
