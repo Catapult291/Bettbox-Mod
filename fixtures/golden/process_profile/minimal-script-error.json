@@ -1,0 +1,254 @@
+{
+  "name": "minimal-script-error",
+  "entry": "process_profile",
+  "input": {
+    "rawConfig": {
+      "proxies": [
+        {
+          "name": "节点1",
+          "type": "ss",
+          "server": "a.example.com"
+        },
+        {
+          "name": "节点2",
+          "type": "ss",
+          "server": "b.example.com"
+        }
+      ],
+      "proxy-groups": [
+        {
+          "name": "DIRECT",
+          "type": "select",
+          "proxies": [
+            "DIRECT"
+          ]
+        }
+      ],
+      "proxy-providers": {},
+      "external-controller": "127.0.0.1:9090",
+      "secret": "s3cret",
+      "external-ui": "C:\\demo\\ui",
+      "external-ui-url": "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip",
+      "interface-name": "",
+      "tcp-concurrent": null,
+      "unified-delay": null,
+      "ipv6": false,
+      "log-level": "error",
+      "port": 7891,
+      "socks-port": null,
+      "keep-alive-interval": null,
+      "mixed-port": 7890,
+      "redir-port": null,
+      "tproxy-port": null,
+      "find-process-mode": "off",
+      "allow-lan": false,
+      "mode": "rule",
+      "tun": {
+        "enable": false,
+        "device": "Bettbox",
+        "dns-hijack": [
+          "any:53"
+        ],
+        "stack": null,
+        "route-address": null,
+        "route-exclude-address": null,
+        "auto-route": true,
+        "auto-detect-interface": true,
+        "auto-redirect": false,
+        "strict-route": null,
+        "endpoint-independent-nat": null,
+        "disable-icmp-forwarding": null,
+        "mtu": null
+      },
+      "geodata-loader": "memconservative",
+      "geodata-mode": false,
+      "profile": {
+        "store-selected": true,
+        "store-fake-ip": true
+      },
+      "geox-url": {
+        "mmdb": "m",
+        "asn": "a",
+        "geosite": "g"
+      },
+      "global-ua": null,
+      "hosts": {
+        "example.com": [
+          "203.0.113.10",
+          "203.0.113.11"
+        ],
+        "dns.msftncsi.com": [
+          "131.107.255.255",
+          "fd3e:4f5a:5b81::1"
+        ]
+      },
+      "dns": {
+        "enable": true,
+        "nameserver": [
+          "system://"
+        ],
+        "nameserver-policy": {}
+      },
+      "ntp": {},
+      "sniffer": {},
+      "experimental": {},
+      "rules": [
+        "DOMAIN,a.example.com,PASS",
+        "MATCH,PASS"
+      ]
+    },
+    "patch": {
+      "dns": {
+        "enable": true
+      },
+      "tun": {
+        "enable": false,
+        "device": "Bettbox",
+        "dns-hijack": []
+      },
+      "ipv6": false,
+      "allow-lan": false,
+      "external-controller": "127.0.0.1:9090",
+      "secret": "s3cret",
+      "log-level": "error",
+      "mode": "rule",
+      "find-process-mode": "off",
+      "geodata-loader": "memconservative",
+      "mixed-port": 7890,
+      "port": 7891,
+      "geox-url": {
+        "mmdb": "m",
+        "asn": "a",
+        "geosite": "g"
+      },
+      "hosts": {
+        "example.com": "203.0.113.10, 203.0.113.11"
+      },
+      "tunnels": [],
+      "sniffer": {},
+      "ntp": {},
+      "experimental": {}
+    },
+    "profile": {
+      "id": "p1",
+      "useScriptOverride": true,
+      "groupSwitches": {
+        "自动选择": false
+      },
+      "overrideData": {
+        "enable": false,
+        "type": "override",
+        "rules": []
+      }
+    },
+    "env": {
+      "isAndroid": false,
+      "isLinux": false,
+      "uiPath": "C:\\demo\\ui",
+      "profilesPath": "C:\\demo\\profiles",
+      "nodeExcludeFilter": "",
+      "healthCheckTimeout": 5000,
+      "scriptAddedRules": [],
+      "hasCurrentScript": false,
+      "disableQuic": false,
+      "excludeChina": false
+    }
+  },
+  "script": "function main(c){ throw new Error('boom'); }",
+  "scriptError": "JS Script Error: Error: boom\n    at main (<eval>)\n    at <anonymous> (<eval>:11)\n    at <eval> (<eval>:12)\n",
+  "output": {
+    "proxies": [
+      {
+        "name": "节点1",
+        "type": "ss",
+        "server": "a.example.com"
+      },
+      {
+        "name": "节点2",
+        "type": "ss",
+        "server": "b.example.com"
+      }
+    ],
+    "proxy-groups": [
+      {
+        "name": "DIRECT",
+        "type": "select",
+        "proxies": [
+          "DIRECT"
+        ]
+      }
+    ],
+    "proxy-providers": {},
+    "external-controller": "127.0.0.1:9090",
+    "secret": "s3cret",
+    "external-ui": "C:\\demo\\ui",
+    "external-ui-url": "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip",
+    "interface-name": "",
+    "tcp-concurrent": null,
+    "unified-delay": null,
+    "ipv6": false,
+    "log-level": "error",
+    "port": 7891,
+    "socks-port": null,
+    "keep-alive-interval": null,
+    "mixed-port": 7890,
+    "redir-port": null,
+    "tproxy-port": null,
+    "find-process-mode": "off",
+    "allow-lan": false,
+    "mode": "rule",
+    "tun": {
+      "enable": false,
+      "device": "Bettbox",
+      "dns-hijack": [
+        "any:53"
+      ],
+      "stack": null,
+      "route-address": null,
+      "route-exclude-address": null,
+      "auto-route": true,
+      "auto-detect-interface": true,
+      "auto-redirect": false,
+      "strict-route": null,
+      "endpoint-independent-nat": null,
+      "disable-icmp-forwarding": null,
+      "mtu": null
+    },
+    "geodata-loader": "memconservative",
+    "geodata-mode": false,
+    "profile": {
+      "store-selected": true,
+      "store-fake-ip": true
+    },
+    "geox-url": {
+      "mmdb": "m",
+      "asn": "a",
+      "geosite": "g"
+    },
+    "global-ua": null,
+    "hosts": {
+      "example.com": [
+        "203.0.113.10",
+        "203.0.113.11"
+      ],
+      "dns.msftncsi.com": [
+        "131.107.255.255",
+        "fd3e:4f5a:5b81::1"
+      ]
+    },
+    "dns": {
+      "enable": true,
+      "nameserver": [
+        "system://"
+      ],
+      "nameserver-policy": {}
+    },
+    "ntp": {},
+    "sniffer": {},
+    "experimental": {},
+    "rules": [
+      "DOMAIN,a.example.com,PASS",
+      "MATCH,PASS"
+    ]
+  }
+}

@@ -28,3 +28,8 @@ Bettbox-Mod 配置管道测试 fixture
 这些文件已脱敏，可以入库；**不要**把原始数据（含订阅令牌、真实服务器与密码）放进仓库。
 重新生成时用 sanitize_fixtures.py 指向本机数据目录，生成后必须复查残留
 （对真实域名/令牌 grep 应无命中）再提交。
+
+其它目录
+--------
+  golden/   配置改写管道的 golden 期望输出（由 Dart 镜像生成，Rust 侧测试只读对比），
+            见 fixtures/golden/README.txt
