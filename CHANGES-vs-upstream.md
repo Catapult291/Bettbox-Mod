@@ -1321,6 +1321,34 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 
 ---
 
+## 30. Android Kotlin Gradle Plugin 版本 2.1.0 → 2.2.20
+
+**文件**：`android/settings.gradle.kts`
+
+**动机**：Flutter 侧对项目 KGP 版本有报错线与告警线两档阈值（`DependencyVersionChecker`），且随 Flutter
+版本上移。本机 Flutter 3.47.2 的报错线是 2.2.20，而项目 pin 的 2.1.0 低于它——本地构建**直接失败**，
+必须先绕过版本校验（`--android-skip-build-dependency-validation` / `skipDependencyChecks=true`）才能出包；
+CI 的 Flutter 3.44.9 报错线是 2.0.0，所以 CI 只是告警、一直没暴露这个问题。
+
+| 阈值 | Flutter 3.44.9（CI） | Flutter 3.47.2（本机） |
+| --- | --- | --- |
+| KGP 报错线 | 2.0.0 | 2.2.20 |
+| KGP 告警线 | 2.2.20 | 2.3.20 |
+
+**改动**：`org.jetbrains.kotlin.android` 2.1.0 → 2.2.20。这是唯一一处让两端都**无报错**的取值：
+2.2.20 在 3.44.9 上既不报错也不告警，在 3.47.2 上不报错（仍有一条「建议升到 2.3.20」的告警）。
+选 2.3.20 也能消除本机告警，但会让 CI 开始告警，且偏离 `android/gradle.properties` 里已写的
+`kotlin_version=2.2.20`（该属性其实无人使用，勿与「设置 KGP 版本」混淆——真正的声明点在
+`settings.gradle.kts` 的 plugins 块）。
+
+**验证**：本机 Flutter 3.47.2 下不再绕过校验，`flutter build apk --debug --target-platform android-x64`
+正常出包（只剩 Gradle 8.14 / AGP 8.12.2 / KGP 2.2.20 三条「即将失去支持」的告警）；模拟器上重装后
+App 启动正常、首页渲染正常、无崩溃与回退日志；`integration_test/android_rust_pipeline_test.dart`
+4 项全过；`flutter test` 159 项、`cargo test --workspace` 不受影响。
+CI 侧 3.44.9 是否放行按阈值推算（其报错线 2.0.0），未在 CI 真跑，下次发版会覆盖。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
