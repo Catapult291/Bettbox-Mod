@@ -165,6 +165,33 @@ class BettboxConfigFFI {
   late final _bb_patch_config = _bb_patch_configPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
 
+  ffi.Pointer<ffi.Char> bb_process_profile(
+    ffi.Pointer<ffi.Char> input_json,
+    ffi.Pointer<ffi.Char> script,
+    ffi.Pointer<ffi.Char> options_json,
+  ) {
+    return _bb_process_profile(input_json, script, options_json);
+  }
+
+  late final _bb_process_profilePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+          )
+        >
+      >('bb_process_profile');
+  late final _bb_process_profile = _bb_process_profilePtr
+      .asFunction<
+        ffi.Pointer<ffi.Char> Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+        )
+      >();
+
   int bb_node_filter_match(
     ffi.Pointer<ffi.Char> pattern,
     ffi.Pointer<ffi.Char> text,

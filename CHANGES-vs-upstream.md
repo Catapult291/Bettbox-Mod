@@ -1246,6 +1246,39 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 
 ---
 
+## 28. 配置改写新增合并入口 bb_process_profile（脚本求值 + patch 只跨一次 FFI）
+
+**文件**：`rust/bettbox-native/include/bettbox_config.h`、`rust/bettbox-native/src/ffi.rs`、
+`rust/bettbox-native/src/patch_config.rs`、`lib/rust/bettbox_config.dart`、
+`lib/rust/generated/bettbox_config_ffi.dart`、`lib/state.dart`、`test/rust/process_profile_diff_test.dart`
+
+**动机**：`patchRawConfig` 原先「先 `handleEvaluate` 跑覆写脚本、再 `patchConfig` 打补丁」，
+整份配置要跨 FFI 两次（脚本求值一次、patch 一次）。合并入口让脚本求值也进 Rust，配置只进出一次。
+
+**改动**：
+
+- 新增 C ABI `bb_process_profile(input_json, script, options_json)`：对 `input` 里的 `rawConfig`
+  跑脚本，再把结果喂给 `patch_config`。信封 `{"ok":true,"config":{…}}`；脚本失败不阻断 patch，
+  而是在信封里附 `"scriptError"`。ABI 级失败/ patch 失败返回 NULL。
+- Dart 封装 `BettboxConfig.processProfile` 与结果类型 `RustProcessedProfile`；ffigen 绑定重生成。
+- `patchRawConfig`：当 `USE_RUST_CONFIG_PIPELINE` 与 `USE_RUST_SCRIPT_ENGINE` 都开启、脚本适用
+  （存在脚本且 `profile.useScriptOverride`）、动态库可用时走合并入口；否则落回原两段式路径。
+  脚本失败时与 `handleEvaluate` 一样弹提示（`profileParseErrorDesc: <scriptError>`）。
+  输入构造抽成局部 `buildInput`，两条路径共用。
+
+**验证**：
+
+- Rust：`cargo test` 57 单元（新增 3 项：脚本输出先于 patch 生效、脚本失败仍产出且带 `scriptError`、
+  `rawConfig` 非对象返回 NULL）；`cargo clippy --all-targets -- -D warnings` 干净。
+- Dart：`test/rust/process_profile_diff_test.dart` 6 项全过（恒等脚本与 `patchConfig` 结果逐字段一致、
+  脚本生效、`customOptions` 合并进 `ruleOptionsEnable`、脚本失败回传 `scriptError`、非对象 `rawConfig`→null、
+  非法 JSON→null）；`flutter test test/rust` 41 项、`flutter test` 156 项全过；`flutter analyze lib test` 干净。
+
+**未决**：`lib/state.dart` 的接线只过了静态检查与上述差分测试，**没在真实应用里跑过**
+（需要桌面构建或真机）——合并路径与回退路径的端到端行为待真机确认。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，

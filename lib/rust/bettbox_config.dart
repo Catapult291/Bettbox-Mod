@@ -81,6 +81,47 @@ abstract final class BettboxConfig {
     return _call(bindings.bb_patch_config, inputJson);
   }
 
+  /// 合并入口：对 [inputJson] 里的 `rawConfig` 跑覆写脚本，再跑整条配置改写管道，
+  /// 整份配置只跨一次 FFI（对应 `patchRawConfig` 里「handleEvaluate + patch」两步）。
+  ///
+  /// 动态库不可用或 patch 失败返回 null（调用方回退两段式路径）；脚本自身失败不阻断
+  /// patch，错误放在结果的 `scriptError` 里由调用方提示。
+  static RustProcessedProfile? processProfile(
+    String inputJson,
+    String script, {
+    String? customOptionsJson,
+  }) {
+    final bindings = _tryLoad();
+    if (bindings == null) return null;
+    final inputPtr = inputJson.toNativeUtf8();
+    final scriptPtr = script.toNativeUtf8();
+    final optionsPtr = customOptionsJson?.toNativeUtf8();
+    try {
+      final outputPtr = bindings.bb_process_profile(
+        inputPtr.cast<Char>(),
+        scriptPtr.cast<Char>(),
+        optionsPtr?.cast<Char>() ?? nullptr,
+      );
+      if (outputPtr == nullptr) return null;
+      try {
+        final map = jsonDecode(outputPtr.cast<Utf8>().toDartString())
+            as Map<String, dynamic>;
+        final config = map['config'];
+        if (config is! Map) return null;
+        return RustProcessedProfile(
+          config: config.cast<String, dynamic>(),
+          scriptError: map['scriptError'] as String?,
+        );
+      } finally {
+        bindings.bb_string_free(outputPtr);
+      }
+    } finally {
+      malloc.free(inputPtr);
+      malloc.free(scriptPtr);
+      if (optionsPtr != null) malloc.free(optionsPtr);
+    }
+  }
+
   /// 解析 provider 列表原文，返回元数据数组 JSON（已剥掉全节点列表）。
   static String? parseProviderMeta(String rawProvidersJson) {
     return _call(_require().bb_parse_provider_meta, rawProvidersJson);
@@ -246,6 +287,18 @@ abstract final class BettboxConfig {
     if (Platform.isMacOS) return 'libbettbox_native.dylib';
     return 'libbettbox_native.so';
   }
+}
+
+/// [BettboxConfig.processProfile] 的结果。
+class RustProcessedProfile {
+  const RustProcessedProfile({required this.config, this.scriptError});
+
+  /// 已跑完脚本与配置改写的配置。
+  final Map<String, dynamic> config;
+
+  /// 脚本自身失败时的错误串（`JS Script Error: …`）；成功时为 null。
+  /// 脚本失败不阻断 patch，[config] 仍然可用。
+  final String? scriptError;
 }
 
 /// [BettboxConfig.parseRule] 的返回结构，字段与 Dart 侧 `ParsedRule` 一一对应。

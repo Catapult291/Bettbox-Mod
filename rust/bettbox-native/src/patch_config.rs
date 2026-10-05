@@ -680,6 +680,8 @@ fn text_of(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::{CStr, CString};
+    use std::ptr;
 
     fn minimal_input() -> Value {
         json!({
@@ -834,5 +836,55 @@ mod tests {
     fn md5_hex_matches_dart_crypto() {
         assert_eq!(md5_hex(""), "d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(md5_hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
+    }
+
+    fn process_profile_via_ffi(input: &Value, script: &str) -> Value {
+        let input_json = CString::new(input.to_string()).unwrap();
+        let script_c = CString::new(script).unwrap();
+        let out = unsafe {
+            crate::ffi::bb_process_profile(input_json.as_ptr(), script_c.as_ptr(), ptr::null())
+        };
+        assert!(!out.is_null(), "bb_process_profile 返回 NULL");
+        let text = unsafe { CStr::from_ptr(out) }.to_str().unwrap().to_string();
+        unsafe { crate::ffi::bb_string_free(out) };
+        serde_json::from_str(&text).unwrap()
+    }
+
+    #[test]
+    fn process_profile_runs_script_then_patch() {
+        // 脚本加的 `scriptMarker` 是管道不认识的键，能证明脚本输出确实喂给了 patch。
+        let envelope = process_profile_via_ffi(
+            &minimal_input(),
+            "function main(c){ c['scriptMarker'] = 'yes'; return c; }",
+        );
+        assert_eq!(envelope["ok"], true);
+        assert_eq!(envelope["config"]["scriptMarker"], "yes");
+        assert!(envelope.get("scriptError").is_none());
+    }
+
+    #[test]
+    fn process_profile_reports_script_error_and_still_patches() {
+        let envelope = process_profile_via_ffi(
+            &minimal_input(),
+            "function main(c){ throw new Error('boom'); }",
+        );
+        assert_eq!(envelope["ok"], true);
+        let error = envelope["scriptError"].as_str().unwrap();
+        assert!(error.starts_with("JS Script Error: "), "{error}");
+        assert!(error.contains("boom"), "{error}");
+        // 脚本失败不阻止 patch：正常产物仍在。
+        assert!(envelope["config"]["external-controller"].is_string());
+    }
+
+    #[test]
+    fn process_profile_null_for_non_object_raw_config() {
+        let mut input = minimal_input();
+        input["rawConfig"] = json!("not an object");
+        let input_json = CString::new(input.to_string()).unwrap();
+        let script = CString::new("function main(c){ return c; }").unwrap();
+        let out = unsafe {
+            crate::ffi::bb_process_profile(input_json.as_ptr(), script.as_ptr(), ptr::null())
+        };
+        assert!(out.is_null());
     }
 }

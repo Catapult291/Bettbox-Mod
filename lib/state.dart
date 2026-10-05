@@ -14,6 +14,7 @@ import 'package:bett_box/plugins/service.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/providers/state.dart' as providers_state;
 import 'package:bett_box/rust/bettbox_config.dart';
+import 'package:bett_box/rust/bettbox_script.dart';
 
 import 'package:bett_box/widgets/dialog.dart';
 import 'package:flutter/material.dart';
@@ -708,7 +709,6 @@ class GlobalState {
     }
     final profileId = targetProfile.id;
     final configMap = await getProfileConfig(profileId);
-    final rawConfig = await handleEvaluate(configMap, profile: targetProfile);
 
     final realPatchConfig = patchConfig.copyWith(
       dns: patchConfig.dns.copyWith(
@@ -726,26 +726,67 @@ class GlobalState {
             config.networkProps.realBypassPrivateRouteAddress,
       ),
     );
-    final input = buildConfigPatchInput(
-      rawConfig: rawConfig,
-      patch: realPatchConfig,
-      profile: targetProfile,
-      isAndroid: system.isAndroid,
-      isLinux: system.isLinux,
-      uiPath: await appPath.uiPath,
-      profilesPath: await appPath.profilesPath,
-      overrideDns: config.overrideDns,
-      overrideNtp: config.overrideNtp,
-      overrideSniffer: config.overrideSniffer,
-      overrideExperimental: config.overrideExperimental,
-      nodeExcludeFilter: config.nodeExcludeFilter,
-      healthCheckTimeout: config.healthCheckTimeout,
-      scriptAddedRules: config.scriptProps.addedRules,
-      hasCurrentScript: config.scriptProps.currentScript != null,
-      disableQuic: config.vpnProps.disableQuic,
-      excludeChina: config.vpnProps.excludeChina,
-      locale: config.appSetting.locale,
-    );
+    Future<Map<String, dynamic>> buildInput(
+      Map<String, dynamic> rawConfig,
+    ) async {
+      return buildConfigPatchInput(
+        rawConfig: rawConfig,
+        patch: realPatchConfig,
+        profile: targetProfile,
+        isAndroid: system.isAndroid,
+        isLinux: system.isLinux,
+        uiPath: await appPath.uiPath,
+        profilesPath: await appPath.profilesPath,
+        overrideDns: config.overrideDns,
+        overrideNtp: config.overrideNtp,
+        overrideSniffer: config.overrideSniffer,
+        overrideExperimental: config.overrideExperimental,
+        nodeExcludeFilter: config.nodeExcludeFilter,
+        healthCheckTimeout: config.healthCheckTimeout,
+        scriptAddedRules: config.scriptProps.addedRules,
+        hasCurrentScript: config.scriptProps.currentScript != null,
+        disableQuic: config.vpnProps.disableQuic,
+        excludeChina: config.vpnProps.excludeChina,
+        locale: config.appSetting.locale,
+      );
+    }
+
+    final currentScript = config.scriptProps.currentScript;
+    final scriptApplies =
+        currentScript != null && targetProfile.useScriptOverride;
+
+    // 合并入口：脚本求值与配置改写都在 Rust 内完成，整份配置只跨一次 FFI。
+    // 任一开关关闭、动态库缺失，或 Rust 侧返回失败时，落回下面的两段式路径。
+    if (useRustConfigPipeline &&
+        useRustScriptEngine &&
+        scriptApplies &&
+        BettboxConfig.isAvailable) {
+      final processed = await _scriptEvaluateLock.synchronized(() async {
+        // 与 `handleEvaluate` 一致：跑脚本前补齐 proxy-providers。
+        final prepared = Map<String, dynamic>.from(configMap);
+        prepared['proxy-providers'] ??= {};
+        final combinedInput = await buildInput(prepared);
+        final options = currentScript.customOptions;
+        return BettboxConfig.processProfile(
+          jsonEncode(combinedInput),
+          currentScript.content,
+          customOptionsJson: options == null ? null : jsonEncode(options),
+        );
+      });
+      if (processed != null) {
+        final scriptError = processed.scriptError;
+        if (scriptError != null) {
+          commonPrint.log('Script execution failed: $scriptError');
+          globalState.showNotifier(
+            '${appLocalizations.profileParseErrorDesc}: $scriptError',
+          );
+        }
+        return processed.config;
+      }
+    }
+
+    final rawConfig = await handleEvaluate(configMap, profile: targetProfile);
+    final input = await buildInput(rawConfig);
 
     if (useRustConfigPipeline) {
       final output = BettboxConfig.patchConfig(jsonEncode(input));

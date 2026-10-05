@@ -191,7 +191,82 @@ pub unsafe extern "C" fn bb_patch_config(input_json: *const c_char) -> *mut c_ch
     })
 }
 
-/// 节点过滤用的最小正则匹配：命中返回 1，未命中返回 0，模式不支持返回 -1。
+/// 合并入口：先对 `input` 里的 `rawConfig` 跑覆写脚本，再跑整条配置改写管道，
+/// 让整份配置只跨一次 FFI（对应 Dart 侧 `patchRawConfig` 的
+/// 「`handleEvaluate` + `patchConfig`」两步）。
+///
+/// 信封：
+///   `{"ok":true,"config":{…}}`                     正常
+///   `{"ok":true,"config":{…},"scriptError":"…"}`   脚本失败：沿用原 `rawConfig` 继续 patch，
+///                                                 调用方据此提示用户（与 Dart 侧一致）
+///   NULL                                           ABI 级失败（入参非法 / patch 失败）→ 调用方回退两段式
+///
+/// # Safety
+///
+/// `input_json` / `script` 必须是 NUL 结尾的 UTF-8 C 字符串；`options_json` 允许 NULL。
+/// 返回的指针所有权归调用方，用完必须传给 [`bb_string_free`]。
+#[no_mangle]
+pub unsafe extern "C" fn bb_process_profile(
+    input_json: *const c_char,
+    script: *const c_char,
+    options_json: *const c_char,
+) -> *mut c_char {
+    catch_panic(ptr::null_mut(), || -> *mut c_char {
+        let Some(raw_input) = (unsafe { borrow_str(input_json) }) else {
+            return ptr::null_mut();
+        };
+        let Some(script) = (unsafe { borrow_str(script) }) else {
+            return ptr::null_mut();
+        };
+        let Some(mut input) = parse_json_limited(raw_input) else {
+            return ptr::null_mut();
+        };
+        // rawConfig 必须是对象：与 eval / patch 的前置一致，否则按 ABI 级失败处理。
+        if !input.get("rawConfig").is_some_and(Value::is_object) {
+            return ptr::null_mut();
+        }
+        let options_json = match unsafe { borrow_str(options_json) } {
+            Some(text)
+                if text.len() <= MAX_JSON_INPUT_BYTES && crate::eval::is_json_object(text) =>
+            {
+                Some(text)
+            }
+            Some(_) => return ptr::null_mut(),
+            None => None,
+        };
+
+        let raw_config_text = input["rawConfig"].to_string();
+        let script_error = match crate::eval::evaluate(script, &raw_config_text, options_json) {
+            crate::eval::EvalOutcome::Config(result) => {
+                let Ok(evaluated) = serde_json::from_str::<Value>(&result) else {
+                    return ptr::null_mut();
+                };
+                input["rawConfig"] = evaluated;
+                None
+            }
+            // 脚本没返回对象：保留原配置（与 Dart 侧 `result is Map` 一致）。
+            crate::eval::EvalOutcome::NotAMap => None,
+            // 脚本抛错/超时/内存超限：保留原配置继续 patch，把错误交回调用方提示。
+            crate::eval::EvalOutcome::Error(message) => Some(message),
+        };
+
+        match crate::patch_config::patch_config(&input) {
+            Ok(config) => {
+                let mut envelope = serde_json::Map::new();
+                envelope.insert("ok".to_string(), Value::Bool(true));
+                envelope.insert("config".to_string(), config);
+                if let Some(message) = script_error {
+                    envelope.insert("scriptError".to_string(), Value::String(message));
+                }
+                into_c_string(&Value::Object(envelope).to_string())
+            }
+            Err(_) => ptr::null_mut(),
+        }
+    })
+}
+
+/// 节点过滤用的正则匹配（QuickJS libregexp）：命中返回 1，未命中返回 0，
+/// 模式无法编译返回 -1。
 ///
 /// # Safety
 ///

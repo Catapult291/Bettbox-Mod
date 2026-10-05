@@ -53,8 +53,16 @@ char *bb_apply_group_switches(const char *proxy_groups_json,
  * 返回改写后的配置 JSON。失败返回 NULL。 */
 char *bb_patch_config(const char *input_json);
 
-/* 节点过滤用的最小正则匹配：命中返回 1，未命中返回 0，
- * 模式用了子集之外的写法返回 -1（此时配置管道会整条回退 Dart）。 */
+/* 合并入口：先对 input_json 里的 rawConfig 跑覆写脚本，再跑整条配置改写管道，
+ * 让整份配置只跨一次 FFI（对应 Dart 侧 patchRawConfig 的 handleEvaluate + patch 两步）。
+ * 信封：{"ok":true,"config":{...}} 或脚本失败时 {"ok":true,"config":{...},"scriptError":"..."}
+ * （脚本失败不阻断 patch，错误交回调用方提示）；失败返回 NULL。
+ * options_json 传 NULL 表示没有自定义选项。 */
+char *bb_process_profile(const char *input_json,
+                         const char *script,
+                         const char *options_json);
+
+/* 节点过滤用的正则匹配：命中返回 1，未命中返回 0，模式无法编译返回 -1。 */
 int bb_node_filter_match(const char *pattern, const char *text);
 
 /* 释放本库返回的字符串。 */
