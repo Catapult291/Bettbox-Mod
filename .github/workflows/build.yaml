@@ -183,7 +183,7 @@ jobs:
                 exit 1
               }
             done
-            echo "$apk 通过：$(printf '%s' $abis | tr '\n' ' ')"
+            echo "$apk 通过：$(printf '%s ' $abis)"
           done
 
       - name: Build Core (Windows)

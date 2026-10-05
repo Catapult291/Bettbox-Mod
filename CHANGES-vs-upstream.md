@@ -1316,8 +1316,13 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 - `flutter analyze lib test setup.dart` 干净；`flutter test test/rust` 44 项、`cargo test --workspace`
   全过。
 
-**未决**：VPN/tun 的真机级端到端（tun0、mixed-port、出口地址对照）未做；新增的 CI 断言尚未在 CI 真跑过。
-`flutter_qjs` 仍在包里（作为 qjs 回退路径与差分测试参照），与 Dart 镜像一起删除属后续步骤。
+**验证**：`ci run 37357996954`（workflow_dispatch，`033384e`）三个 job 全绿——两个 Android job 的
+`Verify Rust native lib (Android)` 都真实执行并通过（arm64 包：`通过：arm64-v8a`；universal 包：
+`通过：arm64-v8a armeabi-v7a x86_64`），说明 APK 内每条 ABI 都同时带了 `libclash.so` 与
+`libbettbox_native.so`；Windows job 的交叉编译、断言与 Rust/Dart 差分测试同样通过。
+
+**未决**：VPN/tun 的真机级端到端（tun0、mixed-port、出口地址对照）未做。`flutter_qjs` 仍在包里
+（作为 qjs 回退路径与差分测试参照），与 Dart 镜像一起删除属后续步骤。
 
 ---
 
@@ -1345,7 +1350,8 @@ CI 的 Flutter 3.44.9 报错线是 2.0.0，所以 CI 只是告警、一直没暴
 正常出包（只剩 Gradle 8.14 / AGP 8.12.2 / KGP 2.2.20 三条「即将失去支持」的告警）；模拟器上重装后
 App 启动正常、首页渲染正常、无崩溃与回退日志；`integration_test/android_rust_pipeline_test.dart`
 4 项全过；`flutter test` 159 项、`cargo test --workspace` 不受影响。
-CI 侧 3.44.9 是否放行按阈值推算（其报错线 2.0.0），未在 CI 真跑，下次发版会覆盖。
+CI 侧由 `ci run 37357996954` 确认：Flutter 3.44.9 对 KGP 2.2.20 既无报错也无告警，Android 两个 job
+均正常出包通过（详见第 29 节的同一轮运行）。
 
 ---
 
