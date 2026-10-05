@@ -124,6 +124,16 @@ class AppPath {
     return join(directory.path, 'helper_auth.key');
   }
 
+  /// 交给 helper（SYSTEM 身份）启动时读取的鉴权 key 文件。
+  ///
+  /// 与 [helperAuthKeyPath] 不同，这份必须是明文：SYSTEM 无法解密当前用户的
+  /// DPAPI 数据。它放在数据目录，继承「当前用户 + SYSTEM + Administrators」的
+  /// ACL，因此服务注册表里只留这个路径也不会把 key 泄露给其他本机用户。
+  Future<String> get helperServiceKeyPath async {
+    final directory = await dataDir.future;
+    return join(directory.path, 'helper_auth_service.key');
+  }
+
   Future<String> get profilesPath async {
     final directory = await dataDir.future;
     return join(directory.path, profilesDirectoryName);

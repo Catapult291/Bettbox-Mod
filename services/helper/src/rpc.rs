@@ -14,12 +14,37 @@ type HmacSha256 = Hmac<Sha256>;
 
 static AUTH_KEY: Lazy<Arc<Mutex<Option<Vec<u8>>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
 
+/// 读取鉴权 key。
+///
+/// 优先读 `HELPER_AUTH_KEY_FILE` 指向的文件：服务注册表的 `Environment` 值对
+/// `BUILTIN\Users` 可读，明文写在那里等于本机任何用户都能拿到 key。文件只保留
+/// 路径，key 本体放在只有当前用户与 SYSTEM 能读的位置。`HELPER_AUTH_KEY` 仅作为
+/// 旧配置的兜底（文件缺失、不可读或为空时）。
+fn read_auth_key() -> Option<String> {
+    if let Ok(path) = std::env::var("HELPER_AUTH_KEY_FILE") {
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                let trimmed = content.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+                ops::logs::log_message(format!("Auth key file is empty: {}", path));
+            }
+            Err(e) => {
+                ops::logs::log_message(format!("Failed to read auth key file {}: {}", path, e));
+            }
+        }
+    }
+
+    std::env::var("HELPER_AUTH_KEY").ok()
+}
+
 pub fn init_auth_key() {
-    let key_hex = match std::env::var("HELPER_AUTH_KEY") {
-        Ok(v) => v,
-        Err(_) => {
+    let key_hex = match read_auth_key() {
+        Some(v) => v,
+        None => {
             ops::logs::log_message(
-                "HELPER_AUTH_KEY not set, helper requests will fail auth".to_string(),
+                "Neither HELPER_AUTH_KEY_FILE nor HELPER_AUTH_KEY is set, helper requests will fail auth".to_string(),
             );
             return;
         }
@@ -262,5 +287,45 @@ impl HelperError {
             code: code.to_string(),
             message: message.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_auth_key;
+
+    #[test]
+    fn reads_the_key_file_and_falls_back_to_the_env() {
+        let previous_file = std::env::var("HELPER_AUTH_KEY_FILE").ok();
+        let previous_env = std::env::var("HELPER_AUTH_KEY").ok();
+
+        let dir = std::env::temp_dir().join(format!("bettbox_helper_auth_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key_path = dir.join("helper_auth_service.key");
+        std::fs::write(&key_path, "  aabbcc  \n").unwrap();
+
+        std::env::set_var("HELPER_AUTH_KEY_FILE", key_path.to_str().unwrap());
+        std::env::set_var("HELPER_AUTH_KEY", "deadbeef");
+        assert_eq!(read_auth_key().as_deref(), Some("aabbcc"));
+
+        // 文件不可读时退回旧的环境变量，避免升级后 helper 直接失去鉴权能力。
+        std::fs::remove_file(&key_path).unwrap();
+        assert_eq!(read_auth_key().as_deref(), Some("deadbeef"));
+
+        std::env::remove_var("HELPER_AUTH_KEY_FILE");
+        assert_eq!(read_auth_key().as_deref(), Some("deadbeef"));
+
+        std::env::remove_var("HELPER_AUTH_KEY");
+        assert_eq!(read_auth_key(), None);
+
+        match previous_file {
+            Some(value) => std::env::set_var("HELPER_AUTH_KEY_FILE", value),
+            None => std::env::remove_var("HELPER_AUTH_KEY_FILE"),
+        }
+        match previous_env {
+            Some(value) => std::env::set_var("HELPER_AUTH_KEY", value),
+            None => std::env::remove_var("HELPER_AUTH_KEY"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

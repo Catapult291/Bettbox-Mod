@@ -1069,6 +1069,55 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 那份产物（39,603,566 B，sha256 `92de919e…`）能正常启动、代理可用 —— 通过后才打 tag。两次构建的安装包
 相差 1 952 字节：Go 内核每次重建的产物不可复现（md5 会变），helper 又按内核 hash 重编，与配置管道无关。
 
+## 23. helper 鉴权 key 不再明文落服务注册表，命名管道 ACL 收紧到当前用户
+
+**文件**：`services/helper/src/rpc.rs`、`services/helper/src/ipc.rs`、`lib/common/helper_auth.dart`、
+`lib/common/path.dart`、`lib/common/system.dart`
+
+**问题**：助手服务的鉴权 key 由应用经 `reg add ...\Services\<name> /v Environment
+/d "HELPER_AUTH_KEY=<明文>"` 下发。实测该服务键的 ACL 对 `BUILTIN\Users` 是 `ReadKey`——**本机任何用户
+都能读到 key**，随后即可通过命名管道驱动以 SYSTEM 身份运行的 helper（启停内核、改内核进程优先级）。
+同一条命令串还把 key 带进了 `ShellExecuteW(runas)` 的命令行。此外管道的 SDDL 是
+`(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;AU)(A;;GRGW;;;IU)`，本机任意已认证/交互用户都能连接。
+
+**改动**：
+
+- key 改为文件下发：应用把 key 明文写进数据目录的 `helper_auth_service.key`（该目录 ACL 为
+  「当前用户 + SYSTEM + Administrators」，新建文件继承 `SYSTEM:(I)(F)`），服务 `Environment` 里
+  只留 `HELPER_AUTH_KEY_FILE=<路径>`；helper 启动时读该文件，读不到再退回 `HELPER_AUTH_KEY`
+  （兼容旧配置）。命令行不再出现密钥。
+- 管道 SDDL 收紧为「SYSTEM + Administrators + 应用当前用户 SID」。helper 以 SYSTEM 跑在 Session 0、
+  拿不到调用方登录会话，故 SID 由应用取（`%SystemRoot%\System32\whoami.exe /user`，不能用 PATH 里的
+  `whoami`——MSYS coreutils 的同名程序会遮蔽它且不认 `/user`）并经 `HELPER_ALLOWED_SID` 下发；
+  helper 侧严格校验 SID 形状（非法 SID 会让 SDDL 转换失败、管道建不起来），缺失或非法时退回旧 ACL。
+- 一次性迁移：helper 健康时 `_registerService` 也会查一次服务 `Environment` 是否还留着
+  `HELPER_AUTH_KEY=`（`HELPER_AUTH_KEY_FILE=` 不会误判），命中就重装服务，需要一次管理员权限。
+- 三层兜底，避免把已装好的机器弄坏：文件下发后 helper 仍不健康 → 自动退回旧的明文 env 下发
+  （这同时覆盖了「只换了 app、没换 helper 二进制」的升级顺序）；UAC 被拒 → 保持原有可用状态
+  （`_registerService` 返回此前的健康状态，不再把可用配置判为失败）。
+- 应用侧不再从注册表读回 key（`HelperAuthManager` 删除该分支），自身仍用 DPAPI 文件保存。
+- 取舍：key 文件与管道 ACL 都只放行「安装/使用该应用的那个用户」，多用户机器上不同用户会互相重装
+  服务；这是「只限当前用户与 SYSTEM」的必然结果，已知并接受。
+
+**验证**：
+
+- Rust：新增 4 个单测（SID 校验正/反例、SDDL 组装与兜底、key 文件读取与 env 兜底）全绿；
+  `cargo build --release --features windows-service` 通过；`dart analyze` 全项目无告警。
+- 控制台模式 helper + 真实 HMAC 客户端，9/9 PASS：管道 DACL 实测
+  `D:P(A;;0x12019f;;;SY)(A;;0x12019f;;;BA)(A;;0x12019f;;;S-1-5-21-…-1001)`（无 `AU`/`IU`）、
+  认证明文 key 文件（含首尾空白裁剪）、`HELPER_ALLOWED_SID` 为外来 SID 时本用户连读 DACL 都被拒、
+  无 SID 时退回旧 ACL、文件缺失时退回 env、无 key 或错签名一律 `UNAUTHORIZED`。
+- `REG_MULTI_SZ` 四段往返实测：4 条独立字符串、路径与 `\\.\pipe\Bettbox.Helper` 反斜杠完好。
+
+**真机验收（2026-10-05）**：现网 `Bettbox.exe`/`BettboxCore.exe`/`BettboxHelperService.exe` 正在运行，
+未在现网服务上做迁移。改用**独立临时服务**（`BettboxHelperE2E` + 独立管道名）在真实 SCM / LocalSystem
+下验证，5/5 PASS：管道 DACL 由真实服务宿主创建且只含 `SY + BA + 本用户`；普通权限（Medium IL）
+客户端可连接并鉴权成功，`helper.ping` 返回的 TOKEN 等于已安装内核的 SHA256；`helper.logs` 显示
+`Auth key initialized` 且无 `Failed to read auth key file`——即 SYSTEM 身份的服务进程确实读到了用户
+目录下的 key 文件。验证后已停用并删除该临时服务、清除测试 key 文件，现网服务配置实测未变。
+
+**发布**：随 v1.19.11 发布（真机迁移流程在现网服务上的验证留待正式升级时确认）。
+
 ---
 
 ## 附：上游已自行实现、本仓库不再单列的改动

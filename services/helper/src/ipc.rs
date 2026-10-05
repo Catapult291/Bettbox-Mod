@@ -55,6 +55,52 @@ pub mod named_pipe {
         Ok(())
     }
 
+    /// 旧 ACL：本机所有已认证/交互用户都可连管道。只在拿不到客户端 SID 时兜底；
+    /// 鉴权 key 已不再写进对 `BUILTIN\Users` 可读的服务注册表，未认证连接也做不了事。
+    const LEGACY_SDDL: &str = "D:P(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;AU)(A;;GRGW;;;IU)";
+
+    /// 管道 ACL：SYSTEM + Administrators + 应用当前用户。
+    ///
+    /// helper 以 SYSTEM 身份跑在 Session 0，拿不到调用方的登录会话，所以由应用在
+    /// 服务 Environment 里用 `HELPER_ALLOWED_SID` 告知自己的用户 SID。
+    fn pipe_sddl() -> String {
+        match std::env::var("HELPER_ALLOWED_SID") {
+            Ok(sid) if is_valid_sid(&sid) => {
+                format!("D:P(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;{})", sid)
+            }
+            Ok(sid) => {
+                crate::ops::logs::log_message(format!(
+                    "Ignoring invalid HELPER_ALLOWED_SID '{}', falling back to legacy pipe ACL",
+                    sid
+                ));
+                LEGACY_SDDL.to_string()
+            }
+            Err(_) => {
+                crate::ops::logs::log_message(
+                    "HELPER_ALLOWED_SID not set, falling back to legacy pipe ACL".to_string(),
+                );
+                LEGACY_SDDL.to_string()
+            }
+        }
+    }
+
+    /// 只接受 `S-1-...` 形式的 SID：非法 SID 会让 SDDL 转换失败，管道建不起来，
+    /// 整个 helper 随之不可用，所以这里必须严格。
+    fn is_valid_sid(sid: &str) -> bool {
+        if sid.len() > 184 || !sid.starts_with("S-") {
+            return false;
+        }
+        let mut parts = sid.split('-');
+        if parts.next() != Some("S") {
+            return false;
+        }
+        let rest: Vec<&str> = parts.collect();
+        rest.len() >= 2
+            && rest
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+    }
+
     struct PipeSecurityAttributes {
         attributes: windows::Win32::Security::SECURITY_ATTRIBUTES,
         security_descriptor: windows::Win32::Security::PSECURITY_DESCRIPTOR,
@@ -62,14 +108,18 @@ pub mod named_pipe {
 
     impl PipeSecurityAttributes {
         fn new() -> anyhow::Result<Self> {
-            use windows::core::w;
+            use windows::core::PCWSTR;
             use windows::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW;
             use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 
+            let sddl: Vec<u16> = pipe_sddl()
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
             let mut security_descriptor = PSECURITY_DESCRIPTOR::default();
             unsafe {
                 ConvertStringSecurityDescriptorToSecurityDescriptorW(
-                    w!("D:P(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;AU)(A;;GRGW;;;IU)"),
+                    PCWSTR(sddl.as_ptr()),
                     1,
                     &mut security_descriptor,
                     None,
@@ -121,6 +171,58 @@ pub mod named_pipe {
                     pipe_name,
                     security_attributes.as_mut_ptr(),
                 )
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{is_valid_sid, pipe_sddl};
+
+        #[test]
+        fn accepts_real_sids() {
+            assert!(is_valid_sid("S-1-5-18"));
+            assert!(is_valid_sid(
+                "S-1-5-21-3593993332-2847871167-1918145219-1001"
+            ));
+            assert!(is_valid_sid("S-1-12-1-1-1-1"));
+        }
+
+        #[test]
+        fn rejects_sids_that_would_break_the_sddl() {
+            for bad in [
+                "",
+                "S-",
+                "S-1-",
+                "S-1-5-21-)",
+                "S-1-5-21-1;D:P(A;;GA;;;WD)",
+                "Administrators",
+                "S-a-1",
+                "\u{ff11}-1-5-18",
+            ] {
+                assert!(!is_valid_sid(bad), "expected {:?} to be rejected", bad);
+            }
+        }
+
+        #[test]
+        fn sddl_prefers_the_configured_sid() {
+            // 环境变量是进程级的，用例结束前恢复原值。
+            let previous = std::env::var("HELPER_ALLOWED_SID").ok();
+
+            std::env::set_var("HELPER_ALLOWED_SID", "S-1-5-21-1-2-3-1001");
+            assert_eq!(
+                pipe_sddl(),
+                "D:P(A;;GRGW;;;SY)(A;;GRGW;;;BA)(A;;GRGW;;;S-1-5-21-1-2-3-1001)"
+            );
+
+            std::env::set_var("HELPER_ALLOWED_SID", "not-a-sid");
+            assert_eq!(pipe_sddl(), super::LEGACY_SDDL);
+
+            std::env::remove_var("HELPER_ALLOWED_SID");
+            assert_eq!(pipe_sddl(), super::LEGACY_SDDL);
+
+            if let Some(value) = previous {
+                std::env::set_var("HELPER_ALLOWED_SID", value);
             }
         }
     }

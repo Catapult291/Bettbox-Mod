@@ -8,7 +8,6 @@ import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
 
-import 'package:win32_registry/win32_registry.dart';
 import 'common.dart';
 
 const _cryptProtectUiForbidden = 0x1;
@@ -23,38 +22,6 @@ class HelperAuthManager {
       return false;
     }
 
-    if (Platform.isWindows) {
-      commonPrint.log('[HelperAuth] Trying to sync auth key from registry for service: $appHelperService');
-      RegistryKey? key;
-      try {
-        final keyPath = 'SYSTEM\\CurrentControlSet\\Services\\$appHelperService';
-        key = Registry.openPath(
-          RegistryHive.localMachine,
-          path: keyPath,
-          desiredAccessRights: AccessRights.readOnly,
-        );
-        final list = key.getStringArrayValue('Environment');
-        if (list != null) {
-          for (final item in list) {
-            if (item.startsWith('HELPER_AUTH_KEY=')) {
-              final val = item.substring('HELPER_AUTH_KEY='.length);
-              if (_isValidHexKey(val)) {
-                _authKey = val;
-                final file = File(await appPath.helperAuthKeyPath);
-                await _persistAuthKey(file, _authKey!);
-                commonPrint.log('[HelperAuth] Successfully synced auth key from registry.');
-                return false;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        commonPrint.log('[HelperAuth] Failed to read registry: $e');
-      } finally {
-        key?.close();
-      }
-    }
-
     final file = File(await appPath.helperAuthKeyPath);
     final existingKey = await _readPersistedAuthKey(file);
     if (existingKey != null) {
@@ -67,6 +34,49 @@ class HelperAuthManager {
     await _persistAuthKey(file, _authKey!);
     commonPrint.log('[HelperAuth] Generated new random auth key.');
     return true;
+  }
+
+  /// 把当前 key 明文写进数据目录，供 helper（SYSTEM）启动时读取。
+  ///
+  /// 该文件继承数据目录的 ACL（当前用户 + SYSTEM + Administrators），因此服务
+  /// 注册表里只保存路径、不再保存明文 key。
+  static Future<String?> writeServiceKeyFile() async {
+    final key = _authKey;
+    if (key == null) return null;
+
+    try {
+      final file = File(await appPath.helperServiceKeyPath);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(key, flush: true);
+      return file.path;
+    } catch (e) {
+      commonPrint.log('[HelperAuth] Failed to write service auth key file: $e');
+      return null;
+    }
+  }
+
+  /// 取当前进程用户的 SID，用于把 helper 命名管道的 ACL 收紧到本用户。
+  ///
+  /// 不用 PATH 里的 `whoami`：MSYS/Git-Bash 的 coreutils `whoami` 会遮蔽 Windows
+  /// 的同名程序且不认 `/user`。
+  static Future<String?> currentUserSid() async {
+    if (!Platform.isWindows) return null;
+
+    try {
+      final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+      final result = await Process.run(
+        '$systemRoot\\System32\\whoami.exe',
+        const ['/user'],
+        stdoutEncoding: latin1,
+      );
+      if (result.exitCode != 0) return null;
+      return RegExp(
+        r'S-\d+(?:-\d+)+',
+      ).firstMatch(result.stdout.toString())?.group(0);
+    } catch (e) {
+      commonPrint.log('[HelperAuth] Failed to resolve current user SID: $e');
+      return null;
+    }
   }
 
   static Map<String, String> generateAuthHeaders(String body) {
@@ -91,6 +101,10 @@ class HelperAuthManager {
     final file = File(await appPath.helperAuthKeyPath);
     if (await file.exists()) {
       await file.delete();
+    }
+    final serviceKeyFile = File(await appPath.helperServiceKeyPath);
+    if (await serviceKeyFile.exists()) {
+      await serviceKeyFile.delete();
     }
   }
 

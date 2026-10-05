@@ -375,11 +375,30 @@ class Windows {
 
   Future<bool> _registerService() async {
     await HelperAuthManager.ensureAuthKey();
-    if (await _isHelperHealthy()) return true;
+    final healthy = await _isHelperHealthy();
+    if (healthy && !await _serviceEnvHasLegacyPlaintextKey()) return true;
 
-    if (!await _configureHelperService()) return false;
+    if (healthy) {
+      commonPrint.log(
+        '[Helper] migrating the plaintext auth key out of the service registry',
+      );
+    }
 
-    return _waitForHelperHealthy();
+    if (await _configureHelperService()) {
+      if (await _waitForHelperHealthy()) return true;
+
+      // key 文件下发后 helper 仍不健康（例如 SYSTEM 读不到该文件）：退回旧的明文
+      // 下发方式，宁可暂时保留旧行为也不要让内核起不来。
+      commonPrint.log(
+        '[Helper] key-file delivery is unhealthy, falling back to env delivery',
+      );
+      if (await _configureHelperService(keyFileDelivery: false)) {
+        return _waitForHelperHealthy();
+      }
+    }
+
+    // 提权被拒时保持现状：旧配置仍然可用，就不必把已运行的服务停掉。
+    return healthy;
   }
 
   Future<bool> _isHelperHealthy() async {
@@ -397,9 +416,56 @@ class Windows {
     return helperClient.ping(coreSHA256);
   }
 
-  Future<bool> _configureHelperService() async {
+  /// 服务注册表里是否还留着旧版的明文 `HELPER_AUTH_KEY`。
+  ///
+  /// `HKLM\SYSTEM\CurrentControlSet\Services\<name>` 对 `BUILTIN\Users` 是
+  /// `ReadKey`，明文写在那里等于本机任何用户都能拿到 key，所以要迁到
+  /// `HELPER_AUTH_KEY_FILE`。注意 `HELPER_AUTH_KEY_FILE=` 不含
+  /// `HELPER_AUTH_KEY=`，不会误判。
+  Future<bool> _serviceEnvHasLegacyPlaintextKey() async {
+    // 值里含用户目录路径，可能有非 UTF-8 字符（用户名、安装路径），用 latin1 读，
+    // 只做 ASCII 子串判断。
+    final result = await Process.run('reg', [
+      'query',
+      'HKLM\\SYSTEM\\CurrentControlSet\\Services\\$appHelperService',
+      '/v',
+      'Environment',
+    ], stdoutEncoding: latin1);
+    if (result.exitCode != 0) return false;
+    return result.stdout.toString().contains('HELPER_AUTH_KEY=');
+  }
+
+  /// 配置/重装 helper 服务。
+  ///
+  /// [keyFileDelivery] 为 true（默认）时，服务 Environment 里只写 key 文件路径，
+  /// helper 启动时自己读文件；false 是旧行为（把 key 明文写进 Environment），仅在
+  /// 文件下发导致 helper 起不来时作为兼容回退使用。两种方式都会写
+  /// `HELPER_ALLOWED_SID` 以收紧管道 ACL（旧版 helper 不认这个变量，会退回旧 ACL）。
+  Future<bool> _configureHelperService({bool keyFileDelivery = true}) async {
     final authKey = HelperAuthManager.getAuthKey();
     if (authKey == null) return false;
+
+    // key 文件写不出来（磁盘或权限异常）时退回明文 env 下发，helper 不至于直接不可用。
+    String? keyFilePath;
+    if (keyFileDelivery) {
+      keyFilePath = await HelperAuthManager.writeServiceKeyFile();
+      if (keyFilePath == null) {
+        commonPrint.log(
+          '[Helper] failed to write the service key file, using env delivery',
+        );
+      }
+    }
+    final allowedSid = await HelperAuthManager.currentUserSid();
+
+    final environmentValue = [
+      if (keyFilePath != null)
+        'HELPER_AUTH_KEY_FILE=$keyFilePath'
+      else
+        'HELPER_AUTH_KEY=$authKey',
+      'HELPER_SERVICE_NAME=$appHelperService',
+      'HELPER_PIPE_NAME=$helperPipeName',
+      if (allowedSid != null) 'HELPER_ALLOWED_SID=$allowedSid',
+    ].join('\\0');
 
     final serviceRegistryPath =
         'HKLM\\SYSTEM\\CurrentControlSet\\Services\\$appHelperService';
@@ -432,7 +498,7 @@ class Windows {
       '/t',
       'REG_MULTI_SZ',
       '/d',
-      '"HELPER_AUTH_KEY=$authKey\\0HELPER_SERVICE_NAME=$appHelperService\\0HELPER_PIPE_NAME=$helperPipeName"',
+      '"$environmentValue"',
       '/f',
       '&&',
       'sc',
