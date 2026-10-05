@@ -6,7 +6,7 @@
 // ignore_for_file: unused_import
 import 'dart:ffi' as ffi;
 
-/// 由 ffigen 从 rust/bettbox-config/include/bettbox_config.h 生成，勿手改。
+/// 由 ffigen 从 rust/bettbox-native/include/bettbox_config.h 生成，勿手改。
 class BettboxConfigFFI {
   /// Holds the symbol lookup function.
   final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)

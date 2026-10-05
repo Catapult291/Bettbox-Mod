@@ -1,12 +1,12 @@
-# 为 Rust 侧 `rust/bettbox-script` 的窄 C ABI 生成 Dart 绑定。
+# 为 Rust 侧 `rust/bettbox-native` 的脚本引擎窄 C ABI 生成 Dart 绑定。
 #
 # 用法（仓库根）：dart run ffigen --config ffigen.bettbox_script.yaml
 # 生成物 `lib/rust/generated/bettbox_script_ffi.dart` 随源码入库，日常构建不需要重跑；
-# 改了 `include/bettbox_script.h` 或 `src/ffi.rs` 的签名后必须重跑并一并提交。
+# 改了 `include/bettbox_script.h` 或 `src/script_ffi.rs` 的签名后必须重跑并一并提交。
 #
 # 与 `ffigen.bettbox_config.yaml` 一样，不要动 pubspec.yaml 里那个默认 `ffigen:` 段。
 name: BettboxScriptFFI
-description: 由 ffigen 从 rust/bettbox-script/include/bettbox_script.h 生成，勿手改。
+description: 由 ffigen 从 rust/bettbox-native/include/bettbox_script.h 生成，勿手改。
 output: 'lib/rust/generated/bettbox_script_ffi.dart'
 # 同 `ffigen.bettbox_config.yaml`：本机 libclang 借用随 IDA 附带的那份，
 # 换机器时改成自己的 LLVM 目录（`<LLVM>/bin/libclang.dll`）或删掉这一项。
@@ -14,9 +14,9 @@ llvm-path:
   - 'C:/Users/bypassnro/Documents/IDA/libclang.dll'
 headers:
   entry-points:
-    - 'rust/bettbox-script/include/bettbox_script.h'
+    - 'rust/bettbox-native/include/bettbox_script.h'
   include-directives:
-    - 'rust/bettbox-script/include/bettbox_script.h'
+    - 'rust/bettbox-native/include/bettbox_script.h'
 functions:
   include:
     - 'bb_.*'

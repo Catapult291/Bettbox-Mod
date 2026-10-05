@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use bettbox_script::eval::{self, EvalOutcome, ExtractOutcome, Limits};
+use bettbox_native::eval::{self, EvalOutcome, ExtractOutcome, Limits};
 
 fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../fixtures")

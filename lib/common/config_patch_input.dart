@@ -35,7 +35,7 @@ dynamic resolveJsonValue(Object? value) {
 }
 
 /// 把宿主侧已经解析好的模型/环境，摊成 [applyConfigPatch] 与 Rust 入口
-/// （`rust/bettbox-config/src/patch_config.rs`）共用的输入 JSON。
+/// （`rust/bettbox-native/src/patch_config.rs`）共用的输入 JSON。
 ///
 /// 这里是两条路径唯一的共同入口，所以映射必须与模型的 `toJson()` 语义一致：
 /// 枚举取 `.name`（`external-controller` 取 `ExternalControllerStatus.value`），

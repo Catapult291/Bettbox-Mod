@@ -3,34 +3,16 @@
 //! 声明在 `include/bettbox_config.h`，Dart 绑定由 ffigen 生成。约定见该头文件：
 //! 字符串一律 UTF-8、Rust 分配、调用方用 [`bb_string_free`] 释放，出错返回 NULL。
 
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr;
 
 use serde_json::Value;
 
+use crate::ffi_support::{
+    borrow_str, catch_panic, into_c_string, parse_json_limited, MAX_JSON_INPUT_BYTES,
+};
 use crate::rule::ParsedRule;
-
-/// 单个 JSON 输入串的字节上限（64 MiB）。超过即视为 ABI 级失败返回 NULL，
-/// 由 Dart 侧回退，避免异常订阅把内存撑爆。
-const MAX_JSON_INPUT_BYTES: usize = 64 * 1024 * 1024;
-
-/// 在 `extern "C"` 边界上捕获 panic。
-///
-/// Rust 1.81 起 `extern "C"` 内 unwind 会直接 abort（整个应用闪退），所以每个导出
-/// 入口都包一层：panic 时返回兜底值，交给调用方的回退/报错逻辑处理。
-/// `AssertUnwindSafe`：导出入口只使用本次调用传入的指针，panic 后不复用被污染的状态。
-fn catch_panic<T>(fallback: T, body: impl FnOnce() -> T) -> T {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)).unwrap_or(fallback)
-}
-
-/// 受上限保护的 JSON 解析；超限或语法错误都返回 `None`。
-fn parse_json_limited(raw: &str) -> Option<Value> {
-    if raw.len() > MAX_JSON_INPUT_BYTES {
-        return None;
-    }
-    serde_json::from_str::<Value>(raw).ok()
-}
 
 /// 解析一条 Clash 规则，返回 JSON 对象。
 ///
@@ -247,20 +229,6 @@ pub unsafe extern "C" fn bb_string_free(value: *mut c_char) {
     })
 }
 
-unsafe fn borrow_str<'a>(ptr: *const c_char) -> Option<&'a str> {
-    if ptr.is_null() {
-        return None;
-    }
-    unsafe { CStr::from_ptr(ptr) }.to_str().ok()
-}
-
-fn into_c_string(value: &str) -> *mut c_char {
-    match CString::new(value) {
-        Ok(value) => value.into_raw(),
-        Err(_) => ptr::null_mut(),
-    }
-}
-
 fn parsed_to_json(parsed: &ParsedRule) -> String {
     serde_json::json!({
         "action": parsed.action.as_str(),
@@ -277,6 +245,7 @@ fn parsed_to_json(parsed: &ParsedRule) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CStr;
 
     fn parse_via_ffi(rule: &str) -> String {
         let input = CString::new(rule).unwrap();

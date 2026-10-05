@@ -1,16 +1,18 @@
 [package]
-name = "bettbox-script"
-description = "Bettbox-Mod 覆写脚本引擎的 Rust 实现（内嵌 QuickJS）"
+name = "bettbox-native"
+description = "Bettbox-Mod 的 Rust 原生实现：配置改写管道 + 覆写脚本引擎（内嵌 QuickJS）"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "bettbox_script"
+name = "bettbox_native"
 # cdylib 供 Dart 通过 FFI 加载；rlib 让 Rust 测试与后续 crate 能正常链接。
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+md5 = "0.7"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [build-dependencies]

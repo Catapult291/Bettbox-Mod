@@ -114,18 +114,12 @@ install(PROGRAMS "${CLASH_DIR}/BettboxHelperService.exe" DESTINATION "${INSTALL_
 install(FILES "WindowsLoopbackManager.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# Rust 配置管道动态库。由 `dart setup.dart windows --out core` 构建到 libclash/windows/；
-# 用 EXISTS 守卫，避免没有该产物的旧工作区在配置/安装阶段直接失败（此时 Dart 侧会退回
-# 仓库内的 cargo 产物，打包版本则要求它存在）。
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_config.dll")
-  install(FILES "${CLASH_DIR}/bettbox_config.dll" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-    COMPONENT Runtime)
-endif()
-
-# Rust 覆写脚本引擎动态库。同样由 `dart setup.dart windows --out config` 产出；
-# 缺它时 `GlobalState.handleEvaluate` 会自动回退 qjs 路径，只慢不错，故用 EXISTS 守卫。
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_script.dll")
-  install(FILES "${CLASH_DIR}/bettbox_script.dll" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+# Rust 原生动态库（配置管道 + 覆写脚本引擎，已合并为一个 cdylib）。由
+# `dart setup.dart windows --out config` 构建到 libclash/windows/；用 EXISTS 守卫，
+# 避免没有该产物的旧工作区在配置/安装阶段直接失败（此时 Dart 侧会退回仓库内的 cargo 产物，
+# 打包版本则要求它存在）。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_native.dll")
+  install(FILES "${CLASH_DIR}/bettbox_native.dll" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
 

@@ -131,7 +131,7 @@ class JavaScriptRuntimeManager {
   ///
   /// 独立成公开入口有两个用途：Rust 库不可用时的回退路径，以及
   /// `test/rust/script_engine_diff_test.dart` 里与 Rust 输出逐字段对拍的参照。
-  /// 改这里的模板必须同步改 `rust/bettbox-script/src/eval.rs` 的 `build_extract_program`
+  /// 改这里的模板必须同步改 `rust/bettbox-native/src/eval.rs` 的 `build_extract_program`
   /// （行结构也要对齐，错误串里的 `<eval>:<行号>` 才会一致）。
   static Future<Map<String, dynamic>> extractOptionsViaQjs(
     String scriptContent,

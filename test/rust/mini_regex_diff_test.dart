@@ -1,7 +1,7 @@
 import 'package:bett_box/rust/bettbox_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 手写最小匹配器（`rust/bettbox-config/src/mini_regex.rs`）与 Dart `RegExp` 的差分。
+/// 手写最小匹配器（`rust/bettbox-native/src/mini_regex.rs`）与 Dart `RegExp` 的差分。
 ///
 /// 规则：
 /// - Rust 认了（返回 true/false）⇒ 必须与 Dart `RegExp.hasMatch` 逐例一致；

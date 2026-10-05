@@ -17,11 +17,12 @@ const bool useRustScriptEngine = bool.fromEnvironment(
   defaultValue: true,
 );
 
-/// Rust 侧覆写脚本引擎（`rust/bettbox-script`）的窄 C ABI 封装。
+/// Rust 侧覆写脚本引擎（`rust/bettbox-native`）的窄 C ABI 封装。
 ///
-/// ABI 见 `rust/bettbox-script/include/bettbox_script.h`，Dart 绑定由 ffigen 生成
+/// ABI 见 `rust/bettbox-native/include/bettbox_script.h`，Dart 绑定由 ffigen 生成
 /// （`ffigen.bettbox_script.yaml`）。契约与 `JavaScriptRuntimeManager.evaluateScript`
-/// 逐项对齐，详见该文件与 `rust/bettbox-script/src/eval.rs`。
+/// 逐项对齐，详见该文件与 `rust/bettbox-native/src/eval.rs`。
+/// 脚本引擎与配置管道已合并进同一个动态库（`bettbox_native`）。
 abstract final class BettboxScript {
   static BettboxScriptFFI? _bindings;
   static Object? _loadError;
@@ -201,8 +202,8 @@ abstract final class BettboxScript {
   }
 
   static String get _libraryFileName {
-    if (Platform.isWindows) return 'bettbox_script.dll';
-    if (Platform.isMacOS) return 'libbettbox_script.dylib';
-    return 'libbettbox_script.so';
+    if (Platform.isWindows) return 'bettbox_native.dll';
+    if (Platform.isMacOS) return 'libbettbox_native.dylib';
+    return 'libbettbox_native.so';
   }
 }

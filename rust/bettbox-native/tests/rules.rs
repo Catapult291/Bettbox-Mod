@@ -3,7 +3,7 @@
 //! 这批字符串取自真实配置里常见的写法；后续接入真实 profile 语料时，
 //! 应在此基础上扩充为「Dart 输出 vs Rust 输出」的差分用例。
 
-use bettbox_config::rule::{ParsedRule, RuleAction};
+use bettbox_native::rule::{ParsedRule, RuleAction};
 
 const SAMPLE_RULES: [&str; 10] = [
     "DOMAIN,ads.example.com,REJECT",

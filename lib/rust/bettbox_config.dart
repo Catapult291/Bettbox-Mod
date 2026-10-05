@@ -17,10 +17,11 @@ const bool useRustConfigPipeline = bool.fromEnvironment(
   defaultValue: true,
 );
 
-/// Rust 侧配置管道（`rust/bettbox-config`）的窄 C ABI 封装。
+/// Rust 侧配置管道（`rust/bettbox-native`）的窄 C ABI 封装。
 ///
-/// ABI 见 `rust/bettbox-config/include/bettbox_config.h`，Dart 绑定由 ffigen 生成
+/// ABI 见 `rust/bettbox-native/include/bettbox_config.h`，Dart 绑定由 ffigen 生成
 /// （`ffigen.bettbox_config.yaml`）。本文件只负责动态库加载、内存管理与 JSON 解码。
+/// 配置管道与脚本引擎已合并进同一个动态库（`bettbox_native`）。
 abstract final class BettboxConfig {
   static BettboxConfigFFI? _bindings;
   static Object? _loadError;
@@ -241,9 +242,9 @@ abstract final class BettboxConfig {
   }
 
   static String get _libraryFileName {
-    if (Platform.isWindows) return 'bettbox_config.dll';
-    if (Platform.isMacOS) return 'libbettbox_config.dylib';
-    return 'libbettbox_config.so';
+    if (Platform.isWindows) return 'bettbox_native.dll';
+    if (Platform.isMacOS) return 'libbettbox_native.dylib';
+    return 'libbettbox_native.so';
   }
 }
 

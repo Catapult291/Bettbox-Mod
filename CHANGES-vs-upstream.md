@@ -1123,7 +1123,8 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 
 ## 24. Rust FFI 边界加固：panic 兜底、JSON 输入上限、工具链锁定
 
-**文件**：`rust/bettbox-config/src/ffi.rs`、`rust/bettbox-script/src/ffi.rs`、`rust-toolchain.toml`（新增）
+**文件**：`rust/bettbox-native/src/ffi.rs`、`rust/bettbox-native/src/script_ffi.rs`、`rust-toolchain.toml`（新增）
+（当时这两个 FFI 模块还在各自的 crate `bettbox-config` / `bettbox-script` 里；随后已在第 26 节合并。）
 
 **问题**：
 
@@ -1165,6 +1166,48 @@ android universal / windows amd64 / release）全绿，Release 附件三件：
 （`controller.dart` 只对主 exe 调用它，内核进程始终走 helper）。
 
 **验证**：`flutter analyze lib test` 无问题；`flutter test` 151 项全过。
+
+---
+
+## 26. Rust 侧两个 crate 合并为一个 cdylib（`bettbox_native`）
+
+**文件**：`rust/Cargo.toml`、`rust/bettbox-native/**`（新增，取代 `rust/bettbox-config/` 与
+`rust/bettbox-script/`）、`setup.dart`、`windows/CMakeLists.txt`、`lib/rust/bettbox_config.dart`、
+`lib/rust/bettbox_script.dart`、`ffigen.bettbox_config.yaml`、`ffigen.bettbox_script.yaml`、
+`lib/rust/generated/*.dart`、`.github/workflows/build.yaml`
+
+**动机**：配置改写管道与覆写脚本引擎各自出一个 cdylib，包里因此有两份动态库、两处打包接线，
+而 Rust 迁移路线（`.grok/Rust 迁移与 Windows 推进路线.md` §1.3）本就要求合并，为后续用 QuickJS
+自带的 libregexp 替换手写 `mini_regex` 铺路。
+
+**改动**：
+
+- 新建 `rust/bettbox-native`，`[lib] name = "bettbox_native"`、`crate-type = ["cdylib", "rlib"]`；
+  沿用 `bettbox-script` 的 `build.rs`（编译仓库内 vendored QuickJS）与其 `c/quickjs_shim.c`；
+  依赖取两者并集（`md5` / `serde` / `serde_json`，build-dep `cc`）。
+- 两个头文件 `include/bettbox_config.h`、`include/bettbox_script.h` 原样保留，ffigen 各生成一份绑定：
+  两块 ABI 仍然独立，只是加载同一个库。
+- **`bb_string_free` 两个 crate 都导出，合并后必须只留一份**：定义保留在 `ffi.rs`，脚本那半
+  （`script_ffi.rs`）不再定义；两边共用新增的 `ffi_support.rs`（`catch_panic` / `borrow_str` /
+  `into_c_string` / `parse_json_limited` / 64 MiB 输入上限）。
+- 接线改名：`setup.dart` 的 `buildRustLibs` 拷贝 `bettbox_native.dll`；`windows/CMakeLists.txt`
+  只保留一个 install；两个 Dart 加载器的 `_libraryFileName`；两个 ffigen 配置的头文件路径；
+  CI 的构建步骤（`Build Rust native lib`）、断言步骤（`Verify Rust native lib`，含 app.so 内的
+  `bettbox_native.dll` 标记）与差分套件前置检查。
+
+**验证**：
+
+- `cargo fmt --check` 干净；`cargo clippy --all-targets -- -D warnings` 无告警；
+  `cargo test --workspace` 全过（56 单元 + 3 fixtures + 2 rules + 17 script_engine）。
+- `cargo build --release` 产出单个 `bettbox_native.dll`（1,129,984 B）；`objdump -p` 导出表恰为
+  11 个 `bb_*` 符号，`bb_string_free` 只有一份。
+- `dart run ffigen` 重新生成两套绑定，diff 仅各 1 行源码路径注释（C 签名未变）。
+- `dart setup.dart windows --arch amd64 --out config` 把库产出到 `libclash/windows/bettbox_native.dll`。
+- Dart 侧：`flutter analyze lib test` 无问题；`flutter test test/rust` 36 项全过（加载新库，含
+  「公共入口确实走 Rust」这类断言，缺库不会静默通过）；`flutter test` 151 项全过。
+
+**未做**：libregexp 替换 `mini_regex`（路线稿 §1.3 的另一半，属有意改变行为，须先扩充 fixtures）；
+Windows 安装包级验证（CMake install + CI 断言）未在本机执行，留待一次 CI run 或完整本地打包。
 
 ---
 

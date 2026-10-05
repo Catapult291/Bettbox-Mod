@@ -275,7 +275,8 @@ class Build {
     await File(outPath).copy(targetPath);
   }
 
-  /// 构建 Rust 配置管道动态库，放进 `libclash/windows/`，由 CMake 打进安装包。
+  /// 构建 Rust 原生动态库（配置管道 + 覆写脚本引擎，已合并为一个 cdylib），
+  /// 放进 `libclash/windows/`，由 CMake 打进安装包。
   ///
   /// 只支持 Windows：本仓库只出 Windows/Android 构建，而这个 crate 是桌面专用的。
   static Future<void> buildRustLibs(Target target) async {
@@ -285,12 +286,11 @@ class Build {
       name: 'build rust libs',
       workingDirectory: join(current, 'rust'),
     );
-    // 配置管道与覆写脚本引擎各一个 cdylib，都随包发出去。
-    for (final name in ['bettbox_config.dll', 'bettbox_script.dll']) {
-      final outPath = join(current, 'rust', 'target', 'release', name);
-      final targetPath = join(Build.outDir, target.name, name);
-      await File(outPath).copy(targetPath);
-    }
+    // 配置管道与脚本引擎合并后只出一个 cdylib。
+    const name = 'bettbox_native.dll';
+    final outPath = join(current, 'rust', 'target', 'release', name);
+    final targetPath = join(Build.outDir, target.name, name);
+    await File(outPath).copy(targetPath);
   }
 
   static List<String> getExecutable(String command) {
@@ -663,7 +663,7 @@ class BuildCommand extends Command {
       }
     }
 
-    // 只产出 Rust 配置管道动态库。必须在 buildCore 之前返回：Go 内核构建不可复现
+    // 只产出 Rust 原生动态库。必须在 buildCore 之前返回：Go 内核构建不可复现
     // （同机重跑 md5 会变），重建内核会让上一步按旧 hash 编出的 helper TOKEN 失配。
     if (actualOut == 'config') {
       if (target != Target.windows) {

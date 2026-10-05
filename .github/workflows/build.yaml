@@ -165,9 +165,9 @@ jobs:
           Write-Host "Core SHA256 (TOKEN for Helper): $coreHash"
           dart setup.dart windows --arch ${{ matrix.arch }} --out helper --core-hash $coreHash
 
-      # 必须在 flutter build 之前产出 libclash/windows/bettbox_config.dll，
+      # 必须在 flutter build 之前产出 libclash/windows/bettbox_native.dll，
       # windows/CMakeLists.txt 才会把它装进 bundle（该文件在 .gitignore 里，只能现造）。
-      - name: Build ConfigLib (Windows)
+      - name: Build Rust native lib (Windows)
         if: matrix.platform == 'windows'
         shell: bash
         run: |
@@ -197,43 +197,33 @@ jobs:
           }
           flutter @flutterArgs
 
-      # Rust 管道默认开启，缺 dll 只会静默回退 Dart、不报错，所以这里硬断言它真的在包里。
+      # Rust 原生库（配置管道 + 脚本引擎）默认开启，缺 dll 只会静默回退 Dart/qjs、不报错，
+      # 所以这里硬断言它真的在包里。
       # 脚本内保持纯 ASCII：PowerShell 5.1 会把无 BOM 的 .ps1 按 ANSI 读，中文会让它解析失败。
-      - name: Verify Rust config pipeline (Windows)
+      - name: Verify Rust native lib (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           $bundleDir = "build/windows/x64/runner/Release"
-          $bundled = "$bundleDir/bettbox_config.dll"
+          $bundled = "$bundleDir/bettbox_native.dll"
           if (-not (Test-Path $bundled)) {
-            Write-Error "bundle is missing $bundled - the Rust config pipeline will not be active"
+            Write-Error "bundle is missing $bundled - the Rust pipeline and script engine will not be active"
             exit 1
           }
           $a = (Get-FileHash $bundled -Algorithm SHA256).Hash
-          $b = (Get-FileHash rust/target/release/bettbox_config.dll -Algorithm SHA256).Hash
+          $b = (Get-FileHash rust/target/release/bettbox_native.dll -Algorithm SHA256).Hash
           if ($a -ne $b) {
             Write-Error "bundled dll differs from the cargo artifact ($a vs $b)"
             exit 1
           }
           $appSo = "$bundleDir/data/app.so"
           $text = [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetString([System.IO.File]::ReadAllBytes($appSo))
-          $marker = ([regex]::Matches($text, 'bettbox_config\.dll')).Count
+          $marker = ([regex]::Matches($text, 'bettbox_native\.dll')).Count
           if ($marker -lt 1) {
             Write-Error "app.so has no Rust pipeline marker - the enabled wrapper may have been tree-shaken"
             exit 1
           }
-          $scriptBundled = "$bundleDir/bettbox_script.dll"
-          if (-not (Test-Path $scriptBundled)) {
-            Write-Error "bundle is missing $scriptBundled - the Rust script engine would silently fall back"
-            exit 1
-          }
-          $c = (Get-FileHash $scriptBundled -Algorithm SHA256).Hash
-          $d = (Get-FileHash rust/target/release/bettbox_script.dll -Algorithm SHA256).Hash
-          if ($c -ne $d) {
-            Write-Error "bundled script dll differs from the cargo artifact ($c vs $d)"
-            exit 1
-          }
-          Write-Host "config dll matches (marker count = $marker); script dll matches"
+          Write-Host "bettbox_native.dll matches (marker count = $marker)"
 
       # Rust vs Dart/qjs 的差分套件（test/rust/）。脚本引擎的差分需要一个 qjs 参考实现：
       # `flutter test` 下 flutter_qjs 只从 `test/build/Debug/ffiquickjs.dll` 加载引擎
@@ -249,11 +239,9 @@ jobs:
             Write-Error "$runner/flutter_qjs_plugin.dll is missing - flutter build windows should have produced it"
             exit 1
           }
-          foreach ($dll in @("bettbox_config.dll", "bettbox_script.dll")) {
-            if (-not (Test-Path "rust/target/release/$dll")) {
-              Write-Error "rust/target/release/$dll is missing - Build ConfigLib should have produced it"
-              exit 1
-            }
+          if (-not (Test-Path "rust/target/release/bettbox_native.dll")) {
+            Write-Error "rust/target/release/bettbox_native.dll is missing - the Rust build step should have produced it"
+            exit 1
           }
           New-Item -ItemType Directory -Force -Path test/build/Debug | Out-Null
           Copy-Item "$runner/flutter_qjs_plugin.dll" test/build/Debug/ffiquickjs.dll -Force

@@ -5,7 +5,7 @@ import 'package:bett_box/models/clash_config.dart';
 ///
 /// 从 `state.dart` 的 `patchRawConfig` 里原样抽出，行为不变；抽出来是为了
 /// 有一个可直接调用的纯函数参照，与 Rust 侧
-/// `rust/bettbox-config/src/group_switch.rs` 做差分（见
+/// `rust/bettbox-native/src/group_switch.rs` 做差分（见
 /// `test/rust/group_switch_diff_test.dart`）。
 ///
 /// 就地修改 [rawConfig] 的 `proxy-groups` 与 [rules]。

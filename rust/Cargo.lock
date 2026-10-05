@@ -3,19 +3,12 @@
 version = 4
 
 [[package]]
-name = "bettbox-config"
-version = "0.1.0"
-dependencies = [
- "md5",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bettbox-script"
+name = "bettbox-native"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "md5",
+ "serde",
  "serde_json",
 ]
 

@@ -12,7 +12,7 @@ import 'string.dart';
 /// 这是 `state.dart` 的 `patchRawConfig` 方法体的机械抽取：把「读 profile 配置、
 /// 跑脚本、算路径、读全局开关」这些宿主职责留给调用方（见 `GlobalState.patchRawConfig`），
 /// 只保留对配置 map 的手术。抽出来是为了能与 Rust 侧
-/// `rust/bettbox-config/src/patch_config.rs` 逐字段差分（见
+/// `rust/bettbox-native/src/patch_config.rs` 逐字段差分（见
 /// `test/rust/patch_config_diff_test.dart`）。
 ///
 /// 输入结构：
