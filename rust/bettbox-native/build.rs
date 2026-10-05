@@ -1,13 +1,11 @@
 //! 编译 vendored QuickJS（`vendor/quickjs`）与本 crate 的薄封装。
 //!
-//! 用仓库里同一份 QuickJS 源码而不是 crates.io 上的绑定，是为了让 Rust 路径与
-//! 插件 `plugins/flutter_qjs` 跑**同一份引擎**——否则两处脚本语义可能漂移，
-//! 而脚本正文由用户编写，回归很难在测试里穷举。
+//! 用仓库内 vendored 的 QuickJS 源码而不是 crates.io 上的绑定：引擎版本随仓库冻结
+//! （见 `vendor/VERSION`），升级是一次可审计的整目录替换。
 //!
-//! 这份源码原本放在 `plugins/flutter_qjs/cxx/quickjs`，因为 `build.rs` 依赖插件目录，
-//! 删插件会连源码一起丢；2026-10-06 移进 crate 后它成为唯一副本，插件的
-//! `cxx/quickjs.cmake` 与 `cxx/prebuild.sh` 反过来指向这里（见 `vendor/README.txt`）。
-//! 源文件清单与编译选项仍照抄 `plugins/flutter_qjs/cxx/quickjs.cmake`。
+//! 这份源码原本在 `plugins/flutter_qjs/cxx/quickjs`；2026-10-06 移进 crate（唯一副本），
+//! 插件本身已在 Rust 迁移阶段 5 删除。源文件清单与编译选项沿用当时插件
+//! `cxx/quickjs.cmake` 的取值。
 //!
 //! 编译开关另对齐插件 Windows 构建（CMake Release）的取值：`/O2` + `-DNDEBUG`。
 //! 原因不是性能：排查「同一份字节偶发解析失败」时发现，失败率随 C 侧代码形态在
@@ -36,7 +34,7 @@ fn main() {
     build.debug(false);
 
     if build.get_compiler().is_like_msvc() {
-        // 同一处 MSVC 规避，见 quickjs.cmake 里的注释（上游 flutter_qjs issue #7）。
+        // 同一处 MSVC 规避（上游 flutter_qjs issue #7）。
         build.flag("/Oi-");
         build.define("alloca", "_alloca");
     } else {

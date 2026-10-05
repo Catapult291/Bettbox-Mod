@@ -22,28 +22,15 @@ class _FakePathProvider extends PathProviderPlatform {
   Future<String?> getDownloadsPath() async => Directory.systemTemp.path;
 }
 
-/// 只替换 [GlobalState.getProfileConfig]（避免真内核），并记录两段式路径是否被走到。
-///
-/// 本用例只验证 `patchRawConfig` 在合并入口与两段式之间的**分支选择**，不重复覆盖
-/// Dart 镜像的实现，所以 [handleEvaluate] 只做标记、原样返回。
+/// 只替换 [GlobalState.getProfileConfig]（避免真内核）。
 class _TestGlobalState extends GlobalState {
   _TestGlobalState(this.profileConfig) : super.forTest();
 
   final Map<String, dynamic> profileConfig;
-  bool twoStageReached = false;
 
   @override
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async =>
       jsonDecode(jsonEncode(profileConfig)) as Map<String, dynamic>;
-
-  @override
-  Future<Map<String, dynamic>> handleEvaluate(
-    Map<String, dynamic> config, {
-    Profile? profile,
-  }) async {
-    twoStageReached = true;
-    return config;
-  }
 }
 
 Map<String, dynamic> _rawConfig() => jsonDecode('''
@@ -90,8 +77,8 @@ void main() {
     state = _TestGlobalState(_rawConfig());
   });
 
-  group('patchRawConfig 合并入口接线', () {
-    test('两个开关都开且脚本适用时走合并入口，不再走两段式', () async {
+  group('patchRawConfig 单一 Rust 管线', () {
+    test('脚本适用时在 Rust 内跑脚本 + patch，一次出结果', () async {
       final config = _config(
         _script("function main(c){ c['mergedMarker'] = 'yes'; return c; }"),
       );
@@ -103,12 +90,12 @@ void main() {
         profile: _profile(),
       );
 
-      expect(state.twoStageReached, isFalse, reason: '走了合并入口就不该再走两段式');
-      expect(result['mergedMarker'], 'yes', reason: '脚本必须真的在 Rust 内跑过');
+      expect(result['mergedMarker'], 'yes', reason: '脚本必须真的被求值过');
       expect(result['external-ui'], uiPath, reason: 'patch 管道必须真的跑过');
+      expect(result['mode'], config.patchClashConfig.mode.name);
     });
 
-    test('脚本抛错时 patch 仍产出，但不回退两段式', () async {
+    test('脚本抛错时 patch 仍产出（scriptError 不阻断）', () async {
       final config = _config(
         _script("function main(c){ throw new Error('boom'); }"),
       );
@@ -120,22 +107,22 @@ void main() {
         profile: _profile(),
       );
 
-      expect(state.twoStageReached, isFalse);
       expect(result['external-ui'], uiPath);
     });
 
-    test('profile 未启用脚本覆写时跳过合并入口，走两段式', () async {
+    test('profile 未启用脚本覆写时不跑脚本，仍走 Rust patch', () async {
       final config = _config(
         _script("function main(c){ c['mergedMarker'] = 'yes'; return c; }"),
       );
       state.config = config;
 
-      await state.patchRawConfig(
+      final result = await state.patchRawConfig(
         patchConfig: config.patchClashConfig,
         profile: _profile(useScriptOverride: false),
       );
 
-      expect(state.twoStageReached, isTrue);
+      expect(result['mergedMarker'], isNull, reason: '未启用覆写时脚本不该被执行');
+      expect(result['rules'], isNotNull);
     });
   }, skip: skipReason);
 }

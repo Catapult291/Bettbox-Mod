@@ -5,7 +5,8 @@
 - 查看完整差异：`git diff 19d5e118 HEAD`
 - 本仓库当前版本：`1.19.13`（tag `v1.19.13` 已发布 Release）
 
-各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138）。
+各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
+差分套件后为 115）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
 
 ## 目录与发布版本对照
@@ -43,6 +44,7 @@
 | 29 | 工程 | Android 侧接入 Rust 原生库（配置管道与脚本引擎不再走 Dart 镜像） | v1.19.13 |
 | 30 | 工程 | Android Kotlin Gradle Plugin 版本 2.1.0 → 2.2.20 | v1.19.13 |
 | 31 | 工程 | vendored QuickJS 移入 Rust crate，插件改为指向它 | v1.19.13 |
+| 32 | 工程 | 删除 Dart 镜像与 qjs 路径，失败策略改为「报错并保留上一份可用配置」 | 下一版（待定） |
 
 ---
 
@@ -1413,6 +1415,86 @@ flutter_qjs 插件（Rust 迁移路线 §1.2），那会连源码一起丢。移
   符号链接支持，本机未开开发者模式、直接拒绝。该步骤由 CI 的 `build (windows)` 覆盖。
 
 **未决**：插件本身（连同 Dart 镜像与 qjs 回退路径）按计划留到后续步骤删除。
+
+---
+
+## 32. 删除 Dart 镜像与 qjs 路径，失败策略改为「报错并保留上一份可用配置」
+
+**文件**：`lib/state.dart`、`lib/common/js_runtime_manager.dart`、`lib/rust/bettbox_config.dart`、
+`lib/rust/bettbox_script.dart`、`lib/common/config_patch_input.dart`、`lib/views/profiles/scripts.dart`、
+`lib/common/common.dart`、`pubspec.yaml`、`windows|linux|macos` 的插件注册生成文件、`macos/Podfile.lock`、
+`.github/workflows/build.yaml`、`rust/bettbox-native/tests/golden.rs`、
+`test/rust/patch_raw_config_test.dart`（新增，取代 `patch_raw_config_merged_test.dart`）、
+`test/rust/patch_config_unavailable_test.dart`、`test/rust/script_engine_unavailable_test.dart`、
+`integration_test/android_rust_pipeline_test.dart`、`fixtures/golden/README.txt`、
+`rust/bettbox-native/{build.rs,c/quickjs_shim.c,vendor/README.txt}`
+
+**删除**：`lib/common/config_patch.dart`（Dart 镜像）、`lib/common/dns_override.dart`、
+`lib/common/group_switch.dart`（后两者只被镜像调用）、`plugins/flutter_qjs/**` 整个插件与
+`pubspec.yaml` 的 flutter_qjs 依赖、`test/rust/{patch_config,process_profile,script_engine,
+group_switch,dns_override}_diff_test.dart`、`test/rust/golden_generate_test.dart`、
+`test/rust/pipeline_cases.dart`、`test/common/{patch_config_reference,patch_config_reference_test,
+group_switch_test,json_diff}.dart`
+
+**动机**：路线稿 §1.5 的第 3、4 步（`v1.19.13` 时按用户决定合并到下一版一起做）。此前配置改写与脚本求值
+各有两套实现（Rust 一套、Dart 镜像 + qjs 一套），任一失败就静默切换；双轨意味着上游每改一处逻辑都要
+移植两次（路线稿 §1.6）。现在每块逻辑只剩一份实现：Android 与 Windows 都随包带
+`libbettbox_native.so` / `bettbox_native.dll`，不存在「另一套实现」可退，也就不该再退。
+
+**改动**：
+
+- **删两处编译期开关**：`USE_RUST_CONFIG_PIPELINE` / `USE_RUST_SCRIPT_ENGINE` 及其 false 分支一并删除，
+  `patchRawConfig` 收敛成单一路径——有生效脚本且 profile 启用覆写走 `bb_process_profile`，否则走
+  `bb_patch_config`；`GlobalState.handleEvaluate` 与 `evaluateScriptPreferRust` 随之删除，
+  `JavaScriptRuntimeManager` 只剩脚本求值与选项抽取两个入口（内部转发 Rust），不再有第二套引擎。
+- **失败策略（行为变更，不只是清理）**：`BettboxConfig.patchConfig` / `processProfile` 与
+  `BettboxScript.evaluateScript` / `extractScriptOptions` 在动态库缺失或 ABI 级失败时抛
+  `StateError`（此前返回 null 让调用方回退）。`patchRawConfig` 因此向上抛错，`getSetupParams` 不再写出
+  运行配置——上一份可用的 `config.yaml` 原样保留，界面由既有 `safeRun` / `runas` 错误路径提示。
+  脚本自身的报错仍不阻断 patch（`process_profile` 把错误放在 `scriptError` 里提示）；
+  `extractScriptOptions` 对脚本错误仍记日志返回空表，但基础设施故障会抛错，不再静默返回空表。
+- **删 qjs 路径**：`lib/common/js_runtime_manager.dart` 去掉 `IsolateQjs` 模板实现与
+  `extractOptionsViaQjs`，删除 `plugins/flutter_qjs` 插件（Android 包内不再有 `libqjs.so`）。
+  Windows/Linux/macOS 的插件注册生成文件与 `macos/Podfile.lock` 同步去掉 flutter_qjs 条目
+  （本机 `flutter pub get` 因未开开发者模式不生成注册文件，故手工对齐；`pubspec.lock` 与
+  `.flutter-plugins-dependencies` 已由 pub get 正常重生成）。
+  插件的 `cxx/quickjs.cmake`、`cxx/prebuild.sh` 与参考 dll 构建入口随插件一起消失，
+  vendored QuickJS 的出处说明改为「插件已删除，本目录是唯一遗留源码」。
+- **golden 成为管道唯一回归网**：Dart 镜像删除后不再有独立参照，`golden.rs` 增加
+  `#[ignore]` 的 `regenerate_golden`（定点写回 `output`/`scriptError`，保留行尾与逗号，幂等），
+  使用纪律与「golden 变了 = 行为变了」写进 `fixtures/golden/README.txt`。
+- **设备端测试改为不依赖参照实现**：`integration_test/android_rust_pipeline_test.dart` 不再与 Dart 镜像
+  对拍，改为断言「库真的随包并可加载」+「Android 分支真的生效」（tun 不自动路由、`ntp` 不写系统，
+  且同一输入在非 Android 上结果相反）+「脚本真的被求值」+「合并入口与 patch 入口逐字段一致」。
+- `lib/views/profiles/scripts.dart` 的 `_handleSave` 补 `catch`：配置改写失败时回滚已写入的分组开关并提示，
+  不把界面留在半改状态。
+- Rust 侧 ABI（含 `bb_apply_group_switches` / `bb_apply_dns_node_override` 等导出）保持不变，
+  `BettboxConfig` 的 Dart 包装也保持完整；本轮只删「第二套实现」，不动 ABI 表面。
+
+**验证**：
+
+- `cargo fmt --all --check` 干净；`cargo clippy --all-targets -- -D warnings` 无告警；
+  `cargo test --workspace` 全过（57 单元 + 3 fixtures + 2 rules + 2 golden + 17 script，另有 1 项
+  `#[ignore]` 的手动重生成）。
+- golden 全量对比通过（13 条 `patch_config` + 5 条 `process_profile`，含脚本错误串逐字一致）；
+  重生成工具实测：重生成 → 对比通过（JSON 合法、CRLF 行尾保持）→ 复跑幂等（文件逐字节不变）。
+- `flutter analyze lib test integration_test` 无问题；`flutter test` 115 项全过
+  （比上一步少 44 项，减去的正是依赖 Dart 镜像/qjs 的差分套件）。
+- 失败策略三条路径：动态库缺失（`patch_config_unavailable_test`：两个入口都抛 `StateError`，
+  且 `getSetupParams` 抛错后上一份 `config.yaml` 内容不变）、ABI 失配（与缺失在加载层同一条路径，
+  由同一用例覆盖）、脚本报错（`patch_raw_config_test`：patch 仍产出）。
+- 未在本机验证：`flutter build windows`（需开发者模式，CI 覆盖；CI 的 Dart 测试步骤已改为
+  `flutter test test/rust`，不再需要 qjs 参考 dll）、Android 设备端 integration 测试（需设备/模拟器）。
+
+**未决**：
+
+- 路线稿 §1.5 第 4 步原建议「保留一个编译期开关至少一个发版周期作为紧急降级通道」；Dart 镜像删除后
+  该建议没有可实现形式（没有第二套实现可切）。**紧急回退路径改为「装回上一版」**，
+  这一点需在发版说明里对用户说明。
+- `plugins/flutter_qjs/android/.cxx`（22 MB CMake 构建缓存）仍留在工作区，属未入库的构建产物，待清理。
+- Rust ABI 中 `bb_apply_group_switches` / `bb_apply_dns_node_override` / `bb_node_filter_match` /
+  `bb_parse_provider_meta` / `bb_build_proxies_groups` 目前没有生产调用方（只在 Rust 单测与
+  Dart 差分测试里用）；是否裁剪待评估。
 
 ---
 

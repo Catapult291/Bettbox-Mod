@@ -14,7 +14,6 @@ import 'package:bett_box/plugins/service.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/providers/state.dart' as providers_state;
 import 'package:bett_box/rust/bettbox_config.dart';
-import 'package:bett_box/rust/bettbox_script.dart';
 
 import 'package:bett_box/widgets/dialog.dart';
 import 'package:flutter/material.dart';
@@ -760,13 +759,13 @@ class GlobalState {
         currentScript != null && targetProfile.useScriptOverride;
 
     // 合并入口：脚本求值与配置改写都在 Rust 内完成，整份配置只跨一次 FFI。
-    // 任一开关关闭、动态库缺失，或 Rust 侧返回失败时，落回下面的两段式路径。
-    if (useRustConfigPipeline &&
-        useRustScriptEngine &&
-        scriptApplies &&
-        BettboxConfig.isAvailable) {
+    //
+    // 这是配置改写的唯一路径（阶段 5 第 3 步删掉了两段式与 Dart 镜像）。
+    // Rust 侧不可用会抛错，而不是换一套实现继续跑；调用方（getSetupParams 等）
+    // 因此不会写坏运行配置，上一份可用的 config.yaml 原样保留。
+    if (scriptApplies) {
       final processed = await _scriptEvaluateLock.synchronized(() async {
-        // 与 `handleEvaluate` 一致：跑脚本前补齐 proxy-providers。
+        // 与原先的两段式一致：跑脚本前补齐 proxy-providers。
         final prepared = Map<String, dynamic>.from(configMap);
         prepared['proxy-providers'] ??= {};
         final combinedInput = await buildInput(prepared);
@@ -777,33 +776,19 @@ class GlobalState {
           customOptionsJson: options == null ? null : jsonEncode(options),
         );
       });
-      if (processed != null) {
-        final scriptError = processed.scriptError;
-        if (scriptError != null) {
-          commonPrint.log('Script execution failed: $scriptError');
-          globalState.showNotifier(
-            '${appLocalizations.profileParseErrorDesc}: $scriptError',
-          );
-        }
-        return processed.config;
-      }
-    }
-
-    final rawConfig = await handleEvaluate(configMap, profile: targetProfile);
-    final input = await buildInput(rawConfig);
-
-    if (useRustConfigPipeline) {
-      final output = BettboxConfig.patchConfig(jsonEncode(input));
-      if (output != null) {
-        return (jsonDecode(output) as Map).cast<String, dynamic>();
-      }
-      if (BettboxConfig.isAvailable) {
-        commonPrint.log(
-          'Rust 配置管道未接管（输入含未支持的写法或内部出错），回退 Dart 路径',
+      final scriptError = processed.scriptError;
+      if (scriptError != null) {
+        commonPrint.log('Script execution failed: $scriptError');
+        globalState.showNotifier(
+          '${appLocalizations.profileParseErrorDesc}: $scriptError',
         );
       }
+      return processed.config;
     }
-    return applyConfigPatch(input);
+
+    final input = await buildInput(configMap);
+    return (jsonDecode(BettboxConfig.patchConfig(jsonEncode(input))) as Map)
+        .cast<String, dynamic>();
   }
 
   Future<Map<String, dynamic>> getProfileConfig(String profileId) async {
@@ -816,34 +801,6 @@ class GlobalState {
     configMap['rules'] = configMap['rule'];
     configMap.remove('rule');
     return configMap;
-  }
-
-  Future<Map<String, dynamic>> handleEvaluate(
-    Map<String, dynamic> config, {
-    Profile? profile,
-  }) async {
-    return _scriptEvaluateLock.synchronized(() async {
-      final currentScript = globalState.config.scriptProps.currentScript;
-      if (currentScript == null) return config;
-
-      if (profile != null && !profile.useScriptOverride) return config;
-
-      config['proxy-providers'] ??= {};
-
-      try {
-        return await JavaScriptRuntimeManager.evaluateScriptPreferRust(
-          currentScript.content,
-          config,
-          customOptions: currentScript.customOptions,
-        );
-      } catch (e) {
-        commonPrint.log('Script execution failed: $e');
-        globalState.showNotifier(
-          '${appLocalizations.profileParseErrorDesc}: $e',
-        );
-        return config;
-      }
-    });
   }
 }
 

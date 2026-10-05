@@ -232,8 +232,8 @@ jobs:
           }
           flutter @flutterArgs
 
-      # Rust 原生库（配置管道 + 脚本引擎）默认开启，缺 dll 只会静默回退 Dart/qjs、不报错，
-      # 所以这里硬断言它真的在包里。
+      # Rust 原生库（配置管道 + 脚本引擎）是唯一实现，缺 dll 时应用会直接报错而不是
+      # 静默降级，所以这里硬断言它真的在包里。
       # 脚本内保持纯 ASCII：PowerShell 5.1 会把无 BOM 的 .ps1 按 ANSI 读，中文会让它解析失败。
       - name: Verify Rust native lib (Windows)
         if: matrix.platform == 'windows'
@@ -260,33 +260,23 @@ jobs:
           }
           Write-Host "bettbox_native.dll matches (marker count = $marker)"
 
-      # Rust vs Dart/qjs 的差分套件（test/rust/）。脚本引擎的差分需要一个 qjs 参考实现：
-      # `flutter test` 下 flutter_qjs 只从 `test/build/Debug/ffiquickjs.dll` 加载引擎
-      # （plugins/flutter_qjs/lib/src/ffi.dart 按 FLUTTER_TEST 分支），而那个 dll 链了
-      # flutter_windows.dll，所以把 runner 目录一并放进 PATH。test/build/ 在 .gitignore 里，
-      # 这个拷贝不会弄脏工作区。缺 fixtures 或 Rust dll 都会直接失败，不会静默跳过。
-      - name: Differential tests Rust vs Dart (Windows)
+      # Dart 侧与 Rust 库相关的测试（test/rust/）。Rust 管道是唯一实现：缺 dll 时这些
+      # 用例会直接报错、不会静默跳过，所以先硬断言产物真的在。cargo 产物在 .gitignore 里，
+      # 这一步不会弄脏工作区。（golden 全量比对由 rust 工作流的 `cargo test` 负责。）
+      - name: Dart tests against Rust native lib (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $runner = "build/windows/x64/runner/Release"
-          if (-not (Test-Path "$runner/flutter_qjs_plugin.dll")) {
-            Write-Error "$runner/flutter_qjs_plugin.dll is missing - flutter build windows should have produced it"
-            exit 1
-          }
           if (-not (Test-Path "rust/target/release/bettbox_native.dll")) {
             Write-Error "rust/target/release/bettbox_native.dll is missing - the Rust build step should have produced it"
             exit 1
           }
-          New-Item -ItemType Directory -Force -Path test/build/Debug | Out-Null
-          Copy-Item "$runner/flutter_qjs_plugin.dll" test/build/Debug/ffiquickjs.dll -Force
-          $env:PATH = "$((Resolve-Path $runner).Path);$env:PATH"
           flutter test test/rust
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "differential tests failed with exit code $LASTEXITCODE"
+            Write-Error "test/rust failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
           }
-          Write-Host "differential tests passed"
+          Write-Host "test/rust passed"
 
       - name: Ensure Inno Setup (Windows)
         if: matrix.platform == 'windows'

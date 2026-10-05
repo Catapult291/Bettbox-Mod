@@ -279,7 +279,7 @@ class _ScriptsViewState extends ConsumerState<ScriptsView> {
           globalState.config.currentProfile?.useScriptOverride ?? false;
       final currentScript = ref.read(scriptStateProvider).currentScript;
       if (useScriptOverride && currentScript != null) {
-        final result = await JavaScriptRuntimeManager.evaluateScriptPreferRust(
+        final result = await JavaScriptRuntimeManager.evaluateScript(
           currentScript.content,
           rawConfig,
           customOptions: currentScript.customOptions,
@@ -1119,6 +1119,21 @@ class _GroupSwitchOptionsSheetState
 
       _dirty = false;
       _originalOptions = Map<String, bool>.from(validOptions);
+    } catch (e) {
+      // 配置改写失败（Rust 库不可用等）：把刚写入的分组开关退回原值，
+      // 运行配置保持上一份可用的那份不变。
+      ref.read(profilesProvider.notifier).updateProfile(
+        widget.profileId,
+        (state) => state.copyWith(groupSwitches: _originalOptions),
+      );
+      if (mounted) {
+        await globalState.showMessage(
+          message: TextSpan(
+            text: '${appLocalizations.profileParseErrorDesc}: ${e.formatError}',
+          ),
+          cancelable: false,
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);

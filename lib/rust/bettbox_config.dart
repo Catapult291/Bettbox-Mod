@@ -6,27 +6,20 @@ import 'package:ffi/ffi.dart';
 import 'package:bett_box/rust/generated/bettbox_config_ffi.dart';
 import 'package:bett_box/rust/native_library.dart';
 
-/// 是否让 Rust 侧接管配置改写管道（`GlobalState.patchRawConfig`）。
-///
-/// 默认开启，用 `--dart-define=USE_RUST_CONFIG_PIPELINE=false` 关闭回 Dart 路径。
-/// Rust 动态库缺失（该平台未构建 Rust 库）或调用失败时自动回退 Dart，不回退才是不正常。
-/// 差分验证见 `test/rust/patch_config_diff_test.dart`。
-const bool useRustConfigPipeline = bool.fromEnvironment(
-  'USE_RUST_CONFIG_PIPELINE',
-  defaultValue: true,
-);
-
 /// Rust 侧配置管道（`rust/bettbox-native`）的窄 C ABI 封装。
 ///
 /// ABI 见 `rust/bettbox-native/include/bettbox_config.h`，Dart 绑定由 ffigen 生成
 /// （`ffigen.bettbox_config.yaml`）。本文件只负责动态库加载、内存管理与 JSON 解码。
 /// 配置管道与脚本引擎已合并进同一个动态库（`bettbox_native`）。
+///
+/// 这是配置改写的唯一实现：动态库缺失或 ABI 级失败会抛 [StateError]，不再回退到
+/// Dart 镜像（失败策略与保留上一份可用运行配置的做法见
+/// `.grok/Rust 迁移与 Windows 推进路线.md` §1.5 第 4 步）。
 abstract final class BettboxConfig {
   static BettboxConfigFFI? _bindings;
   static Object? _loadError;
 
-  /// 动态库是否可用。不可用时 [parseRule] / [roundTripRule] 会抛错，
-  /// 调用方可以先探测再决定走 Dart 兜底路径。
+  /// 动态库是否可用。不可用时所有入口都会抛错。
   static bool get isAvailable => _tryLoad() != null;
 
   /// 解析一条 Clash 规则。动态库缺失时抛错；输入非法时返回 null。
@@ -50,8 +43,9 @@ abstract final class BettboxConfig {
     return _call(_require().bb_rule_round_trip, rule);
   }
 
-  /// 节点过滤用的最小正则匹配：命中返回 true，未命中返回 false，
-  /// 模式用了 Rust 子集之外的写法返回 null（此时配置管道会整条回退 Dart）。
+  /// 节点过滤用的正则匹配（QuickJS libregexp 语义）：命中返回 true，未命中返回
+  /// false，模式语法错误返回 null（配置管道遇到语法错误时跳过过滤，与 Dart 侧
+  /// `try { RegExp(...) } catch (_) {}` 一致）。
   static bool? nodeFilterMatch(String pattern, String text) {
     final bindings = _require();
     final patternPtr = pattern.toNativeUtf8();
@@ -70,28 +64,31 @@ abstract final class BettboxConfig {
 
   /// 跑完整条配置改写管道，返回改写后的配置 JSON 文本。
   ///
-  /// 输入结构见 `lib/common/config_patch.dart` 的 `applyConfigPatch`。
-  ///
-  /// 动态库不可用时返回 null 交给调用方回退 Dart，而不是抛错——该管道是可选
-  /// 加速路径，缺失不算错误。
-  static String? patchConfig(String inputJson) {
-    final bindings = _tryLoad();
-    if (bindings == null) return null;
-    return _call(bindings.bb_patch_config, inputJson);
+  /// 动态库不可用，或 Rust 侧未产出结果（输入结构非法、内部出错）时抛
+  /// [StateError]。该管道是唯一实现，失败必须让调用方看见（会保留上一份可用的
+  /// 运行配置，见 `GlobalState.getSetupParams`）。
+  static String patchConfig(String inputJson) {
+    final output = _call(_require().bb_patch_config, inputJson);
+    if (output == null) {
+      throw StateError('Rust 配置管道未产出结果（输入结构非法或内部出错）');
+    }
+    return output;
   }
 
   /// 合并入口：对 [inputJson] 里的 `rawConfig` 跑覆写脚本，再跑整条配置改写管道，
-  /// 整份配置只跨一次 FFI（对应 `patchRawConfig` 里「handleEvaluate + patch」两步）。
+  /// 整份配置只跨一次 FFI（对应 `patchRawConfig` 原先「handleEvaluate + patch」两步）。
   ///
-  /// 动态库不可用或 patch 失败返回 null（调用方回退两段式路径）；脚本自身失败不阻断
-  /// patch，错误放在结果的 `scriptError` 里由调用方提示。
-  static RustProcessedProfile? processProfile(
+  /// 动态库不可用或 Rust 侧未产出结果时抛 [StateError]；脚本自身失败不阻断 patch，
+  /// 错误放在结果的 `scriptError` 里由调用方提示。
+  static RustProcessedProfile processProfile(
     String inputJson,
     String script, {
     String? customOptionsJson,
   }) {
     final bindings = _tryLoad();
-    if (bindings == null) return null;
+    if (bindings == null) {
+      throw StateError('bettbox_native 动态库不可用：$_loadError');
+    }
     final inputPtr = inputJson.toNativeUtf8();
     final scriptPtr = script.toNativeUtf8();
     final optionsPtr = customOptionsJson?.toNativeUtf8();
@@ -101,12 +98,16 @@ abstract final class BettboxConfig {
         scriptPtr.cast<Char>(),
         optionsPtr?.cast<Char>() ?? nullptr,
       );
-      if (outputPtr == nullptr) return null;
+      if (outputPtr == nullptr) {
+        throw StateError('Rust 合并入口未产出结果（输入结构非法或内部出错）');
+      }
       try {
         final map = jsonDecode(outputPtr.cast<Utf8>().toDartString())
             as Map<String, dynamic>;
         final config = map['config'];
-        if (config is! Map) return null;
+        if (config is! Map) {
+          throw StateError('Rust 合并入口返回的信封里没有 config');
+        }
         return RustProcessedProfile(
           config: config.cast<String, dynamic>(),
           scriptError: map['scriptError'] as String?,
@@ -153,7 +154,7 @@ abstract final class BettboxConfig {
   /// 应用分组开关，返回 `{"proxy-groups": [...], "rules": [...]}` JSON 文本。
   ///
   /// [groupSwitchesJson] 是 `{分组名: 是否启用}`；[scriptActive] 为真时不处理
-  /// （与 Dart 侧 `applyGroupSwitches` 一致）。
+  /// （与配置管道内部的调用口径一致）。
   static String? applyGroupSwitches(
     String proxyGroupsJson,
     String rulesJson,

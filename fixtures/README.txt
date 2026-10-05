@@ -31,5 +31,6 @@ Bettbox-Mod 配置管道测试 fixture
 
 其它目录
 --------
-  golden/   配置改写管道的 golden 期望输出（由 Dart 镜像生成，Rust 侧测试只读对比），
+  golden/   配置改写管道的 golden 期望输出（阶段 5 第 1 步由 Dart 镜像生成，
+            镜像删除后它是整条管道唯一的回归网，Rust 侧测试只读对比），
             见 fixtures/golden/README.txt

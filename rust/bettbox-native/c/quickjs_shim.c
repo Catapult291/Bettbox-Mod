@@ -12,9 +12,10 @@
  * 的 `SyntaxError: unexpected character`、`'\u{1}'` 之类，甚至把越界字节当成 JS 执行
  * 出 `ReferenceError: 'xxx' is not defined`。
  *
- * 用法与 Dart 侧 `plugins/flutter_qjs/cxx/ffi.cpp` 同源裁剪：同一次求值一个新
+ * 用法与原先 Dart 侧 qjs 插件的 `cxx/ffi.cpp` 同源裁剪（插件已在 Rust 迁移阶段 5
+ * 删除）：同一次求值一个新
  * runtime、同样的 clock() 计时中断（超时）、同样的 JS_Eval 全局代码求值。
- * 编译开关也对齐插件的 Windows 构建（见 build.rs 的 opt_level/NDEBUG 说明）。
+ * 编译开关也对齐当时插件的 Windows 构建（见 build.rs 的 opt_level/NDEBUG 说明）。
  */
 
 #include <stdint.h>
@@ -61,10 +62,10 @@ static char *bbq_strdup(const char *src, size_t len) {
 
 /* 取走当前异常并格式化成一张 C 字符串（始终消费掉 pending exception）。
  *
- * 形状照抄 Dart 侧 `JSError.toString()`（`plugins/flutter_qjs/lib/src/object.dart`）：
- * 异常对象带非空 `stack` 属性时拼成 `message\nstack`，否则只给 message。Dart 侧的
- * `stack` 来自 `wrapper.dart` 里对异常的 `stack` 属性读取，少了它报错提示会比 qjs
- * 路径短一截（脚本正文由用户编写，栈是唯一能定位到出错的脚本行的线索）。 */
+ * 形状照抄原先 Dart 侧 qjs 插件的 `JSError.toString()`：
+ * 异常对象带非空 `stack` 属性时拼成 `message\nstack`，否则只给 message。那条路径的
+ * `stack` 来自插件的 `wrapper.dart` 里对异常 `stack` 属性的读取，少了它报错提示会比
+ * 原先 qjs 路径短一截（脚本正文由用户编写，栈是唯一能定位到出错的脚本行的线索）。 */
 static char *bbq_take_exception(JSContext *ctx) {
   JSValue exc = JS_GetException(ctx);
   const char *message = JS_ToCString(ctx, exc);

@@ -41,8 +41,7 @@ migrate_working_dir/
 /specs/
 /dist/
 .test/
-# `flutter test` 下 flutter_qjs 只从 test/build/Debug/ 加载参考实现动态库
-# （见 plugins/flutter_qjs/lib/src/ffi.dart），这里放的是本地构建产物。
+# 测试用的本地构建产物目录（历史上放 qjs 参考实现 dll）。
 /test/build/
 # Unsupported generated iOS platform
 /ios/

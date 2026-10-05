@@ -5,7 +5,7 @@ import 'package:bett_box/common/config_patch_input.dart';
 import 'package:bett_box/models/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// `buildConfigPatchInput` 是 Dart 与 Rust 两条路径唯一的共同入口，
+/// `buildConfigPatchInput` 是配置管道唯一的输入装配处，
 /// 这里把它对模型的映射钉住：枚举取 `.name`、`external-controller` 取 `.value`、
 /// `tunnels` 用 `toClashJson()` 而不是 `toJson()`。
 void main() {
