@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:bett_box/common/config_patch.dart';
 import 'package:bett_box/rust/bettbox_config.dart';
@@ -7,93 +6,10 @@ import 'package:bett_box/rust/bettbox_config.dart';
 import '../common/json_diff.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, dynamic> _fixture(String name) =>
-    jsonDecode(File('fixtures/$name').readAsStringSync())
-        as Map<String, dynamic>;
-
-dynamic _copy(Object? value) => jsonDecode(jsonEncode(value));
-
-final _app = _fixture('config/app-config.json');
-
-/// 脱敏脚本把 `hosts` 的值写成了列表，但 `ClashConfig.hosts` 是 `Map<String, String>`；
-/// 这里换成应用里真实会出现的字符串形状，并留一条多值以覆盖分隔符切分。
-Map<String, dynamic> _patchBase() {
-  final patch = _copy(_app['patchClashConfig']) as Map<String, dynamic>;
-  patch['hosts'] = <String, dynamic>{
-    'example.com': '203.0.113.10',
-    'cdn.example.net': '203.0.113.11, 203.0.113.12',
-  };
-  return patch;
-}
-
-/// 把 `Profile` 里 `patchRawConfig` 会读到的字段摊成平结构。
-///
-/// `overrideData.rules` 是 `OverrideRule.rules`（按 type 选 overrideRules / addedRules）
-/// 映射出的 `value` 列表，对应 Dart 侧的 `OverrideDataExt.runningRule`。
-Map<String, dynamic> _profileMeta(String id) {
-  final entry = (_app['profiles'] as List).cast<Map>().firstWhere(
-    (profile) => profile['id'] == id,
-  );
-  final overrideData = (entry['overrideData'] as Map).cast<String, dynamic>();
-  final rule = (overrideData['rule'] as Map).cast<String, dynamic>();
-  final rules =
-      (rule['type'] == 'override' ? rule['overrideRules'] : rule['addedRules'])
-          as List;
-  return <String, dynamic>{
-    'id': entry['id'],
-    'useScriptOverride': entry['useScriptOverride'],
-    'groupSwitches': entry['group-switches'],
-    'overrideData': <String, dynamic>{
-      'enable': overrideData['enable'],
-      'type': rule['type'],
-      'rules': rules.map((rule) => (rule as Map)['value']).toList(),
-    },
-  };
-}
-
-Map<String, dynamic> _envBase() => <String, dynamic>{
-  'isAndroid': false,
-  'isLinux': false,
-  'uiPath': r'C:\demo\Bettbox\ui',
-  'profilesPath': r'C:\demo\Bettbox\profiles',
-  'overrideDns': _app['overrideDns'],
-  'overrideNtp': _app['overrideNtp'],
-  'overrideSniffer': _app['overrideSniffer'],
-  'overrideExperimental': _app['overrideExperimental'],
-  'nodeExcludeFilter': _app['nodeExcludeFilter'],
-  'healthCheckTimeout': _app['healthCheckTimeout'],
-  'scriptAddedRules': (_app['scriptProps'] as Map)['added-rules'],
-  'hasCurrentScript': (_app['scriptProps'] as Map)['currentId'] != null,
-  'disableQuic': (_app['vpnProps'] as Map)['disableQuic'],
-  'excludeChina': (_app['vpnProps'] as Map)['excludeChina'],
-  'locale': (_app['appSetting'] as Map)['locale'],
-};
-
-Map<String, dynamic> _build({
-  required String profileFixture,
-  required String profileId,
-  Map<String, dynamic>? env,
-  Map<String, dynamic>? profile,
-  void Function(Map<String, dynamic> raw)? mutateRaw,
-  void Function(Map<String, dynamic> patch)? mutatePatch,
-}) {
-  final raw =
-      _copy(_fixture('config/$profileFixture.json')) as Map<String, dynamic>;
-  mutateRaw?.call(raw);
-  // 注入用的 Dart 字面量会推断出窄类型，过一次 JSON 归一化以匹配真实解码结果。
-  final normalizedRaw = _copy(raw) as Map<String, dynamic>;
-  final patch = _patchBase();
-  mutatePatch?.call(patch);
-  return <String, dynamic>{
-    'rawConfig': normalizedRaw,
-    'patch': patch,
-    'profile': profile ?? _profileMeta(profileId),
-    'env': <String, dynamic>{..._envBase(), ...?env},
-  };
-}
+import 'pipeline_cases.dart';
 
 void _expectSame(Map<String, dynamic> input, String where) {
-  final dartOutput = applyConfigPatch(_copy(input) as Map<String, dynamic>);
+  final dartOutput = applyConfigPatch(copyJson(input) as Map<String, dynamic>);
 
   final rustJson = BettboxConfig.patchConfig(jsonEncode(input));
   expect(rustJson, isNotNull, reason: where);
@@ -123,24 +39,24 @@ void main() {
       ? null
       : '未找到 bettbox_config 动态库，先构建：cd rust && cargo build';
 
-  const profileA = '1790933713761';
-  const profileB = '1790933895907';
+  const profileA = profileAId;
+  const profileB = profileBId;
 
   group('Rust vs Dart 的整管道差分', () {
     test('两份真实 profile 的默认开关', () {
       _expectSame(
-        _build(profileFixture: 'profile-a', profileId: profileA),
+        buildPatchInput(profileFixture: 'profile-a', profileId: profileA),
         'profile-a 默认',
       );
       _expectSame(
-        _build(profileFixture: 'profile-b', profileId: profileB),
+        buildPatchInput(profileFixture: 'profile-b', profileId: profileB),
         'profile-b 默认',
       );
     });
 
     test('DNS / NTP / Sniffer / Experimental 全覆盖打开', () {
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           env: {
@@ -156,7 +72,7 @@ void main() {
 
     test('Android 分支（tun / dns listen / ntp）', () {
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           env: {'isAndroid': true},
@@ -164,7 +80,7 @@ void main() {
         'Android',
       );
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-b',
           profileId: profileB,
           env: {'isAndroid': true, 'isLinux': true},
@@ -176,7 +92,7 @@ void main() {
     test('节点过滤与 tolerance 归一化', () {
       for (final filter in ['过期|剩余|官网', '^test-', '中文\\d+']) {
         _expectSame(
-          _build(
+          buildPatchInput(
             profileFixture: 'profile-a',
             profileId: profileA,
             env: {'nodeExcludeFilter': filter, 'healthCheckTimeout': 3000},
@@ -185,7 +101,7 @@ void main() {
         );
       }
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-b',
           profileId: profileB,
           env: {'nodeExcludeFilter': '过期', 'healthCheckTimeout': 8000},
@@ -193,7 +109,7 @@ void main() {
         'profile-b 节点过滤',
       );
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           mutateRaw: (raw) {
@@ -220,7 +136,7 @@ void main() {
         '俄语环境': {'disableQuic': true, 'excludeChina': true, 'locale': 'ru-RU'},
       }.entries) {
         _expectSame(
-          _build(
+          buildPatchInput(
             profileFixture: 'profile-a',
             profileId: profileA,
             env: entry.value,
@@ -233,11 +149,11 @@ void main() {
     test('overrideData 与追加规则', () {
       for (final type in ['override', 'added']) {
         _expectSame(
-          _build(
+          buildPatchInput(
             profileFixture: 'profile-a',
             profileId: profileA,
             profile: {
-              ..._profileMeta(profileA),
+              ...profileMeta(profileA),
               'overrideData': {
                 'enable': true,
                 'type': type,
@@ -252,7 +168,7 @@ void main() {
         );
       }
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           env: {
@@ -262,12 +178,12 @@ void main() {
         '脚本追加规则',
       );
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           env: {'hasCurrentScript': true},
           profile: {
-            ..._profileMeta(profileA),
+            ...profileMeta(profileA),
             'overrideData': {
               'enable': true,
               'type': 'override',
@@ -281,11 +197,11 @@ void main() {
 
     test('分组开关', () {
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           profile: {
-            ..._profileMeta(profileA),
+            ...profileMeta(profileA),
             'groupSwitches': {
               'OpenAI': false,
               'Telegram': false,
@@ -296,7 +212,7 @@ void main() {
         '禁用两个分组',
       );
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-b',
           profileId: profileB,
           mutateRaw: (raw) {
@@ -304,10 +220,10 @@ void main() {
             raw['proxy-groups'] = groups;
           },
           profile: {
-            ..._profileMeta(profileB),
+            ...profileMeta(profileB),
             'groupSwitches': {
               for (final (index, group)
-                  in ((_copy(_fixture('config/profile-b.json'))
+                  in ((copyJson(fixtureJson('config/profile-b.json'))
                               as Map)['proxy-groups']
                           as List)
                       .indexed)
@@ -322,7 +238,7 @@ void main() {
 
     test('provider 路径改写与 provider 级 exclude-filter', () {
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           env: {'nodeExcludeFilter': '过期'},
@@ -350,7 +266,7 @@ void main() {
 
     test('tun / sniffer 端口 / tunnels / 代理字段补丁', () {
       _expectSame(
-        _build(
+        buildPatchInput(
           profileFixture: 'profile-a',
           profileId: profileA,
           mutateRaw: (raw) {
