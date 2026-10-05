@@ -1,15 +1,16 @@
 import 'package:bett_box/rust/bettbox_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// 手写最小匹配器（`rust/bettbox-native/src/mini_regex.rs`）与 Dart `RegExp` 的差分。
+/// `nodeExcludeFilter` 的正则实现（`rust/bettbox-native/src/regex_matcher.rs`，
+/// QuickJS 自带的 libregexp）与 Dart `RegExp` 的差分。
 ///
 /// 规则：
-/// - Rust 认了（返回 true/false）⇒ 必须与 Dart `RegExp.hasMatch` 逐例一致；
-/// - Rust 拒绝（返回 null）⇒ 该模式必须确实在支持子集之外，且 Dart 侧要么也拒绝、
-///   要么管道会整条回退 Dart（见 `patch_config.rs`），不会出现两端悄悄分叉。
+/// - 两边都接受 ⇒ Rust 的 true/false 必须与 Dart `RegExp.hasMatch` 逐例一致；
+/// - Dart 拒绝（FormatException）⇒ Rust 也必须拒绝（返回 null），否则两端分叉。
 ///
-/// 支持子集的用例与子集外的用例分开列，避免「把支持的模式误判为不支持」被漏掉。
+/// 截目前未发现「一边接受、另一边拒绝」的有效性分歧。
 const _supported = <String>[
+  // 旧 mini_regex 已支持的子集
   '过期',
   '剩余|官网',
   '^test-',
@@ -44,23 +45,31 @@ const _supported = <String>[
   r'\n',
   r'^$',
   '',
-];
-
-/// 子集之外：Rust 必须拒绝。
-const _unsupported = <String>[
-  r'a{2}',
-  r'(?i)abc',
-  r'(?:ab)',
-  r'(?=a)',
+  // 换 libregexp 后新支持的写法（旧 mini_regex 会整条回退）
+  'a{2}',
+  'a{1,}',
+  '(?:ab)',
+  '(?=a)',
+  'a(?=b)',
+  '(?<=a)b',
+  '(?<name>a)',
   r'\bfoo',
+  r'\b',
   r'(a)\1',
-  r'\p{L}',
   r'\u0041',
   r'\x41',
+  '节点{2}',
+  r'^节点1{1}$',
+  r'\p{L}',
+  r'\k<name>',
+];
+
+/// Dart 拒绝 ⇒ Rust 也必须拒绝。
+const _invalid = <String>[
+  r'(?i)abc',
   '[a',
   'a**',
   '*abc',
-  r'a{1,}',
   'a+*',
   r'\',
 ];
@@ -106,22 +115,36 @@ const _texts = <String>[
   'a\u2028b',
   '\u00a0',
   '\ufeff',
+  // 新语法相关
+  'aa',
+  'xaa',
+  'ab',
+  'cb',
+  'a foo',
+  'afoo',
+  'foo',
+  'A',
+  '节点',
+  '节点1',
+  '节点2',
+  'p{L}',
+  'k<name>',
 ];
 
 void main() {
   final available = BettboxConfig.isAvailable;
   final skipReason = available
       ? null
-      : '未找到 bettbox_config 动态库，先构建：cd rust && cargo build';
+      : '未找到 bettbox_native 动态库，先构建：cd rust && cargo build --release';
 
-  group('最小匹配器 vs Dart RegExp', () {
-    test('支持子集内逐例一致', () {
+  group('libregexp vs Dart RegExp', () {
+    test('两边都接受时逐例一致', () {
       for (final pattern in _supported) {
-        final RegExp? dartRegex = _tryCompile(pattern);
-        expect(dartRegex, isNotNull, reason: 'Dart 应该接受 `$pattern`');
+        final dartRegex = _tryCompile(pattern);
+        expect(dartRegex, isNotNull, reason: 'Dart 应当接受 `$pattern`');
         for (final text in _texts) {
           final rust = BettboxConfig.nodeFilterMatch(pattern, text);
-          expect(rust, isNotNull, reason: '`$pattern` 在支持子集内，Rust 不应拒绝');
+          expect(rust, isNotNull, reason: '`$pattern` 应当能编译');
           expect(
             rust,
             dartRegex!.hasMatch(text),
@@ -133,27 +156,14 @@ void main() {
       }
     });
 
-    test('子集之外必须拒绝', () {
-      for (final pattern in _unsupported) {
+    test('Dart 拒绝的模式，Rust 也必须拒绝', () {
+      for (final pattern in _invalid) {
+        expect(_tryCompile(pattern), isNull, reason: '`$pattern` Dart 应当拒绝');
         expect(
           BettboxConfig.nodeFilterMatch(pattern, '任意文本'),
           isNull,
-          reason: '`$pattern` 在支持子集之外，Rust 应拒绝而不是猜着匹配',
+          reason: '`$pattern` Dart 拒绝，Rust 也必须拒绝',
         );
-      }
-    });
-
-    test('Dart 拒绝的模式，Rust 也必须拒绝', () {
-      for (final pattern in [..._supported, ..._unsupported]) {
-        final dartAccepts = _tryCompile(pattern) != null;
-        final rustAccepts = BettboxConfig.nodeFilterMatch(pattern, 'x') != null;
-        if (!dartAccepts) {
-          expect(
-            rustAccepts,
-            isFalse,
-            reason: '`$pattern` Dart 拒绝而 Rust 接受，两端会分叉',
-          );
-        }
       }
     });
   }, skip: skipReason);

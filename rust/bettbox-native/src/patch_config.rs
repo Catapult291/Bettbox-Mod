@@ -8,8 +8,8 @@
 //! `ClashConfig`、取应用数据目录）留在 Dart，这里只做对配置 map 的手术。
 //!
 //! 与 Dart 的已知差异（只在畸形输入上体现）：
-//! - `nodeExcludeFilter` 用本 crate 的 [`crate::mini_regex`]（手写最小子集）；用了子集之外的
-//!   写法时整条管道返回错误，由 Dart 侧回退，行为仍与 Dart 一致。
+//! - `nodeExcludeFilter` 用本 crate 的 [`crate::regex_matcher`]（QuickJS libregexp，非 unicode
+//!   模式，与 Dart `RegExp` 同语义）；模式语法错误时与 Dart 的 `catch (_) {}` 一致，跳过过滤。
 //! - `tun` 不是对象、`proxy-groups` 元素不是对象等情形，这里返回错误（FFI 侧得到 NULL），
 //!   Dart 会直接抛异常。
 
@@ -19,7 +19,7 @@ use serde_json::{json, Map, Value};
 
 use crate::dns_override::apply_dns_node_override;
 use crate::group_switch::apply_group_switches;
-use crate::mini_regex;
+use crate::regex_matcher::RegexMatcher;
 
 const EXTERNAL_UI_URL: &str =
     "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip";
@@ -392,14 +392,9 @@ fn apply_node_filter(
     let filter_regex = if node_exclude_filter.is_empty() {
         None
     } else {
-        // 子集之外的写法直接放弃整条 Rust 路径（返回 Err → FFI 得到 NULL → Dart 兜底），
-        // 而不是猜着当字面量处理，否则两端行为会悄悄分叉。
-        match mini_regex::compile(&node_exclude_filter) {
-            Ok(regex) => Some(regex),
-            Err(error) => {
-                return Err(format!("nodeExcludeFilter 用了未支持的写法：{error}"));
-            }
-        }
+        // 编译失败（模式语法非法）时与 Dart 侧 `try { RegExp(...) } catch (_) {}` 一致：
+        // 跳过节点过滤，而不是让整条管道失败。
+        RegexMatcher::compile(&node_exclude_filter).ok()
     };
 
     let mut protected_names: HashSet<String> =
@@ -771,12 +766,26 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_node_filter_aborts_so_dart_can_take_over() {
-        // `{}` 量词在最小匹配器子集之外：整条管道返回错误（FFI 得到 NULL），
-        // Dart 侧据此回退到自己的 RegExp 路径，两端行为不会分叉。
+    fn brace_quantifier_filter_works_after_libregexp() {
+        // 旧 mini_regex 对 `{n}` 会整条回退；换成 libregexp 后直接可用，不再需要 Dart 兜底。
         let mut input = minimal_input();
-        input["env"]["nodeExcludeFilter"] = json!("节点{2}");
-        assert!(patch_config(&input).is_err());
+        input["env"]["nodeExcludeFilter"] = json!("^节点1{1}$");
+        input["profile"]["groupSwitches"] = json!({});
+        let output = patch_config(&input).unwrap();
+        let members = output["proxy-groups"][0]["proxies"].as_array().unwrap();
+        assert_eq!(members, &vec![json!("节点2")]);
+    }
+
+    #[test]
+    fn invalid_filter_pattern_skips_filtering_like_dart() {
+        // Dart 侧 `try { RegExp(...) } catch (_) {}`：语法错误时 filterRegex 为 null、
+        // 整段过滤被跳过。Rust 现在与之一致，而不是让整条管道失败。
+        let mut input = minimal_input();
+        input["env"]["nodeExcludeFilter"] = json!("[a");
+        input["profile"]["groupSwitches"] = json!({});
+        let output = patch_config(&input).unwrap();
+        let members = output["proxy-groups"][0]["proxies"].as_array().unwrap();
+        assert_eq!(members, &vec![json!("节点1"), json!("节点2")]);
     }
 
     #[test]

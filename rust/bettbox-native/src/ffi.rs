@@ -205,7 +205,7 @@ pub unsafe extern "C" fn bb_node_filter_match(pattern: *const c_char, text: *con
         let Some(text) = (unsafe { borrow_str(text) }) else {
             return -1;
         };
-        match crate::mini_regex::compile(pattern) {
+        match crate::regex_matcher::RegexMatcher::compile(pattern) {
             Ok(regex) => i32::from(regex.is_match(text)),
             Err(_) => -1,
         }

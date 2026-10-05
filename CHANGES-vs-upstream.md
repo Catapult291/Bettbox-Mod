@@ -1211,6 +1211,41 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 
 ---
 
+## 27. 节点过滤正则改用 QuickJS 的 libregexp（删除手写 mini_regex）
+
+**文件**：`rust/bettbox-native/src/regex_matcher.rs`（新增，取代 `mini_regex.rs`）、
+`rust/bettbox-native/c/quickjs_shim.c`、`rust/bettbox-native/src/patch_config.rs`、
+`rust/bettbox-native/src/ffi.rs`、`test/rust/regex_matcher_diff_test.dart`（取代 `mini_regex_diff_test.dart`）
+
+**动机**：`nodeExcludeFilter` 原先由手写的最小正则子集实现，遇到 `{n}`、反向引用、`\b`、
+前瞻等写法只能整条回退 Dart——是配置管道最大的回退来源。仓库已内嵌 QuickJS，其 `libregexp`
+就是完整的 ECMAScript 实现，直接复用即可。
+
+**改动**：
+
+- 删除 `mini_regex.rs`；新增 `regex_matcher.rs`（`RegexMatcher::compile` / `is_match`），
+  复用 vendored QuickJS 的 `lre_compile` / `lre_exec`。
+- libregexp 的内存分配与栈检查钩子（`lre_realloc` / `lre_check_stack_overflow`）在本仓库
+  （`quickjs.c`）都绑定到 `JSContext`，`opaque` 因此必须是真实 context。由 `c/quickjs_shim.c`
+  新增的 `bbq_regex_compile` / `bbq_regex_is_match` / `bbq_regex_free` 句柄 API 封装：每个句柄
+  自持一套 runtime/context，跨线程安全；所有 QuickJS 交互仍留在 C 侧（与 `bbq_eval_program` 一致）。
+- 编码对齐 Dart `RegExp(pattern)`（非 unicode）：模式编成 CESU-8 并补 NUL 结尾
+  （`lre_compile` 解析完会读模式末尾之后一个字节）；被匹配文本按 UTF-16 码元传入。
+- `patch_config`：模式语法错误时**跳过节点过滤**（与 Dart 侧
+  `try { RegExp(...) } catch (_) {}` 一致），不再让整条管道失败；`bb_node_filter_match`
+  仍对语法错误返回 -1。
+
+**验证**：
+
+- `cargo test`：54 单元（含 `regex_matcher` 新增用例与改写的 `patch_config` 用例）+ 集成全过；
+  `cargo clippy --all-targets -- -D warnings` 干净。
+- `flutter test test/rust`：`regex_matcher_diff_test.dart` 用 50 个模式 × 53 段文本对拍，
+  Rust 与 Dart `RegExp.hasMatch` 逐例一致；Dart 拒绝的 6 个模式（`(?i)abc`、`[a`、`a**`、
+  `*abc`、`a+*`、末尾单独 `\`）Rust 也拒绝。未发现有效性分歧。
+- `flutter analyze lib test` 无问题；`flutter test` 150 项全过。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，

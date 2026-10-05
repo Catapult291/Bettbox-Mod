@@ -23,6 +23,7 @@
 #include <time.h>
 
 #include "quickjs.h"
+#include "libregexp.h"
 
 #ifdef _MSC_VER
 #define BBQ_EXPORT __declspec(dllexport)
@@ -201,3 +202,102 @@ BBQ_EXPORT int32_t bbq_eval_program(const char *program, size_t program_len,
 }
 
 BBQ_EXPORT void bbq_string_free(char *ptr) { free(ptr); }
+
+/*
+ * 节点过滤用的正则匹配（QuickJS 自带的 libregexp）。
+ *
+ * 为什么句柄里要带一个 runtime/context：libregexp 把内存分配与栈检查留给嵌入方，
+ * 本仓库的 `lre_realloc` / `lre_check_stack_overflow`（quickjs.c）都把 `opaque`
+ * 当 JSContext 用（`js_realloc_rt(ctx->rt, …)`），所以 opaque 必须是一个真实的
+ * context，不能塞别的指针。每个句柄自持一套，互不共享，因此跨线程安全。
+ *
+ * 句柄在 Rust 侧由 `RegexMatcher` 的 Drop 释放；每次编译返回新句柄。
+ */
+typedef struct {
+  JSRuntime *rt;
+  JSContext *ctx;
+  uint8_t *bytecode;
+} bbq_regex;
+
+/* 编译模式。
+ *
+ * 入参契约：`pattern` 必须**以 NUL 结尾**（与 bbq_eval_program 的 program 同理——
+ * lre_compile 解析完会读 `*buf_ptr` 判断是否有多余字符，不补 NUL 就会越界读）。
+ * `pattern_len` 不含这个 NUL。模式按 CESU-8 传入、`re_flags = 0`（非 unicode），
+ * 与 Dart 侧 `RegExp(pattern)` 的语义一致。
+ *
+ * 返回句柄；模式语法非法或内存不足返回 NULL。 */
+BBQ_EXPORT void *bbq_regex_compile(const char *pattern, size_t pattern_len) {
+  JSRuntime *rt = JS_NewRuntime();
+  if (rt == NULL) {
+    return NULL;
+  }
+  JSContext *ctx = JS_NewContext(rt);
+  if (ctx == NULL) {
+    JS_FreeRuntime(rt);
+    return NULL;
+  }
+  JS_UpdateStackTop(rt);
+
+  char error_msg[128];
+  int len = 0;
+  uint8_t *bytecode = lre_compile(&len, error_msg, sizeof(error_msg), pattern,
+                                  pattern_len, 0, ctx);
+  if (bytecode == NULL) {
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+    return NULL;
+  }
+
+  bbq_regex *handle = (bbq_regex *)malloc(sizeof(bbq_regex));
+  if (handle == NULL) {
+    lre_realloc(ctx, bytecode, 0);
+    JS_FreeContext(ctx);
+    JS_FreeRuntime(rt);
+    return NULL;
+  }
+  handle->rt = rt;
+  handle->ctx = ctx;
+  handle->bytecode = bytecode;
+  return handle;
+}
+
+/* `text` 为 UTF-16 码元数组（与 Dart 非 unicode RegExp 一致：按码元匹配）。
+ * 返回 1 命中、0 未命中、-1 内部错误（句柄为空或内存不足）。 */
+BBQ_EXPORT int32_t bbq_regex_is_match(void *handle_ptr, const uint16_t *text,
+                                      size_t text_len) {
+  bbq_regex *handle = (bbq_regex *)handle_ptr;
+  if (handle == NULL) {
+    return -1;
+  }
+  int capture_count = lre_get_capture_count(handle->bytecode);
+  uint8_t **capture = NULL;
+  if (capture_count > 0) {
+    /* 反向引用等需要捕获组；这里只判定是否命中，缓冲区仅作临时存放。 */
+    capture = (uint8_t **)calloc((size_t)capture_count * 2, sizeof(uint8_t *));
+    if (capture == NULL) {
+      return -1;
+    }
+  }
+  int ret = lre_exec(capture, handle->bytecode, (const uint8_t *)text, 0,
+                     (int)text_len, 1, handle->ctx);
+  free(capture);
+  if (ret < 0) {
+    return -1;
+  }
+  return ret == 1 ? 1 : 0;
+}
+
+BBQ_EXPORT void bbq_regex_free(void *handle_ptr) {
+  bbq_regex *handle = (bbq_regex *)handle_ptr;
+  if (handle == NULL) {
+    return;
+  }
+  if (handle->bytecode != NULL) {
+    /* 字节码由 libregexp 经 lre_realloc 分配，必须用同一个分配器释放。 */
+    lre_realloc(handle->ctx, handle->bytecode, 0);
+  }
+  JS_FreeContext(handle->ctx);
+  JS_FreeRuntime(handle->rt);
+  free(handle);
+}
