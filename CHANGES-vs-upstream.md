@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.9`（tag `v1.19.9` 已发布 Release）
+- 本仓库当前版本：`1.19.13`（tag `v1.19.13` 已发布 Release）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138）。
 文中提到的截图与构建产物均为本机验证留存，**未入库**，仅作为该步骤已执行的记录。
@@ -34,6 +34,15 @@
 | 20 | 稳定性 | 剪贴板工具（EcoPaste 双击粘贴等）注入的 Ctrl+V 无效：运行器在 IME 之前接管 | v1.19.8 |
 | 21 | 界面 | 配置编辑页新增「代理更新」开关：订阅更新可选走代理或直连 | v1.19.8 |
 | 22 | 工程 | 配置改写管道改为 Rust 实现（仅 Windows，异常自动回退） | v1.19.9 |
+| 23 | 安全 | helper 鉴权 key 不再明文落服务注册表，命名管道 ACL 收紧到当前用户 | v1.19.11 |
+| 24 | 工程 | Rust FFI 边界加固：panic 兜底、JSON 输入上限、工具链锁定 | v1.19.12 |
+| 25 | 工程 | 进程优先级不再依赖 wmic（Windows） | v1.19.12 |
+| 26 | 工程 | Rust 侧两个 crate 合并为一个 cdylib（`bettbox_native`） | v1.19.12 |
+| 27 | 工程 | 节点过滤正则改用 QuickJS 的 libregexp（删除手写 mini_regex） | v1.19.12 |
+| 28 | 工程 | 配置改写合并入口 bb_process_profile（脚本求值 + patch 只跨一次 FFI） | v1.19.12 |
+| 29 | 工程 | Android 侧接入 Rust 原生库（配置管道与脚本引擎不再走 Dart 镜像） | v1.19.13 |
+| 30 | 工程 | Android Kotlin Gradle Plugin 版本 2.1.0 → 2.2.20 | v1.19.13 |
+| 31 | 工程 | vendored QuickJS 移入 Rust crate，插件改为指向它 | v1.19.13 |
 
 ---
 
@@ -1358,6 +1367,41 @@ App 启动正常、首页渲染正常、无崩溃与回退日志；`integration_
 4 项全过；`flutter test` 159 项、`cargo test --workspace` 不受影响。
 CI 侧由 `ci run 37357996954` 确认：Flutter 3.44.9 对 KGP 2.2.20 既无报错也无告警，Android 两个 job
 均正常出包通过（详见第 29 节的同一轮运行）。
+
+---
+
+## 31. vendored QuickJS 移入 Rust crate，插件改为指向它
+
+**文件**：`rust/bettbox-native/vendor/quickjs/**`（自 `plugins/flutter_qjs/cxx/quickjs/**` 迁入）、
+`rust/bettbox-native/vendor/README.txt`（新增）、`rust/bettbox-native/build.rs`、
+`plugins/flutter_qjs/cxx/quickjs.cmake`、`plugins/flutter_qjs/cxx/prebuild.sh`
+
+**动机**：Rust 侧编译的 QuickJS 取自插件目录 `plugins/flutter_qjs/cxx/quickjs`，而后续步骤要删掉
+flutter_qjs 插件（Rust 迁移路线 §1.2），那会连源码一起丢。移进 crate 后它成为仓库内唯一副本，
+插件反过来指向它。
+
+**改动**：
+
+- 用 `git mv` 整目录搬迁（20 个文件，约 2.7 MB），保留文件历史。
+- `build.rs` 改为 `manifest.join("vendor/quickjs")`，不再引用插件目录。
+- 插件的 `cxx/quickjs.cmake` 与 `cxx/prebuild.sh` 改指 crate 内路径，各自加了存在性检查——路径写错时
+  在 CMake 配置 / `pod install` 阶段直接失败，而不是编出空目录后报难懂的错。
+- `cxx/ffi.h` 写的是 `#include "quickjs/quickjs.h"`，原先靠「与 ffi.h 同级目录」命中，搬迁后不再成立；
+  在 `quickjs` 目标上补 `target_include_directories(... PUBLIC ...)` 显式给出父目录。
+- 新增 `vendor/README.txt`：来源、版本（`2026-06-14`）、许可证、参与编译的文件与升级做法。用 `.txt`
+  而非 `.md`，因为根 `.gitignore` 全局忽略 `*.md`。
+
+**验证**：
+
+- `cargo test --workspace` 全过（含 golden 2 项；C 库由新路径重新编译）；`cargo fmt --all --check`
+  与 `cargo clippy --all-targets -- -D warnings` 干净。
+- 插件侧：用其 `test/CMakeLists.txt` 从新路径构建出 `ffiquickjs.dll`，据此跑 `flutter test test/rust`
+  44 项全过（参照实现即新构建的 dll）。
+- `dart setup.dart android --out config`：三个出货 ABI 交叉编译通过；`llvm-readelf` 确认 armeabi-v7a 为
+  ARM，arm64-v8a / x86_64 的 LOAD 段对齐 `0x4000`（16 KB），三份各导出 12 个 `bb_*` 符号。
+- `flutter analyze lib test setup.dart` 无问题；`flutter test` 159 项全过。
+
+**未决**：插件本身（连同 Dart 镜像与 qjs 回退路径）按计划留到后续步骤删除。
 
 ---
 
