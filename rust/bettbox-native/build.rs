@@ -1,9 +1,13 @@
-//! 编译 vendored QuickJS（`plugins/flutter_qjs/cxx/quickjs`）与本 crate 的薄封装。
+//! 编译 vendored QuickJS（`vendor/quickjs`）与本 crate 的薄封装。
 //!
 //! 用仓库里同一份 QuickJS 源码而不是 crates.io 上的绑定，是为了让 Windows 的
 //! Rust 路径与 Android/iOS 的 `plugins/flutter_qjs` 跑**同一份引擎**——否则两端
 //! 脚本语义可能漂移，而脚本正文由用户编写，回归很难在测试里穷举。
-//! 源文件清单与编译选项照抄 `plugins/flutter_qjs/cxx/quickjs.cmake`。
+//!
+//! 这份源码原本放在 `plugins/flutter_qjs/cxx/quickjs`，因为 `build.rs` 依赖插件目录，
+//! 删插件会连源码一起丢；2026-10-06 移进 crate 后它成为唯一副本，插件的
+//! `cxx/quickjs.cmake` 与 `cxx/prebuild.sh` 反过来指向这里（见 `vendor/README.txt`）。
+//! 源文件清单与编译选项仍照抄 `plugins/flutter_qjs/cxx/quickjs.cmake`。
 //!
 //! 编译开关另对齐插件 Windows 构建（CMake Release）的取值：`/O2` + `-DNDEBUG`。
 //! 原因不是性能：排查「同一份字节偶发解析失败」时发现，失败率随 C 侧代码形态在
@@ -16,8 +20,7 @@ use std::path::PathBuf;
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let cxx = manifest.join("../../plugins/flutter_qjs/cxx");
-    let quickjs = cxx.join("quickjs");
+    let quickjs = manifest.join("vendor/quickjs");
 
     let version_path = quickjs.join("VERSION");
     println!("cargo:rerun-if-changed={}", version_path.display());
