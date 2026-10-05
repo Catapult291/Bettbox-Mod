@@ -151,6 +151,41 @@ jobs:
         run: |
           dart setup.dart android --arch ${{ matrix.arch }} ${{ env.IS_STABLE == 'true' && '--env stable' || '' }}
 
+      # Rust 原生库（配置管道 + 脚本引擎）在 Android 上默认开启，缺 .so 会静默回退 Dart/qjs、
+      # 不报错，所以这里硬断言它真的进了 APK。按 ABI 逐个核对：凡是打了 libclash.so 的 ABI 目录，
+      # 都必须同时有 libbettbox_native.so——两边的 ABI 集由同一次 setup.dart 决定，不该出现缺口。
+      - name: Verify Rust native lib (Android)
+        if: matrix.platform == 'android'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          apks=(dist/*.apk)
+          if [ ${#apks[@]} -eq 0 ]; then
+            echo "dist/ 下没有 APK" >&2
+            exit 1
+          fi
+          for apk in "${apks[@]}"; do
+            entries=$(unzip -Z1 "$apk")
+            if [ -z "$entries" ]; then
+              echo "列不出 APK 内容（unzip 缺失或包损坏）：$apk" >&2
+              exit 1
+            fi
+            # ABI 以包里的 libclash.so 为准：这几个目录必须同时带上 Rust 库，
+            # 任何一边缺都是打包链路缺口，不是可以跳过的情形。
+            abis=$(printf '%s\n' "$entries" | sed -n 's#^lib/\([^/]*\)/libclash\.so$#\1#p' | sort -u)
+            if [ -z "$abis" ]; then
+              echo "$apk 里没有 libclash.so，打包链路异常" >&2
+              exit 1
+            fi
+            for abi in $abis; do
+              printf '%s\n' "$entries" | grep -qx "lib/$abi/libbettbox_native.so" || {
+                echo "$apk 的 $abi 缺 libbettbox_native.so" >&2
+                exit 1
+              }
+            done
+            echo "$apk 通过：$(printf '%s' $abis | tr '\n' ' ')"
+          done
+
       - name: Build Core (Windows)
         if: matrix.platform == 'windows'
         shell: bash

@@ -84,6 +84,9 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # 设备端验证：Android 上 Rust 管道是否真的接管（integration_test/）。
+  integration_test:
+    sdk: flutter
   # 测试里替换 PathProviderPlatform.instance：test 环境没有 path_provider_windows，
   # 默认的 MethodChannel 实现取下载目录会直接抛 UnsupportedError。
   path_provider_platform_interface: ^2.1.3

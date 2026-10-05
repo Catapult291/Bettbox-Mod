@@ -1279,6 +1279,48 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
 
 ---
 
+## 29. Android 侧接入 Rust 原生库（配置管道与脚本引擎不再走 Dart 镜像）
+
+**文件**：`setup.dart`、`lib/rust/native_library.dart`（新增）、`lib/rust/bettbox_config.dart`、
+`lib/rust/bettbox_script.dart`、`pubspec.yaml`、`.github/workflows/build.yaml`、
+`integration_test/android_rust_pipeline_test.dart`（新增）
+
+**动机**：Rust 侧的配置改写管道与覆写脚本引擎此前只在 Windows 生效；Android 上没有动态库，
+`BettboxConfig.isAvailable` 恒为假，于是每次都静默回退到 Dart 镜像与 qjs。两端实现并存既是双份维护，
+也让 Android 用不上 Rust 侧的性能与资源边界收益。
+
+**改动**：
+
+- `setup.dart` 新增 `Build.buildRustLibsForAndroid`：按 ABI（armeabi-v7a / arm64-v8a / x86_64）交叉编译
+  `bettbox-native`，产物落到 `libclash/android/<abi>/libbettbox_native.so`。`android/core` 既有的
+  `copyNativeLibs` 任务会把该目录整体拷进 jniLibs，Gradle 侧不需要新配置；CI 的 Android 任务本来就调
+  `dart setup.dart android`，因此也没有新增构建步骤。NDK 路径取自 `ANDROID_NDK`，并显式导出 `CC_`/`AR_`
+  ——cc crate 不认识 Android NDK，缺编译器时会静默退回宿主 gcc，编出错误架构的目标文件。
+- `lib/rust/native_library.dart`：把原先在 `bettbox_config.dart` 与 `bettbox_script.dart` 里各一份的
+  动态库加载逻辑合并。Windows/macOS 按可执行文件同目录的绝对路径加载；Android/iOS 交给平台加载器按名解析
+  （包内的库不在 dart:io 能枚举的路径上，不能先做文件预检）。
+- `.github/workflows/build.yaml`：Android 任务新增断言——APK 内每个带 `libclash.so` 的 ABI 目录都必须
+  同时有 `libbettbox_native.so`。缺库会让 Android 静默回退、不报错，所以这里硬断言；列表为空也直接失败
+  （避免断言被跳过而假通过）。
+- `integration_test/android_rust_pipeline_test.dart`：设备端回归网。断言设备上两个动态库都可加载，
+  并用同一份输入对拍 `bb_patch_config` vs Dart 镜像、`bb_eval_script` vs qjs、`bb_process_profile`
+  vs `bb_patch_config`。默认的 `flutter test` 只扫 `test/`，不会带上它。
+
+**验证**：
+
+- 交叉编译三个出货 ABI 全通过；`llvm-readelf` 确认架构正确、`LOAD` 段对齐 16 KB（NDK r28 默认），
+  `llvm-nm -D` 列出全部 12 个 `bb_*` 导出符号。
+- debug APK 内三个 ABI 均有 `libbettbox_native.so`（x86_64 另有 `libclash.so`）。
+- 模拟器（Android 16 / API 36 / x86_64）上 `flutter test integration_test/android_rust_pipeline_test.dart`
+  4 项全过；普通 debug 包启动正常、首页渲染正常、日志里没有回退记录。
+- `flutter analyze lib test setup.dart` 干净；`flutter test test/rust` 44 项、`cargo test --workspace`
+  全过。
+
+**未决**：VPN/tun 的真机级端到端（tun0、mixed-port、出口地址对照）未做；新增的 CI 断言尚未在 CI 真跑过。
+`flutter_qjs` 仍在包里（作为 qjs 回退路径与差分测试参照），与 Dart 镜像一起删除属后续步骤。
+
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，

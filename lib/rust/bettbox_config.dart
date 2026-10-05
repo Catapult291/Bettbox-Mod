@@ -1,16 +1,15 @@
 import 'dart:convert';
 import 'dart:ffi';
-import 'dart:io';
 
 import 'package:ffi/ffi.dart';
-import 'package:path/path.dart' as p;
 
 import 'package:bett_box/rust/generated/bettbox_config_ffi.dart';
+import 'package:bett_box/rust/native_library.dart';
 
 /// 是否让 Rust 侧接管配置改写管道（`GlobalState.patchRawConfig`）。
 ///
 /// 默认开启，用 `--dart-define=USE_RUST_CONFIG_PIPELINE=false` 关闭回 Dart 路径。
-/// Rust 动态库缺失（如 Android）或调用失败时自动回退 Dart，不回退才是不正常。
+/// Rust 动态库缺失（该平台未构建 Rust 库）或调用失败时自动回退 Dart，不回退才是不正常。
 /// 差分验证见 `test/rust/patch_config_diff_test.dart`。
 const bool useRustConfigPipeline = bool.fromEnvironment(
   'USE_RUST_CONFIG_PIPELINE',
@@ -240,7 +239,7 @@ abstract final class BettboxConfig {
     if (cached != null) return cached;
     if (_loadError != null) return null;
     try {
-      return _bindings = BettboxConfigFFI(_openLibrary());
+      return _bindings = BettboxConfigFFI(openBettboxNativeLibrary());
     } catch (error) {
       _loadError = error;
       return null;
@@ -255,38 +254,6 @@ abstract final class BettboxConfig {
     return bindings;
   }
 
-  static DynamicLibrary _openLibrary() {
-    final tried = <String>[];
-    for (final path in _candidatePaths()) {
-      if (!File(path).existsSync()) {
-        tried.add('$path（不存在）');
-        continue;
-      }
-      try {
-        return DynamicLibrary.open(path);
-      } catch (error) {
-        tried.add('$path（$error）');
-      }
-    }
-    throw StateError('未找到 $_libraryFileName，已尝试：\n${tried.join('\n')}');
-  }
-
-  static List<String> _candidatePaths() {
-    return [
-      // 打包后：与 Bettbox.exe 同目录（CMake install 的结果）。
-      p.join(p.dirname(Platform.resolvedExecutable), _libraryFileName),
-      // 开发/测试时：仓库根的 cargo 产物（flutter test 与 flutter run 的 cwd 都是仓库根）。
-      // debug 在前：开发迭代跑 `cargo build`，若 release 产物更旧会被它挡住。
-      for (final profile in ['debug', 'release'])
-        p.join(Directory.current.path, 'rust', 'target', profile, _libraryFileName),
-    ];
-  }
-
-  static String get _libraryFileName {
-    if (Platform.isWindows) return 'bettbox_native.dll';
-    if (Platform.isMacOS) return 'libbettbox_native.dylib';
-    return 'libbettbox_native.so';
-  }
 }
 
 /// [BettboxConfig.processProfile] 的结果。

@@ -293,6 +293,86 @@ class Build {
     await File(outPath).copy(targetPath);
   }
 
+  /// 交叉编译 Android 用的 Rust cdylib：每个 ABI 出一份 `libbettbox_native.so`，
+  /// 放进 `libclash/android/<abi>/`。`android/core` 的 copyNativeLibs 任务会把该目录
+  /// 整体拷进 jniLibs，Gradle 侧不需要任何新配置。
+  ///
+  /// `ANDROID_NDK` 由 CI 的「Setup Android NDK」写入，本地自行 export。
+  /// 必须显式给出 CC/AR：cc crate 不认识 Android NDK，缺编译器时会退回宿主 gcc，
+  /// 编出错误架构的目标文件——报错要到链接阶段才出现，与根因相距很远。
+  static Future<void> buildRustLibsForAndroid({Arch? arch}) async {
+    final ndk = Platform.environment['ANDROID_NDK'];
+    if (ndk == null || ndk.isEmpty) {
+      throw 'ANDROID_NDK is not set; it is required for Android cross builds';
+    }
+    final prebuiltDir = Directory(
+      join(ndk, 'toolchains', 'llvm', 'prebuilt'),
+    ).listSync().first.path;
+    final binDir = join(prebuiltDir, 'bin');
+
+    // API 级别与 `.github/workflows/build.yaml` 里的 Cargo linker 配置保持一致。
+    const api = 26;
+    // arch -> (jniLibs ABI 目录名, rustc target triple, NDK clang 前缀)
+    final targets = {
+      Arch.arm: (
+        'armeabi-v7a',
+        'armv7-linux-androideabi',
+        'armv7a-linux-androideabi',
+      ),
+      Arch.arm64: (
+        'arm64-v8a',
+        'aarch64-linux-android',
+        'aarch64-linux-android',
+      ),
+      Arch.amd64: ('x86_64', 'x86_64-linux-android', 'x86_64-linux-android'),
+    };
+
+    final items = buildItems.where((element) {
+      return element.target == Target.android &&
+          (arch == null ? true : element.arch == arch);
+    });
+
+    for (final item in items) {
+      final (abi, triple, clangPrefix) = targets[item.arch]!;
+      final envName = triple.replaceAll('-', '_');
+      final clang = join(
+        binDir,
+        '$clangPrefix$api-clang${Platform.isWindows ? '.cmd' : ''}',
+      );
+      final env = <String, String>{
+        // cc crate 依次找 CC_<target> / CC_<target 下划线形式> / TARGET_CC / CC。
+        'CC_$envName': clang,
+        'AR_$envName': join(
+          binDir,
+          'llvm-ar${Platform.isWindows ? '.exe' : ''}',
+        ),
+        // rustc 链 cdylib 时用的 linker，cargo 只认这个大写形式。
+        'CARGO_TARGET_${envName.toUpperCase()}_LINKER': clang,
+      };
+      await exec(
+        ['cargo', 'build', '--release', '--target', triple],
+        name: 'build rust lib for $abi',
+        environment: env,
+        workingDirectory: join(current, 'rust'),
+      );
+      final outPath = join(
+        current,
+        'rust',
+        'target',
+        triple,
+        'release',
+        'libbettbox_native.so',
+      );
+      final targetPath = join(
+        Build.outDir,
+        Target.android.name,
+        abi,
+        'libbettbox_native.so',
+      );
+      copyFile(outPath, targetPath);
+    }
+  }
+
   static List<String> getExecutable(String command) {
     return command.split(' ');
   }
@@ -666,8 +746,12 @@ class BuildCommand extends Command {
     // 只产出 Rust 原生动态库。必须在 buildCore 之前返回：Go 内核构建不可复现
     // （同机重跑 md5 会变），重建内核会让上一步按旧 hash 编出的 helper TOKEN 失配。
     if (actualOut == 'config') {
+      if (target == Target.android) {
+        await Build.buildRustLibsForAndroid(arch: arch);
+        return;
+      }
       if (target != Target.windows) {
-        throw '--out config is only supported for windows';
+        throw '--out config is only supported for windows and android';
       }
       await Build.buildRustLibs(target);
       return;
@@ -769,6 +853,9 @@ class BuildCommand extends Command {
         }
         return;
       case Target.android:
+        // Rust 库必须在 flutter_distributor 之前落进 libclash/android/<abi>/：
+        // android/core 的 copyNativeLibs 在 preBuild 阶段整目录拷进 jniLibs。
+        await Build.buildRustLibsForAndroid(arch: arch);
         final targetMap = {
           Arch.arm: 'android-arm',
           Arch.arm64: 'android-arm64',
