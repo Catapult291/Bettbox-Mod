@@ -1384,8 +1384,15 @@ flutter_qjs 插件（Rust 迁移路线 §1.2），那会连源码一起丢。移
 
 - 用 `git mv` 整目录搬迁（20 个文件，约 2.7 MB），保留文件历史。
 - `build.rs` 改为 `manifest.join("vendor/quickjs")`，不再引用插件目录。
-- 插件的 `cxx/quickjs.cmake` 与 `cxx/prebuild.sh` 改指 crate 内路径，各自加了存在性检查——路径写错时
-  在 CMake 配置 / `pod install` 阶段直接失败，而不是编出空目录后报难懂的错。
+- 插件的 `cxx/quickjs.cmake` 与 `cxx/prebuild.sh` 改为从自身所在目录**逐级向上**找含
+  `rust/bettbox-native/vendor/quickjs` 的那一级作为仓库根，找不到才在配置阶段失败。
+  **不能用固定层数**（`${CMAKE_CURRENT_LIST_DIR}/../../../rust/...`）：桌面端 Flutter 把插件放在
+  `<平台>/flutter/ephemeral/.plugin_symlinks/<name>` 下引用，那里是符号链接（或没有符号链接权限时
+  退化成插件目录副本）——两种情况固定层数都落在 `ephemeral/` 里而不是仓库根，`flutter build windows`
+  会在 CMake 配置阶段直接失败（打 `v1.19.13` 标签的首次 CI 就是这样挂的：报
+  `找不到 vendored QuickJS：…/windows/flutter/ephemeral/rust/bettbox-native/vendor/quickjs`）。
+  上溯写法对「真实路径 / 符号链接 / 目录副本」三种布局都成立，本机三种都实测过。
+  另外支持外部显式指定 `BETTBOX_QUICKJS_DIR`，便于把插件移出仓库单独使用。
 - `cxx/ffi.h` 写的是 `#include "quickjs/quickjs.h"`，原先靠「与 ffi.h 同级目录」命中，搬迁后不再成立；
   在 `quickjs` 目标上补 `target_include_directories(... PUBLIC ...)` 显式给出父目录。
 - 新增 `vendor/README.txt`：来源、版本（`2026-06-14`）、许可证、参与编译的文件与升级做法。用 `.txt`
@@ -1395,11 +1402,15 @@ flutter_qjs 插件（Rust 迁移路线 §1.2），那会连源码一起丢。移
 
 - `cargo test --workspace` 全过（含 golden 2 项；C 库由新路径重新编译）；`cargo fmt --all --check`
   与 `cargo clippy --all-targets -- -D warnings` 干净。
-- 插件侧：用其 `test/CMakeLists.txt` 从新路径构建出 `ffiquickjs.dll`，据此跑 `flutter test test/rust`
-  44 项全过（参照实现即新构建的 dll）。
+- 插件侧路径解析按三种布局各实测一次（都用插件自带的 `test/CMakeLists.txt` 配置并构建出
+  `ffiquickjs.dll`）：插件真实路径、`<平台>/flutter/ephemeral/.plugin_symlinks/` 下的目录副本、
+  同位置下的 junction（本机无符号链接权限，junction 与符号链接同形）。
+- 据此跑 `flutter test test/rust` 44 项全过（参照实现即新构建的 dll）。
 - `dart setup.dart android --out config`：三个出货 ABI 交叉编译通过；`llvm-readelf` 确认 armeabi-v7a 为
   ARM，arm64-v8a / x86_64 的 LOAD 段对齐 `0x4000`（16 KB），三份各导出 12 个 `bb_*` 符号。
 - `flutter analyze lib test setup.dart` 无问题；`flutter test` 159 项全过。
+- Windows 的完整应用构建（`flutter build windows --release`）本机无法执行：Flutter 在有插件时要求
+  符号链接支持，本机未开开发者模式、直接拒绝。该步骤由 CI 的 `build (windows)` 覆盖。
 
 **未决**：插件本身（连同 Dart 镜像与 qjs 回退路径）按计划留到后续步骤删除。
 
