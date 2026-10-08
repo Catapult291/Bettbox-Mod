@@ -23,7 +23,8 @@ const FORCE_PROXY_DOMAINS = [
   "api.ipinfo.io"
 ];
 
-// 自定义节点过滤（用 | 分割；null = 不过滤任何节点）
+// 自定义节点过滤：命中的节点从所有节点组里剔除（节点本身仍留在 proxies）。正则字面量
+// （/官网|剩余/i）和字符串（"官网|剩余"，按不区分大小写编译）都接受；null = 不过滤任何节点。
 const CUSTOM_FILTER = null;
 
 // IPv6 支持。内核里 AAAA 放行条件是 dns.ipv6 与顶层 ipv6 同时为真（ipv6 := dns.ipv6 && general.ipv6），
@@ -57,25 +58,32 @@ const SETTINGS = {
   // TW/SG/JP/KR 合并为 TW_SG_JP_KR 单一分组；原 AS 分组（东南亚）已移除
   REGION_ORDER: ["HK", "TW_SG_JP_KR", "US"],
 
+  // 不钉 timeout：写死 1 秒会把跨境节点里 TLS 握手偏慢（常见 0.8~2.5 s）的那些判死，而实时
+  // 故障切换靠 max-failed-times 已经能保证（连续失败即触发一次健康检查）。不写 timeout 时
+  // Bettbox 会按应用内「健康检查超时」写入（patch_config 只在组没有 timeout 时才写），
+  // 其它内核用默认 5000。
   URL_TEST_EXTRA: {
     hidden: true,
     url: "https://example.com/generate_204",
     interval: 900,
     tolerance: 100,
     lazy: true,
-    timeout: 1000,
     "max-failed-times": 1,
   },
 
+  // 同上：不钉 timeout，交给应用设置 / 内核默认
   FALLBACK_TEST_EXTRA: {
     url: "https://example.com/generate_204",
     interval: 900,
     lazy: true,
-    timeout: 1000,
     "max-failed-times": 1,
   },
 
-  INFO_FILTER: /tg|telegram|倒卖|到期|电报|订阅|发布|防止|返利|购买|官方|官网|工单|过期|规则|建议|客服|联系|流量|剩余|失联|网址|邮箱|续费|邀请|重置|梯子|群/i
+  // `tg` 是短代号，必须带字母/数字边界：旧写法会把「HKTG-01」「SG-TG01」这类真实节点当成
+  // 信息节点，判成信息节点后它就不进任何节点组。带分隔符的 TG / Telegram 仍按信息节点处理
+  // ——公告节点远比「专为 TG 优化的节点」常见，宁可贵一点。若订阅里真有叫 TG-01 的节点，
+  // 把这一项里的 `(?:^|[^a-z0-9])tg(?:[^a-z0-9]|$)|` 整段删掉即可。
+  INFO_FILTER: /(?:^|[^a-z0-9])tg(?:[^a-z0-9]|$)|telegram|倒卖|到期|电报|订阅|发布|防止|返利|购买|官方|官网|工单|过期|规则|建议|客服|联系|流量|剩余|失联|网址|邮箱|续费|邀请|重置|梯子|群/i
 };
 
 // ====================
@@ -114,6 +122,20 @@ const buildRegex = (arr = []) =>
     "i"
   );
 
+// provider 模式的地区筛选用：正则跑在内核（regexp2，默认区分大小写）里、匹配的是原始
+// 节点名，所以要用内联 (?i)；2~3 个字母的地区代号要加字母边界，否则 HK 会命中「HKTG」。
+const buildRegionFilter = (arr = []) =>
+  "(?i)" +
+  arr
+    .map((raw) => {
+      const token = String(raw).trim();
+      const escaped = escapeRegex(token);
+      return /^[A-Za-z]{2,3}$/.test(token)
+        ? `(?:^|[^A-Za-z])${escaped}(?:[^A-Za-z]|$)`
+        : escaped;
+    })
+    .join("|");
+
 const buildRegions = () =>
   ([
     { name: "HK", pattern: ["香港", "HK", "HKG", "HONGKONG", "HONG KONG"], icon: "Hong_Kong.png" },
@@ -140,9 +162,10 @@ const buildRegions = () =>
       ],
       icon: "United_States.png"
     }
-  ]).map((r) => ({ ...r, regex: buildRegex(r.pattern) }));
+  ]).map((r) => ({ ...r, regex: buildRegex(r.pattern), filter: buildRegionFilter(r.pattern) }));
 
 const REGIONS = buildRegions();
+const REGION_META = new Map(REGIONS.map((r) => [r.name, r]));
 
 const buildFakeIpFilter = (bypass = []) =>
   uniq([
@@ -159,22 +182,33 @@ const buildFakeIpFilter = (bypass = []) =>
     )
   ]);
 
+// 订阅自带的直连规则要插在「第一条泛化代理规则」之前：旧做法插在 MATCH 之前，它们排在
+// RULE-SET,gfw,main 与 ai/tg 分类规则之后，对 gfw 域名根本轮不到生效（等于白留）。
+// 锚点选 gfw 而不是所有指向代理组的规则，有两处有意保留的优先级：
+//   * FORCE_PROXY_DOMAINS 那几条是网络检测的锚点，要保持脚本可控；
+//   * ai / tg 的分类优先（AI 走独立出口降风控、Telegram 直连在部分网络不通）。
+// 想让订阅规则连这两类也盖过去，把锚点换成 /,(?:main|ai|tg)$/ 即可。
+const EXTRA_RULES_ANCHOR = /^RULE-SET,gfw,main$/i;
+
 const mergeRules = (baseRules = [], extraRules = []) => {
   const extra = Array.isArray(extraRules) ? extraRules.filter(Boolean) : [];
   if (!extra.length) return baseRules.slice();
 
-  const matchIndex = baseRules.findIndex(
-    // 注意：左侧已 toUpperCase，右侧也必须是全大写——旧写法的 "MATCH,main" 永远不相等，
-    // 于是保留下来的 profile 直连规则被追加到 MATCH 之后，成为永不生效的死规则。
-    (rule) => String(rule).trim().toUpperCase() === "MATCH,FINAL"
-  );
+  let insertIndex = baseRules.findIndex((rule) => EXTRA_RULES_ANCHOR.test(String(rule).trim()));
+  if (insertIndex === -1) {
+    insertIndex = baseRules.findIndex(
+      // 注意：左侧已 toUpperCase，右侧也必须是全大写——旧写法的 "MATCH,main" 永远不相等，
+      // 于是保留下来的 profile 直连规则被追加到 MATCH 之后，成为永不生效的死规则。
+      (rule) => String(rule).trim().toUpperCase() === "MATCH,FINAL"
+    );
+  }
 
-  if (matchIndex === -1) return uniq([...baseRules, ...extra]);
+  if (insertIndex === -1) return uniq([...baseRules, ...extra]);
 
   return uniq([
-    ...baseRules.slice(0, matchIndex),
+    ...baseRules.slice(0, insertIndex),
     ...extra,
-    ...baseRules.slice(matchIndex)
+    ...baseRules.slice(insertIndex)
   ]);
 };
 
@@ -260,6 +294,16 @@ const STATIC_RULES = [
   "MATCH,final"
 ];
 
+// 无可用节点（既无内联 proxies 也无 proxy-providers）时用的规则：与 STATIC_RULES 同序，
+// 只把指向代理组的那几条降级成 DIRECT。内核 parseRules 对不存在的规则目标直接报
+// "rules[N] [RULE-SET,gfw,main] error: proxy [main] not found" 并拒绝整份配置（连 DNS
+// 都不生效），不是回退直连，所以这不是美观问题。
+const STATIC_RULES_NO_NODES = STATIC_RULES.map((rule) =>
+  /^(?:RULE-SET|DOMAIN|DOMAIN-SUFFIX),[^,]+,(?:main|ai|tg)$/.test(rule)
+    ? rule.replace(/,(?:main|ai|tg)$/, ",DIRECT")
+    : rule
+);
+
 const STATIC_FAKE_IP_FILTER = buildFakeIpFilter(BYPASS_DOMAINS);
 
 // ====================
@@ -270,6 +314,13 @@ const ensureConfigObject = (input) =>
 
 const getOriginalProxies = (input) =>
   Array.isArray(input.proxies) ? input.proxies : [];
+
+// proxy-providers 的键：这类订阅的节点不在 config.proxies 里，只在运行期由 provider 提供。
+// 旧版只看 proxies，于是 provider 型订阅会走进「无节点」分支。
+const getProxyProviders = (input) => {
+  const providers = input && input["proxy-providers"];
+  return providers && typeof providers === "object" ? Object.keys(providers) : [];
+};
 
 const makeProxyNamesUnique = (proxies = []) => {
   const used = new Set();
@@ -297,11 +348,26 @@ const makeProxyNamesUnique = (proxies = []) => {
   });
 };
 
+// 过滤器统一成 RegExp：字符串按不区分大小写编译（旧注释写「用 | 分割」，直接传字符串会
+// 在 .test 上抛 TypeError，脚本整体失败并回退上一份配置）。正则非法只警告一次并退化为
+// 「不过滤」——留一个笔误就废掉整份配置的代价更大。
+const toFilterRegex = (filter) => {
+  if (!filter) return null;
+  if (filter instanceof RegExp) return filter;
+  try {
+    return new RegExp(String(filter), "i");
+  } catch (err) {
+    console.warn(`CUSTOM_FILTER 不是合法正则，已忽略：${String(filter)}（${err}）`);
+    return null;
+  }
+};
+
 const filterCustomProxies = (proxies = [], customFilter) => {
-  if (!customFilter) return proxies.slice();   // 未配置过滤器：全保留
+  const filter = toFilterRegex(customFilter);
+  if (!filter) return proxies.slice();   // 未配置过滤器：全保留
   return proxies.filter((proxy) => {
     if (!proxy || !proxy.name) return false;
-    return !customFilter.test(proxy.name);
+    return !filter.test(proxy.name);
   });
 };
 
@@ -355,46 +421,68 @@ const classifyProxiesByRegion = (normalProxies = [], regions = []) => {
   };
 };
 
-const buildAllAiProxyList = (activeRegions = [], otherProxyNames = [], allNames = []) => {
-  const nonHk = uniq([
+// 排除 HK 的节点名单。旧版在「无非 HK 节点」时退回全量（含 HK），于是只有 HK 节点的订阅
+// 里 AI 仍然走 HK；这里返回空，由 buildProxyGroups 把 ai 组指向 main（AI 跟随主组）。
+const buildAllAiProxyList = (activeRegions = [], otherProxyNames = []) =>
+  uniq([
     ...activeRegions.filter((r) => r.name !== "HK").flatMap((r) => r.proxies),
     ...otherProxyNames
   ]);
-  return nonHk.length ? nonHk : allNames;
-};
 
 // ====================
 // 5. 策略组
 // ====================
+// 节点来源有两种，可同时存在：
+//   * 内联节点（config.proxies）→ 显式名单建组，能按名字做地区/AI 分类；
+//   * proxy-providers → `use` + `filter`/`exclude-filter` 建组，节点名运行期才知道，
+//     分类交给内核正则在组内筛。filter 只作用于 provider 带来的节点，显式名单始终保留
+//     （内核 groupbase.GetProxies 只对 provider 节点套 filterRegs）。
+// 代价：provider 型订阅在组之前拿不到节点名，INFO_FILTER 与「地区内具体有哪些节点」都
+// 只能交给内核正则，公告类节点会照规则留在地区组里。
 const buildProxyGroups = ({
   allNames,
   allAiNames,
   activeRegionMap,
   activeRegionNameSet,
   otherProxyNames,
-  infoNames
+  infoNames,
+  providers
 }) => {
   const groups = [];
+  const hasNodes = allNames.length > 0 || providers.length > 0;
+  const hasProvider = providers.length > 0;
+  const hasAllAi = allAiNames.length > 0 || hasProvider;
 
-  const add = (name, type, proxies, icon = "Available.png", extra = {}) => {
-    proxies = uniq(proxies);
-    if (name && proxies.length) {
-      groups.push({
-        name,
-        type,
-        proxies,
-        icon: SETTINGS.ICON_BASE + icon,
-        ...extra
-      });
-    }
+  const add = (name, type, proxies = [], icon = "Available.png", extra = {}) => {
+    const list = uniq(Array.isArray(proxies) ? proxies : []);
+    const use = uniq(extra.use || []);
+    // 显式名单与 use 都空才算空组：只靠 use 的组（provider 模式）不能按名单长度判空
+    if (!name || (!list.length && !use.length)) return;
+    groups.push({
+      name,
+      type,
+      ...(use.length ? { use } : {}),
+      proxies: list,
+      icon: SETTINGS.ICON_BASE + icon,
+      ...extra
+    });
   };
 
-  add("fcm", "select", ["DIRECT"], "Google_Search.png", { hidden: true });
+  // provider 模式下给叶子组补 use（地区筛选交给 filter）
+  const withProviders = (extra = {}) => (hasProvider ? { ...extra, use: providers } : extra);
 
-  const regionEntries = SETTINGS.REGION_ORDER.filter((rName) => activeRegionNameSet.has(rName));
+  // 这里原本还有一个 hidden 的 `fcm` 组（["DIRECT"]），但没有任何规则或分组引用它，
+  // 而 FCM 已由 STATIC_RULES 的 RULE-SET,googlefcm,DIRECT 直接判直连，故删除。
+  // 想要「FCM 从哪个出口走」的手动开关：把那条规则的 DIRECT 换成 fcm，并去掉 hidden。
+
+  // 有哪些地区组：内联侧出现过的地区；provider 模式下三个地区组都建（内容运行期筛）
+  const regionEntries = SETTINGS.REGION_ORDER.filter((rName) => {
+    const meta = REGION_META.get(rName);
+    return meta && (activeRegionNameSet.has(rName) || hasProvider);
+  });
 
   // main 组
-  if (allNames.length) {
+  if (hasNodes) {
     const mainEntries = ["All", ...regionEntries];
     if (otherProxyNames.length) mainEntries.push("Other");
     add("main", "select", mainEntries, "Available.png");
@@ -404,9 +492,7 @@ const buildProxyGroups = ({
   // 想改兜底走向时不用动规则；默认第一项是 main，与旧版 MATCH,main 行为一致。
   // 该组永远存在（至少含 DIRECT），因此无可用节点时也不会出现悬空的 MATCH 目标。
   const finalEntries = [
-    ...(allNames.length ? ["main"] : []),
-    ...(allAiNames.length ? ["ai"] : []),
-    ...(allNames.length ? ["tg"] : []),
+    ...(hasNodes ? ["main", "ai", "tg"] : []),
     ...regionEntries,
     ...(otherProxyNames.length ? ["Other"] : []),
     "DIRECT"
@@ -414,30 +500,45 @@ const buildProxyGroups = ({
   add("final", "select", finalEntries, "Final.png");
 
   // All 组
-  if (allNames.length) {
-    add("URL Test - All", "url-test", allNames, "Auto.png", SETTINGS.URL_TEST_EXTRA);
+  if (hasNodes) {
+    add("URL Test - All", "url-test", allNames, "Auto.png", withProviders({ ...SETTINGS.URL_TEST_EXTRA }));
     add("All", "select", ["URL Test - All", ...allNames], "Auto.png");
   }
 
-  // ai 组（包含地区子分组，排除 HK）
-  if (allAiNames.length) {
+  // ai 组（含地区子分组，排除 HK）与它的全量组
+  if (hasNodes) {
     const aiRegionEntries = SETTINGS.REGION_ORDER.filter(
-      (rName) => rName !== "HK" && activeRegionNameSet.has(rName)
+      (rName) => rName !== "HK" && regionEntries.includes(rName)
     );
-    const aiEntries = ["All-ai", ...aiRegionEntries];
-    if (otherProxyNames.length) aiEntries.push("Other");
+    const aiEntries = [
+      ...(hasAllAi ? ["All-ai"] : []),
+      ...aiRegionEntries,
+      ...(otherProxyNames.length ? ["Other"] : [])
+    ];
+    // 只有 HK 节点（无非 HK 节点、也无 provider）时不能退回「含 HK 的全量」——旧版会在
+    // 只有 HK 的订阅上把 AI 交给 HK。改成指向 main：语义是「AI 跟随主组」，且不生成悬空组。
+    if (!aiEntries.length) aiEntries.push("main");
     add("ai", "select", aiEntries, "ChatGPT.png");
-  }
 
-  // All-ai 组（排除 HK 的所有节点）
-  if (allAiNames.length) {
-    add("URL Test - All-ai", "url-test", allAiNames, "ChatGPT.png", SETTINGS.URL_TEST_EXTRA);
-    add("All-ai", "select", ["URL Test - All-ai", ...allAiNames], "ChatGPT.png");
+    if (hasAllAi) {
+      add(
+        "URL Test - All-ai",
+        "url-test",
+        allAiNames,
+        "ChatGPT.png",
+        withProviders({
+          ...SETTINGS.URL_TEST_EXTRA,
+          // provider 侧的排除 HK 只能靠 exclude-filter（名单里没有 provider 节点名）
+          ...(hasProvider ? { "exclude-filter": REGION_META.get("HK").filter } : {})
+        })
+      );
+      add("All-ai", "select", ["URL Test - All-ai", ...allAiNames], "ChatGPT.png");
+    }
   }
 
   // tg 组（原优先 SG，SG 已并入 TW_SG_JP_KR，改为优先合并组）
-  if (allNames.length) {
-    const hasAsia4 = activeRegionNameSet.has("TW_SG_JP_KR");
+  if (hasNodes) {
+    const hasAsia4 = activeRegionNameSet.has("TW_SG_JP_KR") || hasProvider;
 
     add(
       "tg - Fallback",
@@ -457,11 +558,20 @@ const buildProxyGroups = ({
 
   // 地区分组
   SETTINGS.REGION_ORDER.forEach((rName) => {
-    const region = activeRegionMap.get(rName);
-    if (!region) return;
+    const meta = REGION_META.get(rName);
+    if (!meta) return;
+    const inline = activeRegionMap.get(rName);
+    const inlineNames = inline ? inline.proxies : [];
+    if (!inline && !hasProvider) return;
 
-    add(`URL Test - ${region.name}`, "url-test", region.proxies, region.icon, SETTINGS.URL_TEST_EXTRA);
-    add(region.name, "select", [`URL Test - ${region.name}`, ...region.proxies], region.icon);
+    add(
+      `URL Test - ${rName}`,
+      "url-test",
+      inlineNames,
+      meta.icon,
+      withProviders({ ...SETTINGS.URL_TEST_EXTRA, ...(hasProvider ? { filter: meta.filter } : {}) })
+    );
+    add(rName, "select", [`URL Test - ${rName}`, ...inlineNames], meta.icon);
   });
 
   // Other 组（未匹配任何地区的节点，含原 AS 组的东南亚节点）
@@ -480,9 +590,10 @@ const buildProxyGroups = ({
     "GLOBAL",
     "select",
     [
-      ...(allNames.length ? ["main", "All"] : []),
-      ...(allAiNames.length ? ["ai", "All-ai"] : []),
-      ...(allNames.length ? ["tg"] : []),
+      ...(hasNodes ? ["main", "All"] : []),
+      ...(hasNodes ? ["ai"] : []),
+      ...(hasAllAi ? ["All-ai"] : []),
+      ...(hasNodes ? ["tg"] : []),
       ...regionEntries,
       ...(otherProxyNames.length ? ["Other"] : []),
       ...(infoNames.length ? ["info"] : []),
@@ -519,6 +630,10 @@ const applySniffer = (cfg) => {
   };
 };
 
+// 注：这一整段在 Bettbox 里基本被应用侧补丁覆盖（enable / device / stack / dns-hijack /
+// auto-route / auto-detect-interface / auto-redirect / strict-route 都由应用写入，见
+// rust/bettbox-native/src/patch_config.rs），这里主要是给其它 mihomo 客户端的默认值；
+// 在 Bettbox 里真正由脚本决定的是规则、DNS 与分组。
 const applyTun = (cfg) => {
   cfg.tun = {
     ...(cfg.tun || {}),
@@ -527,11 +642,14 @@ const applyTun = (cfg) => {
     "auto-route": true,
     "auto-detect-interface": true,
     "strict-route": true,
-    "dns-hijack": ["any:53", "tcp://any:53"]
+    // 只留 any:53：内核会把 `tcp://any:53` 的前缀裁掉、any 换成 0.0.0.0，与 any:53 完全相同
+    // （listener/sing_tun/server.go），而 TUN 的 dns-hijack 本来就同时接管 UDP/TCP。
+    "dns-hijack": ["any:53"]
   };
 };
 
-const applyDns = (cfg) => {
+// hasProxyGroups=false 表示这份配置没有任何节点（无 main/ai 组），DNS 里就不能再引用它们。
+const applyDns = (cfg, { hasProxyGroups = true } = {}) => {
   const dns = cfg.dns || {};
   const fakeIpFilterFromCfg = Array.isArray(dns["fake-ip-filter"]) ? dns["fake-ip-filter"] : [];
 
@@ -548,6 +666,11 @@ const applyDns = (cfg) => {
     "https://1.1.1.1/dns-query#main",
     "https://8.8.8.8/dns-query#main"
   ];
+
+  // 没有代理组时不能再用 `#main`：内核找不到这个名字时会把它当**网卡名**去绑定
+  // （tunnel/dns_dialer.go: Proxies()[name] 未命中就 dialer.WithInterface(name)），
+  // 结果是这些 nameserver 的查询直接失败，而不是回落直连。
+  const directForeignDNS = foreignDNS.map((s) => s.replace(/#main$/, "#DIRECT"));
 
   // AI 域名 DNS 锁定 ai 组出口，保证解析出口与实际流量出口地理位置一致，降低风控
   const aiDNS = [
@@ -610,11 +733,15 @@ const applyDns = (cfg) => {
     // 内核重启后旧 fake-ip 失配会让客户端连到失效地址（表现为超时/重置）
     "fake-ip-filter": uniq([...fullFakeIpFilter, ...CRITICAL_DOMAINS]),
     "default-nameserver": ["223.5.5.5", "119.29.29.29"],
+    // 订阅自带的 nameserver-policy 合并进来，脚本点名的键以脚本为准。内核的 policy 键按最长
+    // 匹配生效、没有真正的全捕获键（`*` 只匹配单标签域名），故订阅里宽泛的键最多影响它点名的
+    // 那部分域名；真遇到塞了 `+.com` 这类宽泛键的订阅，把下面第一行展开去掉即可。
     "nameserver-policy": {
-      "rule-set:category-ai-!cn": aiDNS,
+      ...(dns["nameserver-policy"] || {}),
+      ...(hasProxyGroups ? { "rule-set:category-ai-!cn": aiDNS } : {}),
       ...criticalNameserverPolicy
     },
-    nameserver: foreignDNS,
+    nameserver: hasProxyGroups ? foreignDNS : directForeignDNS,
     "proxy-server-nameserver": [
       "https://doh.pub/dns-query#DIRECT",
       "https://dns.alidns.com/dns-query#DIRECT"
@@ -622,7 +749,10 @@ const applyDns = (cfg) => {
     "direct-nameserver": chinaDNS
   };
 
+  // 合并而不是整段覆盖：订阅自带的 hosts 条目保留下来，同名的以脚本为准（脚本这几条分别是
+  // DoH 引导与定向屏蔽，必须由脚本说了算）。
   cfg.hosts = {
+    ...(cfg.hosts || {}),
     "dns.alidns.com": ["223.5.5.5", "223.6.6.6"],
     "doh.pub": ["1.12.12.12", "120.53.53.53"],
     "services.googleapis.cn": ["services.googleapis.com"],
@@ -657,6 +787,7 @@ function main(config) {
   config = ensureConfigObject(config);
 
   const originalProxies = getOriginalProxies(config);
+  const providers = getProxyProviders(config);
   const existingRules = Array.isArray(config.rules) ? config.rules : [];
 
   config["rule-providers"] = {
@@ -664,61 +795,58 @@ function main(config) {
     ...buildRuleProviders()
   };
 
-  config.rules = mergeRules(STATIC_RULES, pickDirectRules(existingRules));
+  makeProxyNamesUnique(originalProxies);
 
-  if (originalProxies.length) {
-    makeProxyNamesUnique(originalProxies);
+  // 1. 先用 CUSTOM_FILTER 过滤掉不想要的节点
+  const filteredProxies = filterCustomProxies(originalProxies, CUSTOM_FILTER);
 
-    // 1. 先用 CUSTOM_FILTER 过滤掉不想要的节点
-    const filteredProxies = filterCustomProxies(originalProxies, CUSTOM_FILTER);
+  // 2. 再用 INFO_FILTER 分离信息节点和正常节点
+  const { infoProxies, normalProxies } = splitInfoAndNormalProxies(
+    filteredProxies,
+    SETTINGS.INFO_FILTER
+  );
 
-    // 2. 再用 INFO_FILTER 分离信息节点和正常节点
-    const { infoProxies, normalProxies } = splitInfoAndNormalProxies(
-      filteredProxies,
-      SETTINGS.INFO_FILTER
-    );
+  const allNames = uniq(normalProxies.map((p) => p.name));
+  const infoNames = uniq(infoProxies.map((p) => p.name));
 
-    const baseProxies = normalProxies;
-    const allNames = uniq(baseProxies.map((p) => p.name));
-    const infoNames = uniq(infoProxies.map((p) => p.name));
+  const {
+    activeRegions,
+    activeRegionNameSet,
+    activeRegionMap,
+    otherProxyNames
+  } = classifyProxiesByRegion(normalProxies, REGIONS);
 
-    const {
-      activeRegions,
-      activeRegionNameSet,
-      activeRegionMap,
-      otherProxyNames
-    } = classifyProxiesByRegion(baseProxies, REGIONS);
+  // 排除 HK 的名单；无非 HK 节点时为空，由分组逻辑把 ai 指向 main
+  const allAiNames = buildAllAiProxyList(activeRegions, otherProxyNames);
 
-    const allAiNames = buildAllAiProxyList(activeRegions, otherProxyNames, allNames);
+  // 有节点 = 内联节点或 proxy-providers 任一非空；规则的组目标只有在这时才合法
+  const hasNodes = allNames.length > 0 || providers.length > 0;
 
-    config["proxy-groups"] = buildProxyGroups({
-      allNames,
-      allAiNames,
-      activeRegionMap,
-      activeRegionNameSet,
-      otherProxyNames,
-      infoNames
-    });
+  // 无节点时把指向 main/ai/tg 的规则降级成 DIRECT：内核 parseRules 对不存在的目标直接
+  // 报 "proxy [main] not found" 并拒绝整份配置，不会回退直连。
+  config.rules = mergeRules(
+    hasNodes ? STATIC_RULES : STATIC_RULES_NO_NODES,
+    pickDirectRules(existingRules)
+  );
 
-    // 保留所有原始节点（包括被 CUSTOM_FILTER 过滤的）
-    config.proxies = originalProxies;
-  } else {
-    config["proxy-groups"] = buildProxyGroups({
-      allNames: [],
-      allAiNames: [],
-      activeRegionMap: new Map(),
-      activeRegionNameSet: new Set(),
-      otherProxyNames: [],
-      infoNames: []
-    });
-  }
+  // 保留所有原始节点（包括被 CUSTOM_FILTER 过滤的）
+  config.proxies = originalProxies;
+  config["proxy-groups"] = buildProxyGroups({
+    allNames,
+    allAiNames,
+    activeRegionMap,
+    activeRegionNameSet,
+    otherProxyNames,
+    infoNames,
+    providers
+  });
 
   removeGeoDataConfig(config);
   applyRuntime(config);
   applyIPv6(config);
   applySniffer(config);
   applyTun(config);
-  applyDns(config);
+  applyDns(config, { hasProxyGroups: hasNodes });
   applyProfile(config);
 
   return config;
