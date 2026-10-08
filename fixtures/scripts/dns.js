@@ -1,31 +1,4 @@
-/**
- * The sing-mix project
- * Sakyvo Present
- * 仓库地址：https://github.com/Sakyvo/sing-mix
- * 脚本链接：https://example.com/Sakyvo/sing-mix/refs/heads/main/sing-mix_origin
- * mihomo客户端推荐：https://github.com/appshubcc/Bettbox
- *
- * 本地修改版（基于 sing-mix_origin）：
- * 1. TW/SG/JP/KR 合并为单一分组 TW_SG_JP_KR，删除独立 AS 分组（东南亚节点落入 Other 组）
- * 2. DNS 防泄漏增强：境外 DoH 双服务器冗余；AI 域名 DNS 锁定 ai 组出口
- * 3. 关键链路域名（*.cline.bot / *.commandcode.ai）固定走直连公共 DoH，且不参与 fake-ip：
- *    境外 nameserver 是 `#main`（经代理组出站），节点全挂时会把全机境外解析一起拖死，
- *    这两个域名落到 MATCH,final、默认仍在 main 上，正是受害面；实测它们不是污染目标
- *    （系统 DNS 与 223.5.5.5 给出的都是同一个真实 IP），直连解析既不被污染也不依赖节点。
- * 4. DNS 监听收窄到 127.0.0.1:1053（原 0.0.0.0:1053）；TUN dns-hijack 不依赖对外监听。
- * 5. 清掉 BYPASS_DOMAINS / FORCE_PROXY_DOMAINS / CUSTOM_FILTER 里的示例占位符。
- * 6. 修 mergeRules 里的大小写比较 bug：`toUpperCase() === "MATCH,main"` 恒为 false，
- *    导致订阅里保留下来的直连规则被追加到 MATCH 之后、永不生效（现改为 "MATCH,FINAL"）。
- * 7. 新增 final 兜底组：MATCH 指向 final，兜底流量可在「前面各策略组 + DIRECT」里选出口，
- *    而不是只能跟着 main 组走。final 默认指向 main，行为与旧版 MATCH,main 一致。
- * 8. 可选 IPv6（ENABLE_IPV6）：DNS 打开 ipv6 并给出 fake-ip-range6。与顶层 ipv6 是
- *    「与」关系（内核 ipv6 := dns.ipv6 && general.ipv6），客户端没开 IPv6 时自动失效。
- * 9. IP 检测域名钉在 main（FORCE_PROXY_DOMAINS 默认值）：Bettbox 首页「网络检测」按序探测
- *    api.ip.sb → Cloudflare trace → api.ipify.org → api.ipinfo.io，这些域名既不在 gfw 也不在 cn，
- *    规则全落空后走 MATCH,final。final 组一旦选 DIRECT，检测请求就直连、显示国内出口 IP，
- *    看着像代理没生效。钉到 main 后检测结果与 final 的取值解耦：final 选什么都仍从 main 出站。
- *    main 是 select 组且不含 DIRECT，做锚点不会被选成直连。
- */
+// 脚本链接：https://example.com/Catapult291/scripts/main/sing-mix_twjpkr.ps1
 
 // ====================
 // 0. 特殊处理
@@ -35,7 +8,10 @@
 const BYPASS_DOMAINS = [];
 
 // 强制代理（按需填域名，留空即不启用）
-// 默认已带上 Bettbox 首页「网络检测」的探测域名，见文件头第 9 条。
+// 默认带上 Bettbox 首页「网络检测」的探测域名（api.ip.sb / Cloudflare trace / api.ipify.org /
+// api.ipinfo.io）：这些域名既不在 gfw 也不在 cn，规则落空后走 MATCH,final；final 一旦选 DIRECT，
+// 检测请求就直连、显示国内出口 IP，看着像代理没生效。钉到 main 后检测结果与 final 的取值解耦：
+// final 选什么都仍从 main 出站。main 是 select 组且不含 DIRECT，做锚点不会被选成直连。
 // 一律用精确域名（DOMAIN），不用 DOMAIN-SUFFIX：后者会把
 // challenges.example.com 一并拽进代理，而它本来由 RULE-SET,cloudflare 判直连。
 const FORCE_PROXY_DOMAINS = [
@@ -61,7 +37,10 @@ const ENABLE_IPV6 = true;
 const FAKE_IP_RANGE6 = "2001:2::1/48";
 
 // 关键链路域名：本机中转链路的入口（cline 渠道 + commandcode 渠道）。
-// 见文件头第 3 条：解析必须与代理组可用性解耦，且不能拿 fake-ip。
+// 解析必须与代理组可用性解耦，且不能拿 fake-ip：境外 nameserver 是 `#main`（经代理组出站），
+// 节点全挂时会把全机境外解析一起拖死，而这两个域名默认走 MATCH,final、仍在 main 上，正是受害面。
+// 实测它们不是污染目标（系统 DNS 与 223.5.5.5 给出的都是同一个真实 IP），走直连公共 DoH
+// 既不被污染也不依赖节点。
 const CRITICAL_DOMAINS = ["+.cline.bot", "+.commandcode.ai"];
 const CRITICAL_DIRECT_DNS = [
   "https://dns.alidns.com/dns-query#DIRECT",
@@ -576,7 +555,7 @@ const applyDns = (cfg) => {
     "https://8.8.8.8/dns-query#ai"
   ];
 
-  // 关键链路域名的 nameserver-policy（见文件头第 3 条）
+  // 关键链路域名的 nameserver-policy：走直连公共 DoH，不经代理组、不参与 fake-ip
   const criticalNameserverPolicy = CRITICAL_DOMAINS.reduce((acc, domain) => {
     acc[domain] = CRITICAL_DIRECT_DNS;
     return acc;
