@@ -59,7 +59,12 @@ jobs:
           fi
           ndk_dir="${sdk}/ndk/${NDK_VERSION}"
           if [ ! -d "$ndk_dir" ]; then
+            # sdkmanager 会问一次许可，用 yes 喂进去。`shell: bash` 带 `-o pipefail`，
+            # sdkmanager 读完退出后 yes 会拿到 SIGPIPE（Broken pipe）而让整条管道判失败，
+            # 所以这里只关掉 pipefail，退出码仍以 sdkmanager 为准。
+            set +o pipefail
             yes | "${sdk}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}"
+            set -o pipefail
           fi
           test -d "$ndk_dir" || {
             echo "NDK ${NDK_VERSION} 未就位：${ndk_dir}" >&2
@@ -110,12 +115,11 @@ jobs:
           arch: x86_64
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            device=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')
-            if [ -z "$device" ]; then
-              echo "没有已就绪的设备" >&2
-              adb devices >&2
-              exit 1
-            fi
-            echo "设备：$device"
+          # 这个 action 会把 script 按换行拆成一条条独立的 `sh -c`（lib/script-parser.js），
+          # 变量和 if 都活不过一行，所以下面必须折成单行（`>-` 把换行折成空格）。
+          # `timeout` 是超时闸：`flutter test` 内部的 `adb install` 没有超时，装包挂住会一直等。
+          script: >-
+            device=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1; exit }');
+            if [ -z "$device" ]; then echo "没有已就绪的设备" >&2; adb devices >&2; exit 1; fi;
+            echo "设备：$device";
             timeout --kill-after=60s 20m flutter test integration_test/android_rust_pipeline_test.dart -d "$device"
