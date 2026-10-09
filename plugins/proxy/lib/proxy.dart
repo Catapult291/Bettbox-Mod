@@ -14,10 +14,11 @@ class Proxy extends ProxyPlatform {
     int port, [
     List<String> bypassDomain = const [],
   ]) async {
+    // Windows 不在本包内：系统代理已改由 Rust 侧 bettbox_native 承担，带快照与
+    // 「只还原自己改过的连接」的语义（见 `lib/common/system_proxy.dart`）。
     return switch (Platform.operatingSystem) {
       "macos" => await _startProxyWithMacos(port, bypassDomain),
       "linux" => await _startProxyWithLinux(port, bypassDomain),
-      "windows" => await ProxyPlatform.instance.startProxy(port, bypassDomain),
       String() => false,
     };
   }
@@ -27,7 +28,6 @@ class Proxy extends ProxyPlatform {
     return switch (Platform.operatingSystem) {
       "macos" => await _stopProxyWithMacos(),
       "linux" => await _stopProxyWithLinux(),
-      "windows" => await ProxyPlatform.instance.stopProxy(),
       String() => false,
     };
   }

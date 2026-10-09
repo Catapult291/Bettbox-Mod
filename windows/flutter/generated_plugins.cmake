@@ -8,7 +8,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   dynamic_color
   file_selector_windows
   hotkey_manager_windows
-  proxy
   restart_app
   screen_retriever_windows
   tray_manager
