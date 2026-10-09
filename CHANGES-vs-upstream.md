@@ -1660,7 +1660,74 @@ group_switch_test,json_diff}.dart`
 
 ---
 
-## 附：上游已自行实现、本仓库不再单列的改动
+## 36. Windows 系统代理改由 Rust 实现：启用前存快照，停止只还原自己改过的连接
+
+**文件**：`rust/bettbox-native/src/system_proxy.rs`（新增）、`rust/bettbox-native/src/system_ffi.rs`（新增）、
+`rust/bettbox-native/include/bettbox_system_proxy.h`（新增）、`ffigen.bettbox_system_proxy.yaml`（新增）、
+`lib/rust/system_proxy.dart`（新增）、`lib/rust/generated/bettbox_system_proxy_ffi.dart`（生成物）、
+`lib/common/system_proxy.dart`（新增）、`lib/manager/proxy_manager.dart`、`lib/controller.dart`、
+`lib/common/proxy.dart`、`plugins/proxy/`（删掉 Windows 原生插件）、
+`windows/flutter/generated_plugin_registrant.cc` 与 `generated_plugins.cmake`（随插件移除更新）
+　**测试**：`rust/bettbox-native/src/system_proxy.rs` 单测（4 项 + 1 项注册表对拍 + 1 项手工往返）、
+`test/common/system_proxy_test.dart`（新增 6 项）、`test/manager/proxy_manager_test.dart`（新增 3 项）
+
+**问题**（Rust 迁移路线 P1 §2.3）：Windows 系统代理由 Flutter 插件 `plugins/proxy` 的 C++ 实现，
+只有「开」和「关」两个动作，关的时候无差别把 `ProxyEnable` 置 0：
+一是会连带清掉**其他程序**设置的系统代理（诊断第 11 节时已实测到），二是应用被强杀后只能等下次启动
+再做一次同样的无差别清理——用户在「被强杀到下次启动」之间是系统代理指向没人监听的端口、上不了网的状态。
+
+**改动**：
+
+- 逻辑并入 `bettbox_native`：`system_proxy.rs` 用 `windows` crate 调 `InternetQueryOptionW` /
+  `InternetSetOptionW` / `RasEnumEntriesW`，覆盖 LAN 连接与所有 RAS 拨号项，每项记 flags / server /
+  bypass / autoconfig url。新增第三份窄 C ABI 头文件与 ffigen 绑定（与配置、脚本两份并列）。
+  三个入口（`bb_system_proxy_query` / `enable` / `restore`）返回的总是 JSON 信封
+  （`{"ok":…}` / `{"ok":false,"message":…}`），只有 ABI 级失败才是 NULL——Win32 层的失败原因
+  要交回 Dart 侧，不能和「指针为空」混为一谈。
+- **语义**：`enable` 先抓快照再写我们的设置，把快照交回 Dart 侧持久化（偏好设置 `system_proxy_snapshot`，
+  里面带 `applied`＝本应用写下的服务器串）；`restore` 只还原**仍归本应用管**的连接
+  （当前服务器串等于 `applied` 且开着显式代理），用户或别的程序在这期间改过的连接跳过不动；
+  没有快照时什么都不做。被强杀后，下次启动 `ProxyManager` 的 `fireImmediately` 监听按
+  `isStart=false` 走同一条还原路径，把残留清掉。
+- **`lib/common/system_proxy.dart`** 是门面：串行化启停（开启要先还原旧快照再抓新快照，中间有 prefs
+  往返，状态快速翻转时两步会互相插队），失败只记日志不抛错（调用方是 UI 状态监听与退出流程，
+  没有能接住异常的地方；失败时快照保留，下次再试）。macOS / Linux 仍走 `plugins/proxy` 的 Dart 实现。
+- **插件收敛**：`plugins/proxy/windows/`（C++ 插件）删除，插件 pubspec 不再声明任何原生平台；
+  这样 Windows 上不会再有第二个实现，也不会再有它那个「注销/关机时无差别 `stopProxy`」的窗口过程。
+
+**验证**（本机实测）：
+
+- **注册表级端到端**（一次性 `flutter test`，跑完即删、未入库；走真实门面 → dll → WinINet → 注册表）：
+  - 先装作别的程序设了 `127.0.0.1:9999` + `<local>;other.test`，`enable(7890, ['localhost'])` 后
+    注册表变成 `127.0.0.1:7890` + `<local>;localhost`；`disable()` 后原来的 9999 与 bypass 逐字回来；
+  - 无快照时 `disable()` **不动注册表**（模拟「别的程序刚设成 8888」后应用停止，8888 保持原样）；
+  - 强杀场景：`enable` 后不调 `disable`，下一次启动的 `disable` 把 7777 与 `<local>;before.test` 还原；
+  - 期间被用户改过的连接（改成 6666）在还原时被跳过（日志 `0 项，跳过 1 项`），不被覆盖。
+  - 跑完把基线（`ProxyEnable=0x1` / `127.0.0.1:7890` / 原 bypass 列表）逐项写回并复核。
+- **Rust 侧**：`cargo test --workspace` 全过（66 项 lib 单测含新增 4 项、fixtures / golden / rules /
+  script_engine 各套）；`cargo fmt --all --check` 干净、`cargo clippy --all-targets -- -D warnings` 无告警。
+  另有一条 `#[ignore]` 的真实往返用例（`enable` → 查 → `restore` → 比对）手工跑过。
+- **只读对拍**：新增用例把 `query()` 的结果与本机注册表里的 `ProxyEnable` / `ProxyServer` /
+  `ProxyOverride` 逐项比对——这条同时验证了「查询时字符串由 API 分配、我们用 `GlobalFree` 释放」
+  这层假设是对的。
+- **Dart 侧**：`flutter analyze lib test` 无问题；`flutter test` 130 项全过（原 121 项 + 新增 9 项）。
+- **构建产物**：`flutter build windows --release` 成功；bundle 里的 `bettbox_native.dll` 与 cargo 产物
+  sha256 一致，且删掉上次构建残留的 `proxy_plugin.dll` 后重建**不会**再生成它
+  （当前 `Bettbox.sln` 与 `cmake_install.cmake` 里都没有 proxy 插件工程）；`data/app.so` 里能检索到
+  `system_proxy_snapshot` 与 `bb_system_proxy`，确认新代码进了包。
+
+**未决**：
+
+- 没有在运行中的应用里点一次「系统代理」开关做 GUI 级验证——本机当前有用户在用的
+  `Bettbox.exe` 实例在跑并持有系统代理（`127.0.0.1:7890`），再起一个实例会和它抢同一份系统代理设置；
+  改用真实 dll 的注册表级端到端（上一条）覆盖了同一条链路，构建产物也逐项核过。
+- **升级过渡期**：旧版本（本改动之前）从不写快照，所以「被强杀 → 直接装新版本 → 启动」这条窄路上，
+  新版本没有快照可还原，残留会留在系统里（重新打开一次「系统代理」开关即可恢复）。没有按端口
+  （`127.0.0.1:<混合端口>`）去「认领」这类残留，是因为默认混合端口 7890 被别的代理客户端占用的情形
+  很常见，按端口认领会把「清掉别人的代理」这个正在修的毛病又引回来。
+
+---
+
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
   上游已在提交 `79cf06e`（Optimize android access control list sorting）中修复，实现与本仓库此前的
