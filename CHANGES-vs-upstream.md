@@ -47,6 +47,7 @@
 | 32 | 工程 | 删除 Dart 镜像与 qjs 路径，失败策略改为「报错并保留上一份可用配置」 | v1.19.14 |
 | 33 | 工程 | 设备端集成测试进 CI（新增 workflow `android-device`） | 未发版 |
 | 34 | 工程 | 脚本引擎入参契约加固：缺末尾 NUL 不再静默解析垃圾；CI 加跑 release 测试 | 未发版 |
+| 35 | 工程 | helper 增加服务/计划任务子命令，应用侧不再拼 `sc`/`reg`/`schtasks` | 未发版 |
 
 ---
 
@@ -1591,6 +1592,71 @@ group_switch_test,json_diff}.dart`
 在本机跑过，数据即证据一节所列。
 
 **未决**：§4.2 的另一半（`cargo-fuzz` / `proptest` 接入）未做。
+
+---
+
+## 35. helper 增加服务/计划任务子命令，应用侧不再拼 `sc` / `reg` / `schtasks`
+
+**文件**：`services/helper/src/cli.rs`（新增）、`services/helper/src/ops/service.rs`（新增）、
+`services/helper/src/ops/task.rs`（新增）、`services/helper/src/main.rs`、`services/helper/Cargo.toml`、
+`lib/common/system.dart`、`lib/common/helper_cli.dart`（新增）、`.github/workflows/rust.yml`
+　**测试**：`services/helper` 单测（新增 9 项）、`test/common/helper_cli_test.dart`（新增 6 项）
+
+**问题**（Rust 迁移路线 P1 §2.2）：Windows 侧的服务注册与计划任务都由 Dart 拼命令行字符串再
+`runas` 提权执行——`sc stop & sc delete & sc create … & reg add …Environment… & sc start`，
+以及 `schtasks /Create /TN … /XML <临时 XML>`。这条路上引号与转义容易出错，失败时只剩一个退出码；
+计划任务的 XML 还是手写模板，路径里出现 `&` 就会让整份 XML 解析失败。
+
+**改动**：
+
+- helper 新增四个子命令，参数与结果都走文件：`service install` / `service uninstall` /
+  `task register` / `task unregister`，用法 `helper.exe <子命令> <request.json> <result.json>`。
+  参数不进命令行是为了绕开引号转义与代码页问题：路径可能带空格与非 ASCII 字符，服务
+  `Environment` 的值里还有 `\0`。
+- `service install`：用 `windows-service` 的 `ServiceManager` 建服务 → 注册表 API 写服务
+  `Environment`（`REG_MULTI_SZ`）→ 配崩溃恢复策略（5s/10s/30s 各重启一次、reset 86400，并打开
+  `FAILURE_ACTIONS_FLAG`，否则 `panic = "abort"` 的崩溃不算失败）→ 启动并等它进入 RUNNING。
+  注册的 binPath 由 helper 自己取 `current_exe()`，不再由调用方传一个可能对不上的路径。
+- 服务重装改成「停 → 等真的停下 → 删 → 等真的消失 → 建」。旧实现里 `sc delete` 是异步的，
+  紧跟的 `sc create` 可能撞上 `ERROR_SERVICE_MARKED_FOR_DELETE`。
+- `task register`：任务 XML 移到 helper 生成（补了 XML 转义），直接交给 Task Scheduler 的 COM
+  接口（`ITaskService` → `ITaskFolder::RegisterTask`）；注销走 `DeleteTask`，任务本来就不存在时
+  按成功处理（幂等）。
+- 应用侧 `_configureHelperService` / `registerTask` / `unregisterTask` 改为写请求 JSON、调用 helper、
+  读结果文件。结果文件是结构化 JSON（`ok` / `code` / `message` / `osError`），日志里能看到失败
+  原因而不是一个退出码；`code` 把「访问被拒」折成稳定的 `ACCESS_DENIED`。`ShellExecuteW` 拿不到
+  子进程的退出码，所以结果以文件为准（Dart 侧轮询它出现，上限 60s）。
+- CI：`rust.yml` 新增 `helper` job（fmt / clippy / test，另跑一遍不带 `windows-service` feature 的
+  clippy——那是开发态手工跑管道服务的形态）。
+
+**验证**：
+
+- **提权后的成功路径（本机实测）**：本机 UAC 是静默提权（`ConsentPromptBehaviorAdmin=0` 且当前用户在
+  Administrators 组），所以用一次性名字（`BettboxCliProbeService` / `BettboxCliProbe`）把两条路径都
+  真跑了一遍，机器上原有的 `BettboxHelperService` 与 `\Bettbox` 任务全程未被触碰。
+  - `service install` → ok；`sc qc` 显示 binPath 就是运行中的 helper.exe、`START_TYPE=AUTO_START`；
+    `Environment` 是 4 项的 `REG_MULTI_SZ`；`FailureActions` 二进制为
+    `reset=86400` + 三次 `RESTART`（5000/10000/30000）、`FailureActionsOnNonCrashFailures=1`；
+    服务 `RUNNING`，命名管道 `\\.\pipe\Bettbox.CliProbe` 已绑定（说明 `Environment` 真的进了服务进程）。
+  - 对**正在运行**的同名服务再 install 一次 → ok，服务重新 `RUNNING`、管道重新绑定（验证了
+    「停 → 等停 → 删 → 等消失 → 建」这条替换路径）。
+  - `service uninstall` → ok，`sc query` 返回 1060、服务注册表键与管道都消失。
+  - `task register` → ok，`schtasks /Query /XML` 回读的 RunLevel 是 `HighestAvailable`、触发器、
+    命令、工作目录与中文描述逐项一致；重复 register → ok（覆盖）；`task unregister` → ok 且任务消失；
+    再 unregister 一次 → ok（幂等）。
+- **应用侧联调**：另写了一次性 `flutter test`（跑完即删、未入库），走真实的 `windows.runas` +
+  `quoteWindowsArguments` + 结果文件轮询，成功注册并注销了探测任务——这条覆盖了 Dart 侧到 helper 的
+  整条链路。
+- **非提权路径**：`service install` / `uninstall` 对已存在的服务返回 `ACCESS_DENIED`（osError 5）、
+  对不存在的服务返回 ok；用法错误退出码 2；请求文件缺失退出码 3 且照样写出结构化结果；请求内容非法
+  给 `INVALID_REQUEST`；无参数时仍落回服务分发器（1063，与改动前一致）。
+- **静态与用例**：`cargo test --features windows-service` 13 项全过、`cargo fmt --check` 干净、带与不带
+  feature 的 `cargo clippy -- -D warnings` 均无告警；`flutter analyze lib test` 无问题、`flutter test`
+  121 项全过。
+
+**未决**：安装器（`windows/packaging/exe/inno_setup.iss`）仍用 `sc` / `schtasks` 装卸服务与任务——
+升级安装刻意不删服务（避免内核在中间窗口失去托管者），与 `service install` 的「先删再建」语义不同，
+暂不合并。
 
 ---
 
