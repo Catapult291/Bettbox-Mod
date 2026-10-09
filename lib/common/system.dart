@@ -452,7 +452,7 @@ class Windows {
     }
     final allowedSid = await HelperAuthManager.currentUserSid();
 
-    final environmentValue = [
+    final environment = [
       if (keyFilePath != null)
         'HELPER_AUTH_KEY_FILE=$keyFilePath'
       else
@@ -460,48 +460,19 @@ class Windows {
       'HELPER_SERVICE_NAME=$appHelperService',
       'HELPER_PIPE_NAME=$helperPipeName',
       if (allowedSid != null) 'HELPER_ALLOWED_SID=$allowedSid',
-    ].join('\\0');
+    ];
 
-    final serviceRegistryPath =
-        'HKLM\\SYSTEM\\CurrentControlSet\\Services\\$appHelperService';
+    final result = await _runHelperCommand('service', 'install', {
+      'serviceName': appHelperService,
+      'startType': AppIdentity.isDev ? 'demand' : 'auto',
+      'environment': environment,
+    });
 
-    final command = [
-      '/c',
-      'sc',
-      'stop',
-      appHelperService,
-      '>nul',
-      '2>&1',
-      '&',
-      'sc',
-      'delete',
-      appHelperService,
-      '>nul',
-      '2>&1',
-      '&',
-      'sc',
-      'create',
-      appHelperService,
-      'binPath= "${appPath.helperPath}"',
-      'start= ${AppIdentity.isDev ? 'demand' : 'auto'}',
-      '&&',
-      'reg',
-      'add',
-      '"$serviceRegistryPath"',
-      '/v',
-      'Environment',
-      '/t',
-      'REG_MULTI_SZ',
-      '/d',
-      '"$environmentValue"',
-      '/f',
-      '&&',
-      'sc',
-      'start',
-      appHelperService,
-    ].join(' ');
+    if (!result.ok) {
+      commonPrint.log('[Helper] failed to install the service: ${result.summary}');
+    }
 
-    return runas('cmd.exe', command);
+    return result.ok;
   }
 
   Future<bool> _waitForHelperHealthy() async {
@@ -537,71 +508,98 @@ class Windows {
     final executablePath = Platform.resolvedExecutable;
     final workingDirectory = dirname(executablePath);
 
-    final taskXml =
-        '''
-<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>开机自动启动代理服务</Description>
-    <URI>\\$appName</URI>
-  </RegistrationInfo>
-  <Principals>
-    <Principal id="Author">
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
-    </Principal>
-  </Principals>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-    </LogonTrigger>
-  </Triggers>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>false</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <RunOnlyIfIdle>false</RunOnlyIfIdle>
-    <WakeToRun>false</WakeToRun>
-    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
-    <Priority>6</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>"$executablePath"</Command>
-      <WorkingDirectory>$workingDirectory</WorkingDirectory>
-    </Exec>
-  </Actions>
-</Task>''';
-    final taskPath = join(await appPath.tempPath, 'task.xml');
-    await File(taskPath).create(recursive: true);
-    await File(
-      taskPath,
-    ).writeAsBytes(taskXml.encodeUtf16LeWithBom, flush: true);
-    final commandLine = [
-      '/Create',
-      '/TN',
-      appName,
-      '/XML',
-      '%s',
-      '/F',
-    ].join(' ');
-    return runas('schtasks', commandLine.replaceFirst('%s', taskPath));
+    final result = await _runHelperCommand('task', 'register', {
+      'taskName': appName,
+      'executablePath': executablePath,
+      'workingDirectory': workingDirectory,
+      'description': '开机自动启动代理服务',
+    });
+
+    if (!result.ok) {
+      commonPrint.log('[Helper] failed to register the task: ${result.summary}');
+    }
+
+    return result.ok;
   }
 
   Future<bool> unregisterTask(String appName) async {
-    final commandLine = ['/Delete', '/TN', appName, '/F'].join(' ');
-    return runas('schtasks', commandLine);
+    final result = await _runHelperCommand('task', 'unregister', {
+      'taskName': appName,
+    });
+
+    if (!result.ok) {
+      commonPrint.log('[Helper] failed to unregister the task: ${result.summary}');
+    }
+
+    return result.ok;
   }
+
+  /// 以一次提权调用 helper 的子命令，并把结果文件读回来。
+  ///
+  /// 参数走请求文件而不是命令行：路径可能带空格与非 ASCII 字符，服务 Environment 的值里
+  /// 还有 `\0`，拼进命令行迟早出错。`ShellExecuteW` 也拿不到子进程的退出码，所以结果由
+  /// helper 写进结果文件，这里轮询它出现。
+  Future<HelperCliResult> _runHelperCommand(
+    String group,
+    String action,
+    Map<String, Object?> request,
+  ) async {
+    final helperPath = appPath.helperPath;
+    if (!await File(helperPath).exists()) {
+      return HelperCliResult.localFailure(
+        'HELPER_MISSING',
+        'helper executable not found: $helperPath',
+      );
+    }
+
+    final tempPath = await appPath.tempPath;
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final requestFile = File(
+      join(tempPath, 'bettbox_helper_$stamp.request.json'),
+    );
+    final resultFile = File(join(tempPath, 'bettbox_helper_$stamp.result.json'));
+
+    try {
+      await requestFile.writeAsString(jsonEncode(request), flush: true);
+
+      final arguments = quoteWindowsArguments([
+        group,
+        action,
+        requestFile.path,
+        resultFile.path,
+      ]);
+      final launched = await runas(helperPath, arguments);
+      if (!launched) {
+        return const HelperCliResult.localFailure(
+          'ELEVATION_DENIED',
+          'helper was not started (elevation refused or launch failed)',
+        );
+      }
+
+      final deadline = DateTime.now().add(_helperCommandTimeout);
+      while (DateTime.now().isBefore(deadline)) {
+        if (await resultFile.exists()) {
+          return HelperCliResult.parse(await resultFile.readAsString());
+        }
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+
+      return HelperCliResult.localFailure(
+        'HELPER_TIMEOUT',
+        'helper did not return a result within ${_helperCommandTimeout.inSeconds}s',
+      );
+    } catch (e) {
+      return HelperCliResult.localFailure('HELPER_FAILED', '$e');
+    } finally {
+      for (final file in [requestFile, resultFile]) {
+        try {
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  static const _helperCommandTimeout = Duration(seconds: 60);
 }
 
 final windows = system.isWindows ? Windows() : null;

@@ -1,3 +1,8 @@
+#[cfg(all(target_os = "windows", feature = "windows-service"))]
+pub mod service;
+#[cfg(target_os = "windows")]
+pub mod task;
+
 pub mod core {
     use once_cell::sync::Lazy;
     use serde::{Deserialize, Serialize};
