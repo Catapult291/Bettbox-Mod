@@ -1484,7 +1484,8 @@ group_switch_test,json_diff}.dart`
   且 `getSetupParams` 抛错后上一份 `config.yaml` 内容不变）、ABI 失配（与缺失在加载层同一条路径，
   由同一用例覆盖）、脚本报错（`patch_raw_config_test`：patch 仍产出）。
 - 未在本机验证：`flutter build windows`（需开发者模式，CI 覆盖；CI 的 Dart 测试步骤已改为
-  `flutter test test/rust`，不再需要 qjs 参考 dll）、Android 设备端 integration 测试（需设备/模拟器）。
+  `flutter test test/rust`，不再需要 qjs 参考 dll）、Android 设备端 integration 测试
+  （需设备/模拟器，当时靠真机手跑；**2026-10-09 起由第 33 节的 `android-device` workflow 覆盖**）。
 
 **未决**：
 
@@ -1496,6 +1497,45 @@ group_switch_test,json_diff}.dart`
 - Rust ABI 中 `bb_apply_group_switches` / `bb_apply_dns_node_override` / `bb_node_filter_match` /
   `bb_parse_provider_meta` / `bb_build_proxies_groups` 目前没有生产调用方（只在 Rust 单测与
   Dart 差分测试里用）；是否裁剪待评估。
+
+---
+
+## 33. 设备端集成测试进 CI（新增 workflow `android-device`）
+
+**文件**：`.github/workflows/android-device.yaml`（新增）
+
+**动机**：`integration_test/android_rust_pipeline_test.dart` 此前不在任何 workflow 里，只有插真机手动
+跑才执行得到。它验的恰好是主机验不了的部分——`libbettbox_native.so` 真的随 APK 分发并能被 Android
+平台加载器按名解析（APK 内的库不在 `dart:io` 能枚举的路径上，主机无法预检）、`Android` 分支真的生效、
+脚本引擎在设备架构上真的求值。第 32 节改写这条用例时写错的断言（期望 `isFalse` 而脚本声明 `true`）
+就是因此一路没被拦下，直到真机手跑才暴露。
+
+**改动**：新 workflow 在 push `main` / `pull_request` / `workflow_dispatch` 上起 x86_64 模拟器
+（`reactivecircus/android-emulator-runner`，API 36 / `google_apis`）跑这条用例。
+
+- 只出 x86_64 一份 ABI（`dart setup.dart android --arch amd64 --out config`），跳过 Go 内核——
+  该用例不启动内核，而 `android/core` 的 CMake 在缺 `libclash.so` 时会正常降级（打印 `Not found` 后照常链接）。
+- 起模拟器前先断言 `libclash/android/x86_64/libbettbox_native.so` 存在并用 `file` 核对架构：
+  缺库时这里的信息比用例的 `isAvailable` 断言直白，而模拟器启动是本任务里最贵的一步。
+- 两道超时闸：测试步骤 `timeout --kill-after=60s 20m`、job `timeout-minutes: 45`。`flutter test` 内部的
+  `adb install` 没有超时，装包一旦挂住会一直等（本机踩过两次，见 `.grok/stage-log.md` §96/§98）。
+- 管道逐字段正确性仍由 `rust.yml` 的 `cargo test`（含 golden）负责，两者不重叠；`build.yaml` 不动
+  （那边只在打 tag 与手动触发时跑）。
+
+**验证**：CI run `37950516821` 全绿（job 12m38s）——APK 构建成功、`Installing … 1,114ms`、
+`🎉 4 tests passed.`（四条设备端用例逐条打印 ✅，含此前写错的那条脚本断言）；`rust.yml` 同 commit
+`b7e83aa` 亦全绿。首次实跑（run `37949970702`）在「Setup Android NDK」失败，两处修正见下。
+
+**踩到的两个坑（都是本地看不出来的）**：
+
+- `shell: bash` 带 `-o pipefail`，`yes | sdkmanager --install` 里 sdkmanager 读完退出后 `yes` 拿到
+  SIGPIPE（`Broken pipe`），整条管道被判失败——尽管 NDK 已装好。`build.yaml` 的同类步骤用 `|| true`
+  吞掉了这个错误；新 job 改为只关掉 pipefail，退出码仍以 sdkmanager 为准，后面照旧 `test -d` 兜底。
+- `android-emulator-runner` 会把 `script` **按换行拆成一条条独立的 `sh -c`**（其 `lib/script-parser.js`），
+  变量与 `if` 都活不过一行，所以脚本必须折成单行（用 `>-`）。写多行不会报错，只会静默拆坏。
+
+**未决**：`adb uninstall failed: DELETE_FAILED_INTERNAL_ERROR` 出现在用例全过之后（`flutter test`
+收尾时自己发起的卸载），不影响退出码；模拟器是一次性的，无需处理。
 
 ---
 
