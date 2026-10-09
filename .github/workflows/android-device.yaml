@@ -1,0 +1,121 @@
+name: android-device
+
+# 设备端集成测试（integration_test/android_rust_pipeline_test.dart）只在这里跑。
+#
+# 它验的是主机上验不了的部分：libbettbox_native.so 真的随 APK 分发、能被 Android 的
+# 平台加载器按名解析（APK 内的库不在 dart:io 能枚举的路径上，主机无法预检）、
+# Android 分支真的生效、脚本引擎在设备架构上真的求值。管道逐字段正确性由 rust 工作流的
+# `cargo test`（含 golden）负责，两者不重叠。
+#
+# 不放进 build.yaml：那边只在打 tag 与手动触发时跑，而这条要当常规回归网。
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.vfs.watch=false
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # 与 build.yaml 一致，也就是 android/{app,core}/build.gradle.kts 里 pin 的 ndkVersion。
+  NDK_VERSION: 28.2.13676358
+
+concurrency:
+  group: android-device-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    runs-on: ubuntu-24.04
+    # 第二道闸：`flutter test` 内部的 `adb install` 没有超时，设备端装包一旦挂住会一直等
+    # （本机踩过两次，见 stage-log §96/§98）。第一道闸是下面测试步骤里的 `timeout`。
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust (Android x86_64)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Setup Java (Android)
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Setup Android NDK
+        shell: bash
+        run: |
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          if [ -z "$sdk" ]; then
+            echo "ANDROID_SDK_ROOT / ANDROID_HOME 都为空，找不到 Android SDK" >&2
+            exit 1
+          fi
+          ndk_dir="${sdk}/ndk/${NDK_VERSION}"
+          if [ ! -d "$ndk_dir" ]; then
+            yes | "${sdk}/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}"
+          fi
+          test -d "$ndk_dir" || {
+            echo "NDK ${NDK_VERSION} 未就位：${ndk_dir}" >&2
+            exit 1
+          }
+          echo "ANDROID_NDK=${ndk_dir}" >> "$GITHUB_ENV"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: flutter-android-device-${{ hashFiles('**/pubspec.lock') }}
+          flutter-version: '3.44.9'
+
+      # 生成代码（*.freezed.dart / *.g.dart）已入库，这里只拉取依赖；setup.dart 也依赖它。
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # 模拟器是 x86_64，只出这一份 ABI。`--out config` 跳过 Go 内核：本用例不启动内核，
+      # 而 android/core 的 CMake 在缺 libclash.so 时会正常降级（会打印 Not found 后照常链接）。
+      - name: Build Rust native lib (Android x86_64)
+        run: dart setup.dart android --arch amd64 --out config
+
+      # 先卡住这一关再启动模拟器：缺 .so 时用例的失败信息（isAvailable 为假）不如这里直白，
+      # 而模拟器启动是本任务里最贵的一步。
+      - name: Verify Rust native lib is in place
+        shell: bash
+        run: |
+          so=libclash/android/x86_64/libbettbox_native.so
+          if [ ! -f "$so" ]; then
+            echo "缺少 $so：APK 里不会有 Rust 库，配置管道与脚本引擎在设备上会直接报错" >&2
+            exit 1
+          fi
+          file "$so"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run integration test on emulator
+        uses: reactivecircus/android-emulator-runner@v2.38.0
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          script: |
+            device=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')
+            if [ -z "$device" ]; then
+              echo "没有已就绪的设备" >&2
+              adb devices >&2
+              exit 1
+            fi
+            echo "设备：$device"
+            timeout --kill-after=60s 20m flutter test integration_test/android_rust_pipeline_test.dart -d "$device"
