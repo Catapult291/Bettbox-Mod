@@ -12,6 +12,9 @@
  * 的 `SyntaxError: unexpected character`、`'\u{1}'` 之类，甚至把越界字节当成 JS 执行
  * 出 `ReferenceError: 'xxx' is not defined`。
  *
+ * 违反契约的后果取决于堆上恰好是什么字节，所以这个校验必须留在 C 侧：把「静默解析
+ * 垃圾」变成「明确的内部错误」，否则同一个调用方的错误会表现为时好时坏的解析失败。
+ *
  * 用法与原先 Dart 侧 qjs 插件的 `cxx/ffi.cpp` 同源裁剪（插件已在 Rust 迁移阶段 5
  * 删除）：同一次求值一个新
  * runtime、同样的 clock() 计时中断（超时）、同样的 JS_Eval 全局代码求值。
@@ -123,6 +126,16 @@ BBQ_EXPORT int32_t bbq_eval_program(const char *program, size_t program_len,
     *out_error = NULL;
   }
 
+  /* 入参契约校验，见文件头。少一个 NUL 时引擎会把越界字节当成 token 解析，结果
+   * 取决于紧邻堆内存，表现为「偶发解析失败」——这里直接拒绝，让调用方的错误可见。 */
+  if (program == NULL || program[program_len] != '\0') {
+    if (out_error != NULL) {
+      static const char message[] = "program 未以 NUL 结尾";
+      *out_error = bbq_strdup(message, sizeof(message) - 1);
+    }
+    return -1;
+  }
+
   JSRuntime *rt = JS_NewRuntime();
   if (rt == NULL) {
     return -1;
@@ -227,8 +240,14 @@ typedef struct {
  * `pattern_len` 不含这个 NUL。模式按 CESU-8 传入、`re_flags = 0`（非 unicode），
  * 与 Dart 侧 `RegExp(pattern)` 的语义一致。
  *
- * 返回句柄；模式语法非法或内存不足返回 NULL。 */
+ * 返回句柄；模式语法非法、违反入参契约或内存不足返回 NULL。 */
 BBQ_EXPORT void *bbq_regex_compile(const char *pattern, size_t pattern_len) {
+  /* 与 bbq_eval_program 同一处契约校验：`lre_compile` 收尾用 `*buf_ptr != '\0'`
+   * 判「没有多余字符」，`re_parse_disjunction` 也直接解引用 `buf_ptr` 找 `|`。 */
+  if (pattern == NULL || pattern[pattern_len] != '\0') {
+    return NULL;
+  }
+
   JSRuntime *rt = JS_NewRuntime();
   if (rt == NULL) {
     return NULL;

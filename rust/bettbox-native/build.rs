@@ -7,12 +7,18 @@
 //! 插件本身已在 Rust 迁移阶段 5 删除。源文件清单与编译选项沿用当时插件
 //! `cxx/quickjs.cmake` 的取值。
 //!
-//! 编译开关另对齐插件 Windows 构建（CMake Release）的取值：`/O2` + `-DNDEBUG`。
-//! 原因不是性能：排查「同一份字节偶发解析失败」时发现，失败率随 C 侧代码形态在
-//! 0/2000 与 28/30 之间摆动，只出现在与插件不同的构建配置（`/Od`、无 `NDEBUG`、
-//! 带额外诊断代码）下；改成与插件一致的 Release 取值后，`many_evaluations_stay_stable`
-//! 连续 2000 次求值稳定。不要为了调试方便把它降回 `/Od`——那会引入与出货配置不同的
-//! 代码生成，让这类偶发问题无法与出货行为对照。
+//! 编译开关对齐插件 Windows 构建（CMake Release）的取值：`/O2` + `-DNDEBUG`，
+//! 使 C 侧代码生成不随 cargo profile 变，debug 与 release 跑的是同一份引擎代码。
+//!
+//! 排查记录（2026-10-09，见 `stage-log.md` §106）：曾经的「同一份字节偶发解析失败」
+//! **不是**代码生成问题。根因是交给 `JS_Eval` 的缓冲区少了末尾 NUL——vendored QuickJS
+//! 的词法分析无条件读 `buf[len]`（`next_token` 先 `c = *p` 再判 `p >= s->buf_end`），
+//! 于是解析结果取决于紧邻堆内存的那一个字节。失败率看起来随 C 侧代码形态摆动，是因为
+//! 分配布局随之变化，而不是 `/Od` 本身生成了错的代码：实测把 C 侧降回 `/Od` + 无
+//! `NDEBUG` 后，补了 NUL 的 20000 次求值 0 失败；去掉 NUL 则同一份字节在 0/2000 与
+//! 约 25% 之间摆动。现在由 `c/quickjs_shim.c` 的哨兵校验兜住，回归用例见
+//! `tests/script_engine.rs` 的 `eval_rejects_a_program_without_nul_sentinel`。
+//! 调试时仍不建议随手降回 `/Od`：它与出货配置不同，而且慢得多。
 
 use std::path::PathBuf;
 

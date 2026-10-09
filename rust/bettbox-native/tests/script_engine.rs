@@ -276,3 +276,116 @@ fn many_evaluations_stay_stable() {
     }
     assert!(failures.is_empty(), "偶发失败：{failures:?}");
 }
+
+/// 绕开 Rust 侧的安全封装，直接调 C ABI——下面两条用例就是要证明「封装不能省」。
+mod raw_abi {
+    use std::os::raw::{c_char, c_int, c_void};
+
+    extern "C" {
+        pub fn bbq_eval_program(
+            program: *const c_char,
+            program_len: usize,
+            timeout_ms: i64,
+            memory_limit: usize,
+            out_json: *mut *mut c_char,
+            out_error: *mut *mut c_char,
+        ) -> c_int;
+        pub fn bbq_regex_compile(pattern: *const c_char, pattern_len: usize) -> *mut c_void;
+        pub fn bbq_regex_free(handle: *mut c_void);
+        pub fn bbq_string_free(ptr: *mut c_char);
+    }
+
+    /// 取走 C 侧 malloc 的字符串。
+    pub fn take(ptr: *mut c_char) -> String {
+        if ptr.is_null() {
+            return String::new();
+        }
+        let text = unsafe { std::ffi::CStr::from_ptr(ptr) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { bbq_string_free(ptr) };
+        text
+    }
+
+    /// 在 `bytes` 的 `len` 处放一个哨兵字节，然后按 `len` 调用。
+    pub fn with_sentinel(bytes: &[u8], sentinel: u8) -> Vec<u8> {
+        let mut buffer = bytes.to_vec();
+        buffer.push(sentinel);
+        buffer
+    }
+}
+
+/// 引擎入参契约：`buf[len]` 必须是 NUL，违反时 C 侧必须**明确拒绝**而不是解析垃圾。
+///
+/// vendored QuickJS 的 `next_token` 是「先 `c = *p`、再判 `p >= s->buf_end`」
+/// （`quickjs.c` 的 `case 0:`），所以每次走到输入末尾都会读走 `buf[len]`；libregexp 的
+/// `lre_compile` 收尾也用 `*buf_ptr != '\0'` 判「没有多余字符」。`buf[len]` 不是 NUL 时，
+/// 同一份字节的解析结果取决于那里恰好是什么——历史上表现为「偶发解析失败」，失败率随
+/// 堆上紧邻内存（因而随 C 侧代码形态与分配布局）在 0/2000 与约 25% 之间摆动。
+///
+/// Rust 侧的安全封装（`eval::evaluate`、`RegexMatcher::new`）始终补 NUL，正常路径不受
+/// 影响；这两条用例故意绕过封装，钉住 C 侧的哨兵校验，否则同一个调用方的错误又会退化成
+/// 「时好时坏的解析失败」。
+#[test]
+fn eval_rejects_a_program_without_nul_sentinel() {
+    let program = b"({a:1})";
+
+    let ok_buffer = raw_abi::with_sentinel(program, 0);
+    let mut out_json = std::ptr::null_mut();
+    let mut out_error = std::ptr::null_mut();
+    let status = unsafe {
+        raw_abi::bbq_eval_program(
+            ok_buffer.as_ptr().cast(),
+            program.len(),
+            30_000,
+            256 * 1024 * 1024,
+            &mut out_json,
+            &mut out_error,
+        )
+    };
+    let json = raw_abi::take(out_json);
+    let error = raw_abi::take(out_error);
+    assert_eq!(status, 0, "NUL 哨兵下应当正常求值，实际：{error}");
+    assert_eq!(json, "{\"a\":1}");
+
+    // 同一个程序，只把 buf[len] 换成 0x01（正是历史上报出的 `'\u{1}'` 那种越界字节）。
+    let dirty_buffer = raw_abi::with_sentinel(program, 0x01);
+    let mut out_json = std::ptr::null_mut();
+    let mut out_error = std::ptr::null_mut();
+    let status = unsafe {
+        raw_abi::bbq_eval_program(
+            dirty_buffer.as_ptr().cast(),
+            program.len(),
+            30_000,
+            256 * 1024 * 1024,
+            &mut out_json,
+            &mut out_error,
+        )
+    };
+    let error = raw_abi::take(out_error);
+    let json = raw_abi::take(out_json);
+    assert_eq!(
+        status, -1,
+        "违反入参契约应当返回内部错误，而不是按越界字节解析；json={json} error={error}"
+    );
+    assert!(error.contains("NUL"), "错误串应指出契约违例，实际：{error}");
+}
+
+/// 同一条契约在 libregexp 入口上的表现（`bbq_regex_compile` 同样要求末尾 NUL）。
+///
+/// 这里只断言「违例不产生句柄」：守卫与引擎本身都会让 `lre_compile` 失败，两者都返回
+/// NULL，从返回值上分不出是哪一个拦下的。真正的差别在危险的哨兵值上——`|` 会让
+/// `re_parse_disjunction` 继续解析越界内存，那属于读到哪里算哪里，不适合做断言。
+#[test]
+fn regex_rejects_a_pattern_without_nul_sentinel() {
+    let pattern = b"a";
+
+    let ok_buffer = raw_abi::with_sentinel(pattern, 0);
+    let handle = unsafe { raw_abi::bbq_regex_compile(ok_buffer.as_ptr().cast(), pattern.len()) };
+    assert!(!handle.is_null(), "NUL 哨兵下模式 `a` 应当编译成功");
+    unsafe { raw_abi::bbq_regex_free(handle) };
+
+    let dirty_buffer = raw_abi::with_sentinel(pattern, b'x');
+    let handle = unsafe { raw_abi::bbq_regex_compile(dirty_buffer.as_ptr().cast(), pattern.len()) };
+    assert!(handle.is_null(), "违反入参契约不应产出正则句柄");
+}

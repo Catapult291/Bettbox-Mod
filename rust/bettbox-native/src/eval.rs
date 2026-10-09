@@ -183,7 +183,8 @@ return { options: options, icons: icons };
 ";
 
 fn eval_once(program: &str, limits: &Limits) -> Result<EvalOutcome, String> {
-    // 必须交给引擎一个 NUL 结尾的缓冲区：见 c/quickjs_shim.c 的入参契约。
+    // 必须交给引擎一个 NUL 结尾的缓冲区：见 c/quickjs_shim.c 的入参契约（漏了会被 C 侧
+    // 的哨兵校验挡下并报内部错误，不会退化成「偶发解析失败」）。
     let program = match std::ffi::CString::new(program) {
         Ok(value) => value,
         Err(_) => return Err("脚本程序含 NUL 字节".to_string()),
