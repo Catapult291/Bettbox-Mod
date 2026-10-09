@@ -123,19 +123,30 @@ void main() {
   });
 
   test('脚本引擎在设备上真的求值（含 customOptions 与选项抽取）', () async {
+    // `customOptions` 的合并发生在求值内部（`Object.assign(ruleOptionsEnable, …)`），
+    // 不借 `main` 的返回值带出来就观察不到。
     const script =
         'var ruleOptionsEnable = {base: true};\n'
-        "function main(c){ c['marker'] = 'android'; return c; }";
+        "function main(c){ c['marker'] = 'android'; c['base'] = ruleOptionsEnable.base; return c; }";
 
-    final output = await JavaScriptRuntimeManager.evaluateScript(
+    final merged = await JavaScriptRuntimeManager.evaluateScript(
       script,
       <String, dynamic>{'a': 1},
       customOptions: const {'base': false},
     );
-    expect(output['marker'], 'android', reason: '脚本正文没有被执行');
+    expect(merged['marker'], 'android', reason: '脚本正文没有被执行');
+    expect(merged['base'], isFalse, reason: 'customOptions 没有合并进 ruleOptionsEnable');
 
-    final options = await BettboxScript.extractScriptOptions(script);
-    expect((options['options'] as Map)['base'], isFalse, reason: 'customOptions 未合并');
+    final declared = await JavaScriptRuntimeManager.evaluateScript(
+      script,
+      <String, dynamic>{'a': 1},
+    );
+    expect(declared['base'], isTrue, reason: 'customOptions 为空时改动了脚本声明的值');
+
+    // 抽取只读脚本声明的选项，不参与 customOptions 合并（合并只发生在求值路径与
+    // 脚本页展示层 `_processScriptData`），因此这里应是脚本里写的 true。
+    final options = await JavaScriptRuntimeManager.extractScriptOptions(script);
+    expect((options['options'] as Map)['base'], isTrue, reason: '抽取改动了脚本声明的值');
   });
 
   test('合并入口 process_profile：恒等脚本与 patchConfig 逐字段一致', () {
