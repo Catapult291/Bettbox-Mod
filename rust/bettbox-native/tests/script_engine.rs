@@ -261,8 +261,10 @@ fn extract_options_error_has_no_dart_style_prefix() {
     }
 }
 
-/// 回归闸门：排查阶段见过「同一份字节偶发解析失败」，失败率随 C 侧代码形态在
-/// 0/2000 与 28/30 之间摆动。这个用例连续求值同一份输入，把那次现象钉住。
+/// 回归闸门：连续求值同一份输入，钉住排查阶段那个「同一份字节偶发解析失败」的现象。
+///
+/// 根因已定位为缓冲区缺末尾 NUL（见 `c/quickjs_shim.c` 的入参契约与下面的哨兵用例）：
+/// 失败率当初随分配布局在 0/2000 与约 25% 之间摆动，看着像「随 C 侧代码形态变化」。
 #[test]
 fn many_evaluations_stay_stable() {
     let script = "function main(c){ c.备注 = '中文节点'; return c; }";
