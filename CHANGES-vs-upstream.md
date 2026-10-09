@@ -45,6 +45,8 @@
 | 30 | 工程 | Android Kotlin Gradle Plugin 版本 2.1.0 → 2.2.20 | v1.19.13 |
 | 31 | 工程 | vendored QuickJS 移入 Rust crate，插件改为指向它 | v1.19.13 |
 | 32 | 工程 | 删除 Dart 镜像与 qjs 路径，失败策略改为「报错并保留上一份可用配置」 | v1.19.14 |
+| 33 | 工程 | 设备端集成测试进 CI（新增 workflow `android-device`） | 未发版 |
+| 34 | 工程 | 脚本引擎入参契约加固：缺末尾 NUL 不再静默解析垃圾；CI 加跑 release 测试 | 未发版 |
 
 ---
 
@@ -1538,6 +1540,57 @@ group_switch_test,json_diff}.dart`
 收尾时自己发起的卸载），不影响退出码；模拟器是一次性的，无需处理。
 
 ---
+
+## 34. 脚本引擎入参契约加固：缺末尾 NUL 不再静默解析垃圾；CI 加跑 release 测试
+
+**文件**：`rust/bettbox-native/c/quickjs_shim.c`、`rust/bettbox-native/build.rs`（注释）、
+`rust/bettbox-native/src/eval.rs`（注释）、`rust/bettbox-native/tests/script_engine.rs`、
+`.github/workflows/rust.yml`　**测试**：`tests/script_engine.rs` 两条哨兵用例
+
+**背景**：Rust 迁移路线 §4.2 把「release/debug 行为分歧」列为一桩待立案的正确性问题——`build.rs`
+的注释记录过「同一份字节偶发解析失败」，失败率随 C 侧代码形态在 0/2000 与 28/30 之间摆动，当时
+按「与插件 Release 构建对齐（`/O2` + `-DNDEBUG`）」处理掉了。本轮立案排查的结论：**这不是代码生成
+问题**，`/O2` 只是碰巧改变了堆布局。
+
+**根因**：vendored QuickJS 的解析入口会读取输入长度之后的那个字节。
+
+- `quickjs.c` 的 `next_token` 先 `c = *p;` 再判 `p >= s->buf_end`（`case 0:`），所以每次走到输入
+  末尾都会读走 `buf[len]`；`'\r'` 与 `'/'` 两个分支还有 `p[1]` 前瞻。
+- `libregexp.c` 的 `lre_compile` 收尾用 `*s->buf_ptr != '\0'` 判「末尾有多余字符」，
+  `re_parse_disjunction` 里是直接 `while (*s->buf_ptr == '|')`。
+
+也就是说交给它们的缓冲区必须在 `len` 处有 NUL 哨兵。缺了它，解析结果取决于紧邻堆内存的那一个
+字节——同一份程序、同一份字节，结果时好时坏，失败率随分配布局（因而随 C 侧代码形态与分配历史）
+摆动。这正是当初看起来像「代码生成分歧」的原因。
+
+**证据**（Windows / MSVC / Rust 1.98.0，本机实测）：
+
+- 现状（补了 NUL）：`cargo test --workspace` 与 `--release` 均全绿。把 C 侧临时降回 `/Od` + 无
+  `NDEBUG`（对象文件 1.70 MB → 2.16 MB，确认确实重编过），`many_evaluations_stay_stable` 1000 次
+  仍 0 失败，补 NUL 的探针 20000 次 0 失败——**与代码生成无关**。
+- 去掉 NUL：同一份程序、同一个二进制，`fresh` 分配下两次运行分别给出 0/2000 与 2000/2000，
+  `recycled-dirty` 下给出 487/2000 与 492/2000；报错形态正是当初记录的那些
+  （`SyntaxError: unexpected character` / `expecting ';'` / `unexpected token in expression: ''`）。
+- 正则入口同样要求末尾 NUL；匹配路径 `lre_exec` 不需要——它的 `GET_CHAR` / `PEEK_CHAR` 调用点
+  都有 `cptr >= cbuf_end` 判断。
+
+**改动**：
+
+- `quickjs_shim.c`：`bbq_eval_program` / `bbq_regex_compile` 入口校验 `buf[len] == '\0'`，违反时
+  分别返回内部错误与 NULL。原来「静默把越界字节当 token 解析」的失败模式变成明确的契约违例。
+- `build.rs`：注释改写为记录真正的根因；`/O2` + `-DNDEBUG` 的取值保留（与插件/出货构建一致，
+  且 `/Od` 慢得多），但不再声称它修好了那个问题。
+- 回归用例：`eval_rejects_a_program_without_nul_sentinel`、`regex_rejects_a_pattern_without_nul_sentinel`，
+  绕过 Rust 封装直调 C ABI，钉住哨兵校验（否则同一个调用方的错误又会退化成「时好时坏的解析失败」）。
+- `rust.yml`：Test 拆成 debug 与 release 两遍。debug 更严（溢出检查、`debug_assertions`），
+  release 与出货配置一致，避免「只在一种 profile 下成立」的结论。
+
+**验证**：`cargo test --workspace`（debug，19 项 script_engine + 57 项单测 + golden）与
+`cargo test --workspace --release` 全绿；`cargo fmt --all --check`、`cargo clippy --all-targets --
+-D warnings` 干净；三条 workflow 过 `actionlint` 1.7.12。上面「降回 `/Od`」「去掉 NUL」两组实验都
+在本机跑过，数据即证据一节所列。
+
+**未决**：§4.2 的另一半（`cargo-fuzz` / `proptest` 接入）未做。
 
 ## 附：上游已自行实现、本仓库不再单列的改动
 
