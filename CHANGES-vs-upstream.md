@@ -1592,6 +1592,8 @@ group_switch_test,json_diff}.dart`
 
 **未决**：§4.2 的另一半（`cargo-fuzz` / `proptest` 接入）未做。
 
+---
+
 ## 附：上游已自行实现、本仓库不再单列的改动
 
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
