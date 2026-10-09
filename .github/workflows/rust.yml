@@ -39,3 +39,40 @@ jobs:
       # 链接 cdylib（Dart 通过 FFI 加载的那份），确保导出符号真的能连出来。
       - name: Build shared library
         run: cargo build --workspace --release
+
+  # helper.exe 是独立 crate（不在 rust/ 工作区里），带不带 windows-service feature 是两种
+  # 构建：出货走带 feature 的那份，开发态手工跑管道服务用不带的那份，两者都要能编译。
+  helper:
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: services/helper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      # TOKEN 是 build.rs 编译期写进 helper 的核对哈希。留空会让 `sha256 != env!("TOKEN")`
+      # 触发 clippy 的 comparison-to-empty（`-D warnings` 下直接失败），给个值即可；这些
+      # 用例都不比对内核哈希，取什么值无关。
+      - name: Clippy
+        run: cargo clippy --all-targets --features windows-service -- -D warnings
+        env:
+          TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
+
+      - name: Test
+        run: cargo test --features windows-service
+        env:
+          TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
+
+      - name: Check without the windows-service feature
+        run: cargo clippy --all-targets -- -D warnings
+        env:
+          TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
