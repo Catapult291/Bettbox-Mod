@@ -1491,7 +1491,8 @@ group_switch_test,json_diff}.dart`
 - 路线稿 §1.5 第 4 步原建议「保留一个编译期开关至少一个发版周期作为紧急降级通道」；Dart 镜像删除后
   该建议没有可实现形式（没有第二套实现可切）。**紧急回退路径改为「装回上一版」**，
   这一点需在发版说明里对用户说明。
-- `plugins/flutter_qjs/android/.cxx`（22 MB CMake 构建缓存）仍留在工作区，属未入库的构建产物，待清理。
+- ~~`plugins/flutter_qjs/android/.cxx`（22 MB CMake 构建缓存）仍留在工作区~~ 已于 2026-10-06 清理：
+  源码随本批改动从 git 删除后，该目录下只剩这套未入库的构建缓存（181 个文件 / 22 MB），已整目录删除。
 - Rust ABI 中 `bb_apply_group_switches` / `bb_apply_dns_node_override` / `bb_node_filter_match` /
   `bb_parse_provider_meta` / `bb_build_proxies_groups` 目前没有生产调用方（只在 Rust 单测与
   Dart 差分测试里用）；是否裁剪待评估。
