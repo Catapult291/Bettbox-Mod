@@ -1347,9 +1347,7 @@ class AppController {
         await prefs?.setBool(listenerRunningKey, false);
       }
       await savePreferences();
-      if (proxy != null) {
-        await proxy!.stopProxy();
-      }
+      await SystemProxy.disable();
       await clashCore.shutdown();
       if (clashService != null) {
         await clashService!.destroy();

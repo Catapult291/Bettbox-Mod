@@ -15,6 +15,15 @@ md5 = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# 系统代理（WinINet / RAS）只在 Windows 上编译，见 src/system_proxy.rs。
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_Rras",
+    "Win32_Networking_WinInet",
+    "Win32_System_Memory",
+] }
+
 [build-dependencies]
 # 编译仓库里那份 vendored QuickJS（见 build.rs 的说明）。
 cc = "1"
