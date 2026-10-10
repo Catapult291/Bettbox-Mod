@@ -1830,10 +1830,28 @@ HMAC 比对。5 秒窗口内，一个已经抓到的合法帧可以被原样重�
   `UNSUPPORTED_VERSION`；换新 nonce 仍通过。
 - 本机 artifact 已按新协议重建：`libclash/windows/BettboxHelperService.exe` 与
   `BettboxDevHelperService.exe`（sha256 `6f07a266…`），TOKEN 取当前内核 hash。
+- **服务方式（LocalSystem / Session 0）15/15 PASS**：用新 helper 二进制建临时服务
+  `BettboxHelperE2E`（`startType=demand`、独立管道 `\\.\pipe\Bettbox.Helper.E2E`、`Environment` 里
+  `HELPER_AUTH_KEY_FILE` 指向临时 key 文件、`HELPER_ALLOWED_SID` 为当前用户 SID），跑完整客户端。
+  管道 DACL 实测 `D:P(A;;0x12019f;;;SY)(A;;0x12019f;;;BA)(A;;0x12019f;;;S-1-5-21-…-1001)`（无 `AU`/`IU`）；
+  `helper.ping` 返回新构建的 TOKEN；helper 日志有 `Auth key initialized`、无 `Failed to read auth key file`、
+  无 `falling back to legacy pipe ACL`；nonce / 重放 / 超窗 / 形状 / 协议版本的判定与控制台模式一致。
+  这次建服务走的是 §35 的 `service install` 子命令（停 → 删 → 建一次过），卸载走 `service uninstall`
+  并连跑两次确认幂等；验完服务与临时文件已删除，现网 `BettboxHelperService`（旧协议）全程未受影响。
+- **升级路径实测**：用协议 2 + nonce 的请求打现网正在运行的旧 helper，拿到
+  `UNSUPPORTED_VERSION`（应答 `version` 仍为 1）；协议 1 + 错签名仍为 `UNAUTHORIZED`——即新 app 对上
+  旧 helper 会让 `helper.ping` 失败 → `checkService()` 判 `presence` → 触发重装服务。
+- **现网实例升级实测（2026-10-10）**：`Documents\Bettbox` 从协议 1 升到协议 2，四个文件全部换新
+  （`data/app.so` `349d3777…` 含 `X-Nonce`、helper `6f07a266…`、内核 `68667b34…`）；升级后现网 helper
+  协议 2 验证 9/9，helper 日志出现 `Received core.start request […]`（ID 格式为 Dart 侧的 `微秒-随机hex`），
+  即新 app 用协议 2 驱动新 helper 起了内核；`curl --proxy 127.0.0.1:7890 http://cp.cloudflare.com/generate_204`
+  → 204（0.1~0.3s，直连对照 0.5s）。安装器自己用 `sc config binPath=` 换的 helper，所以没走
+  「TOKEN 不一致 → 重装服务」那条路（该路径另见临时服务验证）。因 `autoRun=false`，升级后代理需手动点一次
+  总开关才恢复（应用既有设计）。
 
 **未决**：
 
-- 真机（服务方式）验证需管理员权限；现网实例升级后首次启动会触发一次重装服务。
+- 升级现网实例用的回退件（上一个安装包 + 四个配套文件）留在 `Documents\Bettbox-rollback\`，确认新版无问题后可删。
 - `setup.dart windows --out helper` 会先跑 `build core`，本次因此重编了本地内核
   （`libclash/windows/BettboxCore.exe` 的 hash 由 `b0225519…` 变为 `68667b34…`）。Go 构建不可复现，
   下次发布构建按 app 路径走一遍即可，helper TOKEN 与 `CORE_SHA256` 会一起重算。
