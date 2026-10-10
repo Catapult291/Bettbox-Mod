@@ -48,6 +48,8 @@
 | 33 | 工程 | 设备端集成测试进 CI（新增 workflow `android-device`） | 未发版 |
 | 34 | 工程 | 脚本引擎入参契约加固：缺末尾 NUL 不再静默解析垃圾；CI 加跑 release 测试 | 未发版 |
 | 35 | 工程 | helper 增加服务/计划任务子命令，应用侧不再拼 `sc`/`reg`/`schtasks` | 未发版 |
+| 36 | 工程 | Windows 系统代理改由 Rust 实现：启用前存快照，停止只还原自己改过的连接 | 未发版 |
+| 37 | 工程 | 打包前清掉构建目录里已下线插件的 dll；本机 Windows 构建环境改开开发者模式 | 未发版 |
 
 ---
 
@@ -1732,3 +1734,53 @@ group_switch_test,json_diff}.dart`
 - **访问控制列表排序稳定性**：原 `lib/models/selector.dart` 中「链式两次排序 + Dart 不稳定排序」问题，
   上游已在提交 `79cf06e`（Optimize android access control list sorting）中修复，实现与本仓库此前的
   修法等价（单次复合比较器 + 兜底包名比较）。本仓库直接采用上游实现。
+
+---
+
+## 37. 打包前清掉构建目录里已下线插件的 dll；本机 Windows 构建环境改开开发者模式
+
+**文件**：`windows/packaging/exe/package_windows.dart`
+
+**问题**：
+
+- **旧插件 dll 会被原样打进包**：`flutter build windows` 不清 `build/windows/x64/runner/Release/`，
+  而打包是整目录（`inno_setup.iss`：`Source: "{SOURCE_DIR}\*"; Flags: ... recursesubdirs createallsubdirs`）。
+  插件删掉后 CMake 既不再产出它的 dll、也不会删掉旧的，残留就会进安装包——实测残留
+  `proxy_plugin.dll`（第 36 节删掉的 C++ 插件）与 `flutter_qjs_plugin.dll`（第 32 节删掉的插件）。
+- **没有符号链接权限时 Windows 构建会卡住**：`flutter pub get` 在**插件列表内容变化**时会清空
+  `<平台>/flutter/ephemeral/.plugin_symlinks/` 再重建（`flutter_tools` 只在内容 `changed` 时才走
+  `force: true`），重建走 `CreateSymbolicLink`；本机未开开发者模式，抛 `ERROR_PRIVILEGE_NOT_HELD`(1314) 后
+  工具直接 `throwToolExit('Building with plugins requires symlink support')` 中止构建。此前靠
+  `tools/windows-build-junctions.py` 用 `mklink /J`（目录联接，不需要特权）补回来，该脚本按约定不入库。
+
+**改动**：
+
+- `package_windows.dart` 在渲染安装脚本前，按 `windows/flutter/generated_plugins.cmake` 的
+  `FLUTTER_PLUGIN_LIST` / `FLUTTER_FFI_PLUGIN_LIST` 比对 Release 目录里的 `*_plugin.dll`：不在当前插件
+  列表里的删掉并打印文件名；`generated_plugins.cmake` 缺失直接报错退出，不静默放行。这样「插件下线」
+  与「构建目录残留」不再能合成一个带旧 dll 的安装包，CI 与本地走的是同一条路径。
+- **本机构建环境（非仓库改动）**：开启开发者模式——`HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\
+  AppModelUnlock` 的 `AllowDevelopmentWithoutDevLicense` 由「不存在」改为 `1`。`flutter pub get` 现在自己
+  就能建联接，`tools/windows-build-junctions.py` 不再需要（脚本幂等，留着也无害）。要退回：删掉该
+  `AllowDevelopmentWithoutDevLicense` 值即可。
+
+**验证**（本机实测）：
+
+- **联接**：删掉 `.flutter-plugins-dependencies` 以触发 `pub get` 的 `force` 路径 →
+  `flutter pub get` 退出码 0，`windows` / `linux` / `macos` 三处 `.plugin_symlinks` 各自重建（windows 21 项），
+  条目 `LinkType` 从 `Junction` 变成 `SymbolicLink`（即由 Flutter 自己创建）；随后
+  `flutter build windows --release --dart-define=CORE_SHA256=b0225519… --dart-define=APP_ENV=stable
+  --dart-define=APP_ASSET_SUFFIX=windows-amd64-setup.exe` **57s 成功**，包内 `bettbox_native.dll` 与
+  `libclash/windows/`、`rust/target/release/` 两份 sha256 一致。
+- **陈旧 dll**：删掉 `build/windows/x64/plugins/{proxy,flutter_qjs}` 两个残留构建目录（插件移除后已无人引用），
+  全树复查无 `proxy_plugin.dll` / `flutter_qjs_plugin.dll`。
+- **打包清理**：往 Release 目录放一个探针 `stale_probe_plugin.dll` 后跑
+  `dart windows/packaging/exe/package_windows.dart --arch amd64 --env stable`，日志打印
+  `Removed stale plugin dll(s) not in the current plugin list: stale_probe_plugin.dll`；ISCC 的压缩清单里
+  没有它，12 个在册插件 dll 与 `bettbox_native.dll` / `code_forge.dll` 照常在列，打包成功。
+
+**未决**：
+
+- 安装器仍无 `[InstallDelete]`：升级安装不会清掉安装目录里旧版遗留的 dll，本次只堵住
+  「构建目录 → 安装包」这一环。
+- 开发者模式是机器级设置，别的机器与 CI 各按自己环境来；CI 以管理员身份运行，本来不需要这一步。
