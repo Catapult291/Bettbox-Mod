@@ -51,6 +51,7 @@
 | 36 | 工程 | Windows 系统代理改由 Rust 实现：启用前存快照，停止只还原自己改过的连接 | v1.19.15 |
 | 37 | 工程 | 打包前清掉构建目录里已下线插件的 dll；本机 Windows 构建环境改开开发者模式 | v1.19.15 |
 | 38 | 安全 | helper 请求加 nonce：签名消息改为 `timestamp:nonce:body`，helper 侧按窗口去重防重放（协议版本 1 → 2） | v1.19.15 |
+| 39 | 界面 | 扫码页权限：未授权时不再自行判定「拒绝」，改由 mobile_scanner 申请系统授权（「每次使用时询问」下弹不出授权框） | 待发布 |
 
 ---
 
@@ -1866,3 +1867,62 @@ HMAC 比对。5 秒窗口内，一个已经抓到的合法帧可以被原样重�
 - `setup.dart windows --out helper` 会先跑 `build core`，本次因此重编了本地内核
   （`libclash/windows/BettboxCore.exe` 的 hash 由 `b0225519…` 变为 `68667b34…`）。Go 构建不可复现，
   下次发布构建按 app 路径走一遍即可，helper TOKEN 与 `CORE_SHA256` 会一起重算。
+
+---
+
+## 39. 扫码页权限：未授权时不再自行判定「拒绝」，改由 mobile_scanner 申请系统授权
+
+**文件**：`lib/pages/scan.dart`
+
+**问题**（用户报告）：Android 权限管理里把相机权限设为「每次使用时询问」时，应用内扫码弹不出系统授权框，
+只显示「相机权限被拒绝」；只有设成「使用时允许」才能扫码。
+
+**原因**：`ScanPage` 进入时先用 `AppPlugin.hasCameraPermission`（即 `checkSelfPermission`）自行判定权限，
+未授权就置 `_permissionDenied = true` 并直接渲染拒绝视图，**从不调用** `MobileScannerController.start()`。
+而 Android 的 `checkSelfPermission` 只能区分「已授权 / 未授权」，未授权既可能是从未申请、也可能是用户拒绝过；
+mobile_scanner 的授权申请恰好发生在 `start()` 内部（原生 `request` → `ActivityCompat.requestPermissions`），
+于是这条自行判定把申请入口整个跳过了：只要权限不是「已授权」，系统授权框永远不会出现。
+
+**改动**：
+
+- 「是否被拒绝」改为只以 `start()` 的结果为准（`controller.value.error == permissionDenied`）：未授权时照常
+  调用 `start()`，由它弹出系统授权框；用户允许则起相机，拒绝才进拒绝视图。
+- `MobileScanner` 不再随 `_permissionDenied` 卸载：scanner 始终挂载，权限被拒时由一层拒绝视图盖住。
+  `start()` 要求 widget 已 `attach`，原先「先卸载 → 再挂载 → 等一帧」的写法不仅多一次黑屏，恢复路径上
+  残留的 `permissionDenied` 错误状态还会被 errorBuilder 重新消费并 `controller.stop()`，把刚起来的相机
+  关掉（实测表现：拒绝后在系统设置里打开权限、回到应用，界面已是扫码视图但预览全白，相机在打开 1 秒后被关闭）。
+- errorBuilder 里的状态回写与 `stop()` 加 `_starting` 守卫：`_ensureCameraStarted` 在途时不打断它，
+  权限状态统一由 `start()` 返回后结算。
+- 处于拒绝视图时重新进入（或从系统设置回来）先查一次真实权限，仍未授权就保持拒绝视图、不再重复弹框；
+  已授权则直接重启相机。
+- 删掉 `_permissionChecking` 的「黑屏检查态」：scanner 未初始化时本身渲染黑底，观感一致。
+
+**验证**：`flutter analyze lib test` 无问题；`flutter test` 132/132 通过。
+
+Android 模拟器（`bb_rust_verify`，x86_64，Android 16 / API 36，1080×2400）实机 A/B：
+
+| 场景 | 1.19.15（改前） | 本次 debug 包（改后） |
+| --- | --- | --- |
+| 全新安装（`CAMERA granted=false`）进入「配置 → 添加配置 → 二维码」 | 直接显示「Camera Permission Denied」，无系统弹框 | 弹出系统授权框（使用时允许 / 仅这一次 / 不允许） |
+| 选「仅这一次」 | — | 相机预览正常（虚拟场景） |
+| 已拒绝一次（`USER_SET`，对应「每次使用时询问」）再进扫码页 | — | 授权框再次弹出 |
+| 选「不允许」 | — | 显示拒绝视图 |
+| 拒绝视图下切后台再回前台 | — | 保持拒绝视图，不再反复弹框 |
+| 拒绝后切后台 `pm grant` 授予权限（进程未被杀）再回前台 | — | 拒绝视图自动换成实时预览（初版实现此处预览全白，相机被 errorBuilder 停掉） |
+
+**未决**：
+
+- 未在设备上重跑「识别成功 → 进导入页」那一步：模拟器虚拟场景无法把相机对准二维码（与 §8 同一限制），
+  本次也未改动 barcode 订阅与 `_handleBarcode`。
+
+**真机实测确认（2026-10-10）**：用户在自己的 arm64 真机上安装本轮产出的包，反馈「测试通过」——相机权限
+不再是「使用时允许」时也能弹出系统授权框并正常扫码。模拟器上无法覆盖的 MIUI/HyperOS 系「每次使用时询问」
+这一条随之关闭，本条不再挂「未在真机验证」。
+
+**arm64 安装包（本机产出，不入库）**：`Bettbox-1.19.15-android-arm64-v8a-scanfix.apk`（release，53.9 MB）与
+`Bettbox-1.19.15-android-arm64-v8a-scanfix-debug.apk`（debug，116 MB），均为 arm64 单 ABI。
+本机没有 release keystore（`android/app/keystore.jks` 与 `local.properties` 的签名项都不存在），所以 release 包
+按 `build.gradle.kts` 的既有回退用 **debug key** 签名（`CN=Android Debug`），**无法覆盖**官方包（官方包是
+release key 签的，同 versionCode 会报签名冲突）；debug 包名为 `com.appshub.bettbox.debug`，可与官方版并存。
+包内 `libclash.so` 是本机 Go 1.26.5 重编的（官方是 CI 的 go1.25.14），内核源码相同（`core/` 自 2026-10-06 未改）、
+体积大 ~10 MB；Android 侧不校验内核 hash（`coreSHA256` 只用于 Windows 的 helper ping），无功能影响。
