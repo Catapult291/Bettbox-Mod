@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 import 'package:win32/win32.dart';
 
 import 'common.dart';
@@ -84,16 +84,32 @@ class HelperAuthManager {
       return {};
     }
 
-    final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final message = '$timestamp:$body';
+    return buildAuthHeaders(
+      keyHex: _authKey!,
+      body: body,
+      timestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      nonce: _generateNonce(),
+    );
+  }
 
-    final keyBytes = _hexToBytes(_authKey!);
-    final messageBytes = utf8.encode(message);
-    final hmacSha256 = Hmac(sha256, keyBytes);
-    final digest = hmacSha256.convert(messageBytes);
-    final signature = digest.toString();
+  /// 签名与请求头的纯函数形式：消息为 `timestamp:nonce:body`，须与 helper 侧
+  /// `rpc::verify_request` 完全一致，因此单独留出来给固定向量测试钉住。
+  @visibleForTesting
+  static Map<String, String> buildAuthHeaders({
+    required String keyHex,
+    required String body,
+    required int timestamp,
+    required String nonce,
+  }) {
+    final message = '$timestamp:$nonce:$body';
+    final hmacSha256 = Hmac(sha256, _hexToBytes(keyHex));
+    final signature = hmacSha256.convert(utf8.encode(message)).toString();
 
-    return {'X-Timestamp': timestamp.toString(), 'X-Signature': signature};
+    return {
+      'X-Timestamp': timestamp.toString(),
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    };
   }
 
   static Future<void> clearAuthKey() async {
@@ -111,6 +127,13 @@ class HelperAuthManager {
   static String _generateRandomKey() {
     final random = Random.secure();
     final bytes = List<int>.generate(32, (_) => random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  /// 每次请求一个新 nonce，参与 HMAC 签名，helper 侧按窗口去重以挡住重放。
+  static String _generateNonce() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
     return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   }
 

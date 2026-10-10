@@ -4,15 +4,27 @@ use hmac::{Hmac, Mac};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const PROTOCOL_VERSION: u32 = 1;
+// 2：签名消息加入 nonce（`timestamp:nonce:body`）。1 及更早的请求一律拒收，
+// 应用侧靠 `helper.ping` 的 TOKEN 比对发现不一致并重装服务。
+const PROTOCOL_VERSION: u32 = 2;
 const TIME_WINDOW_SECS: u64 = 5;
+const NONCE_MAX_LEN: usize = 64;
+
+/// 已用 nonce 的缓存上限。窗口淘汰本身就把规模压在「窗口内请求数」上，这里是
+/// 防止密钥持有者按请求速率灌爆内存的兜底。
+const MAX_REPLAY_ENTRIES: usize = 8192;
 
 type HmacSha256 = Hmac<Sha256>;
 
 static AUTH_KEY: Lazy<Arc<Mutex<Option<Vec<u8>>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+
+/// nonce → 该请求的时间戳（秒）。只保留窗口内的条目。
+static REPLAY_CACHE: Lazy<Arc<Mutex<HashMap<String, u64>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// 读取鉴权 key。
 ///
@@ -82,13 +94,32 @@ async fn handle_request(request: HelperRequest) -> HelperResponse {
         );
     }
 
+    if !is_valid_nonce(&request.auth.nonce) {
+        ops::logs::log_message("Rejected request with malformed nonce".to_string());
+        return HelperResponse::error(
+            &request.id,
+            HelperError::new("UNAUTHORIZED", "Unauthorized helper request"),
+        );
+    }
+
     let auth_payload = format!("{}:{}:{}", request.version, request.method, request.body);
     if !verify_request(
         request.auth.timestamp,
+        &request.auth.nonce,
         &request.auth.signature,
         &auth_payload,
     ) {
         ops::logs::log_message("Authentication failed".to_string());
+        return HelperResponse::error(
+            &request.id,
+            HelperError::new("UNAUTHORIZED", "Unauthorized helper request"),
+        );
+    }
+
+    // 只在签名通过之后再登记 nonce：否则未鉴权的连接可以拿垃圾 nonce 灌缓存，
+    // 反过来把合法请求挤成「重放」。
+    if !claim_nonce(&request.auth.nonce, request.auth.timestamp) {
+        ops::logs::log_message("Rejected replayed request".to_string());
         return HelperResponse::error(
             &request.id,
             HelperError::new("UNAUTHORIZED", "Unauthorized helper request"),
@@ -170,7 +201,47 @@ fn result_to_response(id: &str, result: String, code: &str) -> HelperResponse {
     }
 }
 
-fn verify_request(timestamp: u64, signature: &str, body: &str) -> bool {
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+}
+
+/// nonce 只接受短 hex 串：它必须进签名消息，而缓存又按它建键，所以长度要有上界。
+fn is_valid_nonce(nonce: &str) -> bool {
+    !nonce.is_empty()
+        && nonce.len() <= NONCE_MAX_LEN
+        && nonce.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// 登记一次 nonce，返回是否为首次使用。
+///
+/// 与 `verify_request` 的窗口校验用同一个时钟，所以时间戳超窗的条目会在下次调用
+/// 时被淘汰——缓存不会无限增长。
+fn claim_nonce(nonce: &str, timestamp: u64) -> bool {
+    let now = now_secs();
+    let mut cache = match REPLAY_CACHE.lock() {
+        Ok(cache) => cache,
+        Err(_) => return false,
+    };
+
+    cache.retain(|_, ts| now.abs_diff(*ts) <= TIME_WINDOW_SECS);
+    if cache.contains_key(nonce) {
+        return false;
+    }
+    if cache.len() >= MAX_REPLAY_ENTRIES {
+        ops::logs::log_message(format!(
+            "Replay cache reached {} entries, clearing",
+            MAX_REPLAY_ENTRIES
+        ));
+        cache.clear();
+    }
+    cache.insert(nonce.to_string(), timestamp);
+    true
+}
+
+fn verify_request(timestamp: u64, nonce: &str, signature: &str, body: &str) -> bool {
     let key = match AUTH_KEY.lock() {
         Ok(guard) => match guard.as_ref() {
             Some(k) => k.clone(),
@@ -179,10 +250,7 @@ fn verify_request(timestamp: u64, signature: &str, body: &str) -> bool {
         Err(_) => return false,
     };
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs();
+    let now = now_secs();
 
     if now.abs_diff(timestamp) > TIME_WINDOW_SECS {
         ops::logs::log_message(format!(
@@ -192,7 +260,7 @@ fn verify_request(timestamp: u64, signature: &str, body: &str) -> bool {
         return false;
     }
 
-    let message = format!("{}:{}", timestamp, body);
+    let message = format!("{}:{}:{}", timestamp, nonce, body);
     let mut mac = match HmacSha256::new_from_slice(&key) {
         Ok(m) => m,
         Err(_) => return false,
@@ -220,6 +288,7 @@ struct HelperRequest {
 #[derive(Debug, Deserialize)]
 struct HelperAuth {
     timestamp: u64,
+    nonce: String,
     signature: String,
 }
 
@@ -292,7 +361,114 @@ impl HelperError {
 
 #[cfg(test)]
 mod tests {
-    use super::read_auth_key;
+    use super::{
+        claim_nonce, is_valid_nonce, now_secs, read_auth_key, verify_request, HmacSha256, AUTH_KEY,
+        REPLAY_CACHE, TIME_WINDOW_SECS,
+    };
+    use hmac::Mac;
+
+    /// `AUTH_KEY` / `REPLAY_CACHE` 是进程级静态量，而 cargo 并行跑用例，
+    /// 所以凡是要动它们的用例都得先拿这把锁串行化。
+    static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn test_lock() -> std::sync::MutexGuard<'static, ()> {
+        TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 造一个签名，消息格式与 Dart 侧 `generateAuthHeaders` 一致。
+    fn sign(timestamp: u64, nonce: &str, body: &str, key: &[u8]) -> String {
+        let mut mac = HmacSha256::new_from_slice(key).unwrap();
+        mac.update(format!("{}:{}:{}", timestamp, nonce, body).as_bytes());
+        hex::encode(mac.finalize().into_bytes())
+    }
+
+    #[test]
+    fn rejects_stale_tampered_and_replayed_requests() {
+        let _guard = test_lock();
+        let key = b"0123456789abcdef0123456789abcdef".to_vec();
+        *AUTH_KEY.lock().unwrap() = Some(key.clone());
+        REPLAY_CACHE.lock().unwrap().clear();
+
+        let body = "2:helper.ping:";
+        let now = now_secs();
+        let nonce = "00112233445566778899aabbccddeeff";
+        let signature = sign(now, nonce, body, &key);
+
+        assert!(verify_request(now, nonce, &signature, body));
+        assert!(claim_nonce(nonce, now), "首次使用的 nonce 应当通过");
+        assert!(!claim_nonce(nonce, now), "重放的 nonce 应当被拒");
+
+        // 窗口外：即使签名正确也拒收。
+        let stale = now - TIME_WINDOW_SECS - 1;
+        assert!(!verify_request(
+            stale,
+            nonce,
+            &sign(stale, nonce, body, &key),
+            body
+        ));
+
+        // 旧格式签名（nonce 未参与）不再被接受。
+        let mut legacy_mac = HmacSha256::new_from_slice(&key).unwrap();
+        legacy_mac.update(format!("{}:{}", now, body).as_bytes());
+        let legacy = hex::encode(legacy_mac.finalize().into_bytes());
+        assert!(!verify_request(now, nonce, &legacy, body));
+
+        // 改过的 nonce 会让签名失配。
+        assert!(!verify_request(
+            now,
+            "ffeeddccbbaa99887766554433221100",
+            &signature,
+            body
+        ));
+
+        // 另一个 nonce 正常通过，且与上一个互不影响。
+        let nonce2 = "ffeeddccbbaa99887766554433221100";
+        assert!(verify_request(
+            now,
+            nonce2,
+            &sign(now, nonce2, body, &key),
+            body
+        ));
+        assert!(claim_nonce(nonce2, now));
+    }
+
+    #[test]
+    fn replay_cache_drops_entries_outside_the_window() {
+        let _guard = test_lock();
+        REPLAY_CACHE.lock().unwrap().clear();
+        let now = now_secs();
+        let stale = now - TIME_WINDOW_SECS - 1;
+
+        assert!(claim_nonce("aa", stale));
+        // 下一次调用会淘汰窗口外的旧条目，所以同一个 nonce 又能用。
+        assert!(claim_nonce("bb", now));
+        assert!(claim_nonce("aa", now));
+    }
+
+    #[test]
+    fn nonce_must_be_short_hex() {
+        assert!(is_valid_nonce("00112233445566778899aabbccddeeff"));
+        assert!(is_valid_nonce("a"));
+        assert!(!is_valid_nonce(""));
+        assert!(!is_valid_nonce("not-hex"));
+        assert!(!is_valid_nonce(&"a".repeat(65)));
+    }
+
+    /// 与 Dart 侧 `test/common/helper_auth_test.dart` 用同一个固定向量，
+    /// 两侧消息格式一旦漂移，这里会先红。
+    #[test]
+    fn signature_matches_the_shared_fixed_vector() {
+        let key = hex::decode("0123456789abcdef0123456789abcdef").unwrap();
+        assert_eq!(
+            sign(
+                1_700_000_000,
+                "00112233445566778899aabbccddeeff",
+                "2:helper.ping:",
+                &key
+            ),
+            "f280c7b7888c7455b6a15f6733be2ce25baa45a901c17686769fa73738428f3e"
+        );
+    }
 
     #[test]
     fn reads_the_key_file_and_falls_back_to_the_env() {

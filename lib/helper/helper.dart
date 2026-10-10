@@ -11,7 +11,7 @@ import 'package:bett_box/common/print.dart';
 import 'package:bett_box/common/win32_kernel.dart';
 import 'package:ffi/ffi.dart';
 
-const helperProtocolVersion = 1;
+const helperProtocolVersion = 2;
 const helperPipeName = WindowsHelperIdentity.pipeName;
 const helperMaxFrameSize = 1024 * 1024;
 const helperDefaultTimeout = Duration(seconds: 5);
@@ -24,13 +24,19 @@ abstract class HelperTransport {
 }
 
 class HelperAuth {
-  const HelperAuth({required this.timestamp, required this.signature});
+  const HelperAuth({
+    required this.timestamp,
+    required this.nonce,
+    required this.signature,
+  });
 
   final int timestamp;
+  final String nonce;
   final String signature;
 
   Map<String, dynamic> toJson() => {
     'timestamp': timestamp,
+    'nonce': nonce,
     'signature': signature,
   };
 }
@@ -203,8 +209,9 @@ class HelperClient {
     final authPayload = '$helperProtocolVersion:$method:$bodyPayload';
     final headers = HelperAuthManager.generateAuthHeaders(authPayload);
     final timestamp = int.tryParse(headers['X-Timestamp'] ?? '');
+    final nonce = headers['X-Nonce'];
     final signature = headers['X-Signature'];
-    if (timestamp == null || signature == null) {
+    if (timestamp == null || nonce == null || signature == null) {
       throw const HelperRpcException(
         'AUTH_NOT_READY',
         'Helper auth key is not ready',
@@ -215,7 +222,11 @@ class HelperClient {
       id: _nextId(),
       method: method,
       body: bodyPayload,
-      auth: HelperAuth(timestamp: timestamp, signature: signature),
+      auth: HelperAuth(
+        timestamp: timestamp,
+        nonce: nonce,
+        signature: signature,
+      ),
     );
     final responsePayload = await _transport.send(
       request.encode(),

@@ -90,6 +90,7 @@ app.*.map.json
 /Bettbox-*.zip
 /Bettbox-*-setup.exe
 /Bettbox-*-windows-*/
+/BettboxHelperService.exe
 
 # 截图工具在本机留下的图片（可能含订阅链接等隐私内容），不入库
 /PixPin_*.png
