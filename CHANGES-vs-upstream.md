@@ -1721,9 +1721,13 @@ group_switch_test,json_diff}.dart`
 
 **未决**：
 
-- 没有在运行中的应用里点一次「系统代理」开关做 GUI 级验证——本机当前有用户在用的
-  `Bettbox.exe` 实例在跑并持有系统代理（`127.0.0.1:7890`），再起一个实例会和它抢同一份系统代理设置；
-  改用真实 dll 的注册表级端到端（上一条）覆盖了同一条链路，构建产物也逐项核过。
+- ~~没有在运行中的应用里点一次「系统代理」开关做 GUI 级验证~~ **2026-10-10 已补做（见 `stage-log.md` §113）**：
+  在运行中的应用（`Documents\Bettbox`）里用 UIA 点右栏「系统代理」，走真实 prefs 与真实注册表——
+  关：`ProxyEnable` 由 `1` 变 `0`，`system_proxy_snapshot` 键被移除，`.NET` 的默认代理从
+  `http://127.0.0.1:7890/` 变回「无代理」；开：注册表回到 `1` / `127.0.0.1:7890` / 原 bypass 列表，
+  `.NET` 默认代理恢复，快照重写为 `{applied:127.0.0.1:7890, flags:1}`（记的是「启用前是直连」）。
+  归属判定也补了一条 GUI 级实测：把服务器串改成等价的 `localhost:7890`（别的程序改过的样子）后再点关，
+  注册表三项原样不动、`.NET` 仍解析到 `localhost:7890`，即没覆盖别人改过的连接。
 - **升级过渡期**：旧版本（本改动之前）从不写快照，所以「被强杀 → 直接装新版本 → 启动」这条窄路上，
   新版本没有快照可还原，残留会留在系统里（重新打开一次「系统代理」开关即可恢复）。没有按端口
   （`127.0.0.1:<混合端口>`）去「认领」这类残留，是因为默认混合端口 7890 被别的代理客户端占用的情形
@@ -1841,12 +1845,19 @@ HMAC 比对。5 秒窗口内，一个已经抓到的合法帧可以被原样重�
 - **升级路径实测**：用协议 2 + nonce 的请求打现网正在运行的旧 helper，拿到
   `UNSUPPORTED_VERSION`（应答 `version` 仍为 1）；协议 1 + 错签名仍为 `UNAUTHORIZED`——即新 app 对上
   旧 helper 会让 `helper.ping` 失败 → `checkService()` 判 `presence` → 触发重装服务。
+- **应用侧重装服务的端到端实测（2026-10-10，见 `stage-log.md` §113）**：把现网服务删掉、按回退目录里的
+  协议 1 helper 重建并启动（协议 2 的 `helper.ping` 打过去回 `UNSUPPORTED_VERSION`），再在运行中的应用里
+  点「启动开关」。应用 2 s 内跑完 `registerService()`：静默提权执行 `helper.exe service install`，
+  服务 binPath 回到安装目录的新 helper、`Environment` 四项被重写、`_waitForHelperHealthy()` 通过，
+  随后起内核——`helper.ping` 返回新 TOKEN `68667b34…`，helper 与内核 PID 都换新，7890 重新监听，
+  系统代理与出站（`204` / 0.16 s）恢复。这条把「新 app 对上旧 helper → 重装服务」从探针级补到了
+  真实应用级，且未出现重装循环。
 - **现网实例升级实测（2026-10-10）**：`Documents\Bettbox` 从协议 1 升到协议 2，四个文件全部换新
   （`data/app.so` `349d3777…` 含 `X-Nonce`、helper `6f07a266…`、内核 `68667b34…`）；升级后现网 helper
   协议 2 验证 9/9，helper 日志出现 `Received core.start request […]`（ID 格式为 Dart 侧的 `微秒-随机hex`），
   即新 app 用协议 2 驱动新 helper 起了内核；`curl --proxy 127.0.0.1:7890 http://cp.cloudflare.com/generate_204`
-  → 204（0.1~0.3s，直连对照 0.5s）。安装器自己用 `sc config binPath=` 换的 helper，所以没走
-  「TOKEN 不一致 → 重装服务」那条路（该路径另见临时服务验证）。因 `autoRun=false`，升级后代理需手动点一次
+  → 204（0.1~0.3s，直连对照 0.5s）。安装器自己用 `sc config binPath=` 换的 helper，所以这次没走
+  「TOKEN 不一致 → 重装服务」那条路（该路径的应用侧实测见本节上一条）。因 `autoRun=false`，升级后代理需手动点一次
   总开关才恢复（应用既有设计）。
 
 **未决**：
