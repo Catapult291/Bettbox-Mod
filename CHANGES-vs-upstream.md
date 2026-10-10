@@ -50,6 +50,7 @@
 | 35 | 工程 | helper 增加服务/计划任务子命令，应用侧不再拼 `sc`/`reg`/`schtasks` | 未发版 |
 | 36 | 工程 | Windows 系统代理改由 Rust 实现：启用前存快照，停止只还原自己改过的连接 | 未发版 |
 | 37 | 工程 | 打包前清掉构建目录里已下线插件的 dll；本机 Windows 构建环境改开开发者模式 | 未发版 |
+| 38 | 安全 | helper 请求加 nonce：签名消息改为 `timestamp:nonce:body`，helper 侧按窗口去重防重放（协议版本 1 → 2） | 未发版 |
 
 ---
 
@@ -1784,3 +1785,55 @@ group_switch_test,json_diff}.dart`
 - 安装器仍无 `[InstallDelete]`：升级安装不会清掉安装目录里旧版遗留的 dll，本次只堵住
   「构建目录 → 安装包」这一环。
 - 开发者模式是机器级设置，别的机器与 CI 各按自己环境来；CI 以管理员身份运行，本来不需要这一步。
+
+## 38. helper 请求加 nonce：签名消息改 `timestamp:nonce:body`，helper 侧按窗口去重（协议版本 1 → 2）
+
+**文件**：`services/helper/src/rpc.rs`、`lib/common/helper_auth.dart`、`lib/helper/helper.dart`、
+`test/common/helper_auth_test.dart`（新增）
+
+**问题**：请求签名只覆盖 `timestamp:version:method:body`，helper 侧仅校验「时间戳在 ±5 s 内」+
+HMAC 比对。5 秒窗口内，一个已经抓到的合法帧可以被原样重放，helper 会照常执行（启停内核、
+改内核进程优先级）。
+
+**收益边界（先讲清楚）**：命名管道 ACL 放行的是「SYSTEM + Administrators + 应用当前用户」，
+而鉴权 key 文件就在同一用户数据目录、同一批主体可读——**能连管道的身份基本都能直接读 key
+伪造任意请求**。所以这次加 nonce 挡的是更窄的一条旁路：抓到了已签名帧、但读不到 key
+（例如句柄注入/调试器抓帧、而 token 权限又够不到 key 文件）。属于纵深防御，不是堵住主风险；
+主风险的收敛仍靠第 23 节的「key 不进注册表 + 管道 ACL 收紧」。
+
+**改动**：
+
+- 签名消息加 nonce：`timestamp:nonce:body`。nonce 必须**进消息**而不只是当字段——只加字段的话，
+  抓到的帧照样能原样重放。两侧各留一条固定向量用例（同一个 HMAC 值）钉住格式。
+- helper 侧新增 nonce 去重缓存（`HashMap<nonce, ts>`）：登记前先按 5 s 窗口淘汰，规模被压在
+  「窗口内请求数」上；另设 8192 条上限，兜住密钥持有者按请求速率灌内存。
+- **只在签名通过之后登记 nonce**：反过来做的话，未鉴权的连接可以拿垃圾 nonce 灌缓存，
+  把合法请求挤成「重放」。
+- nonce 形状校验（非空、≤64 字符、纯 hex），不合法直接 `UNAUTHORIZED`。
+- 协议版本 1 → 2：`auth` 多了必填的 `nonce`，旧客户端会先撞 `UNSUPPORTED_VERSION`，比签名失败好定位。
+  升级路径不动：既有 TOKEN 握手（`helper.ping` 返回值 ≠ `globalState.coreSHA256` → `checkService()`
+  判 `presence` → `registerService()` 重装服务）已覆盖「新 app 对上旧 helper」，代价是升级后首次启动
+  需要一次 UAC。
+- 时间戳窗口维持 5 s（复核为已足够短，未改）。
+
+**验证**：
+
+- Rust：`cargo fmt --check` 干净；`cargo clippy --all-targets` 无新增告警（只剩既有 `ops.rs:73`
+  的 `comparison_to_empty`）；`cargo test` 15/15 通过。
+- 固定向量（独立用 python3 `hmac` 算出）：key `0123456789abcdef…`、ts `1700000000`、
+  nonce `00112233445566778899aabbccddeeff`、body `2:helper.ping:` →
+  `f280c7b7888c7455b6a15f6733be2ce25baa45a901c17686769fa73738428f3e`；Rust 与 Dart 两侧各自断言。
+- Dart：`flutter analyze lib test` 无问题；`flutter test` 132/132 通过。
+- **端到端 9/9 PASS**（控制台模式 helper + 真实命名管道 `\\.\pipe\Bettbox.Helper.NonceE2E` + 真实 HMAC
+  客户端）：正常请求通过；同一帧重放 `UNAUTHORIZED`；时间戳超窗 `UNAUTHORIZED`；空 nonce / 非 hex nonce
+  `UNAUTHORIZED`；缺 `nonce` 字段 `INVALID_REQUEST`；错签名 `UNAUTHORIZED`；协议版本 1
+  `UNSUPPORTED_VERSION`；换新 nonce 仍通过。
+- 本机 artifact 已按新协议重建：`libclash/windows/BettboxHelperService.exe` 与
+  `BettboxDevHelperService.exe`（sha256 `6f07a266…`），TOKEN 取当前内核 hash。
+
+**未决**：
+
+- 真机（服务方式）验证需管理员权限；现网实例升级后首次启动会触发一次重装服务。
+- `setup.dart windows --out helper` 会先跑 `build core`，本次因此重编了本地内核
+  （`libclash/windows/BettboxCore.exe` 的 hash 由 `b0225519…` 变为 `68667b34…`）。Go 构建不可复现，
+  下次发布构建按 app 路径走一遍即可，helper TOKEN 与 `CORE_SHA256` 会一起重算。
