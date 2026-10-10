@@ -56,6 +56,30 @@ void main(List<String> arguments) async {
     exit(1);
   }
 
+  // 3.5 Drop plugin dlls that are no longer part of the build. `flutter build windows`
+  // does not clean Release/, and everything in it is packed, so a plugin removed from
+  // the project would otherwise keep shipping its stale dll.
+  final expectedPlugins = _readPluginNames();
+  final removedDlls = <String>[];
+  for (final entity in Directory(sourceDir).listSync()) {
+    if (entity is! File) {
+      continue;
+    }
+    final name = path.basename(entity.path);
+    if (!name.endsWith('_plugin.dll')) {
+      continue;
+    }
+    final pluginName = name.substring(0, name.length - '_plugin.dll'.length);
+    if (expectedPlugins.contains(pluginName)) {
+      continue;
+    }
+    entity.deleteSync();
+    removedDlls.add(name);
+  }
+  if (removedDlls.isNotEmpty) {
+    print('Removed stale plugin dll(s) not in the current plugin list: ${removedDlls.join(', ')}');
+  }
+
   // 4. Map variables for Inno Setup template
   final coreExecutableName = isDev ? 'BettboxDevCore.exe' : 'BettboxCore.exe';
   final helperExecutableName = isDev ? 'BettboxDevHelperService.exe' : 'BettboxHelperService.exe';
@@ -159,4 +183,31 @@ void main(List<String> arguments) async {
   final targetInstallerPath = path.join('dist', '$outputBaseName.exe');
   generatedInstallerFile.renameSync(targetInstallerPath);
   print('Successfully generated and moved installer to: $targetInstallerPath');
+}
+
+/// Plugin names of the current build, read from `windows/flutter/generated_plugins.cmake`.
+///
+/// Flutter names a plugin dll after the plugin (`<plugin>_plugin.dll`), so this list is
+/// what tells a live dll from one left behind by a plugin that has since been removed.
+Set<String> _readPluginNames() {
+  final cmakeFile = File('windows/flutter/generated_plugins.cmake');
+  if (!cmakeFile.existsSync()) {
+    print('Error: windows/flutter/generated_plugins.cmake not found.');
+    exit(1);
+  }
+  final content = cmakeFile.readAsStringSync();
+  final names = <String>{};
+  for (final listName in ['FLUTTER_PLUGIN_LIST', 'FLUTTER_FFI_PLUGIN_LIST']) {
+    final match = RegExp(
+      'list\\(APPEND $listName(.*?)\\)',
+      dotAll: true,
+    ).firstMatch(content);
+    if (match == null) {
+      continue;
+    }
+    names.addAll(
+      match.group(1)!.split(RegExp(r'\s+')).where((name) => name.isNotEmpty),
+    );
+  }
+  return names;
 }
