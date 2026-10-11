@@ -2211,11 +2211,24 @@ CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI
 - 护栏生效：另建一个 pubspec 写 `flutter: "3.44.9"`，在本机 3.47.2 上跑 `pub get` 直接失败——
   `Because pintest requires Flutter SDK version 3.44.9, version solving failed.`
 
+**CI 验证（2026-10-11，`03bc022` 推送后手动 dispatch `build.yaml`）**：`build` 38148779867、
+`android-device` 38148769870、`rust` 38148769872 三个 run **全部 completed / success**（`release` job 仍因
+非 tag 被跳过、未发版）。
+
+- `build` 三条腿（windows amd64 / android arm64 / android universal）日志里出现的 Flutter 路径都是
+  `3.44.9-x64-6b182d2c7585eba26d4edce0f97630effd256c33`（`6b182d2c` 就是 3.44.9 的发布提交），全日志内
+  **没有任何别的 stable 版本号**——即 `flutter-version-file: pubspec.yaml` 确实解析成了 3.44.9。
+- Windows runner 上 `flutter-action` 按文档自装了 `yq`（`choco install yq` → yq 4.54.1）；这是该写法在
+  Windows 上的前置条件，已确认不是拦路点（Linux runner 上这一步 skipped）。
+- 三条腿的 `flutter pub get` 输出都是 `Got dependencies!`，而不是 `Changed N dependencies!`——说明仓库里的
+  `pubspec.lock` 现在就是 CI 侧的解析结果，锁文件漂移确实修掉了。
+- `android-device` 的模拟器集成测试 **4 tests passed**；`build` 上传的 artifact 为
+  `Bettbox-1.19.15-windows-amd64-setup.exe`（39,587,725B）与 `Bettbox-1.19.15-android-arm64-v8a.apk`（50,844,659B）。
+
 **未决**：
 
 - 本机与 CI 仍有 JDK 差（本机 21.0.2，CI temurin 17）与 Go 差（本机 1.26.5，CI 1.25.x）；NDK 已一致
   （项目 pin `28.2.13676358`），Rust 由 `rust-toolchain.toml`（1.98.0）钉住。
-- 本节的 CI 侧改动（`flutter-version-file`）尚未经 CI 实跑验证，需一次 `gh workflow run build.yaml` 或 `v*` tag。
 
 ---
 
