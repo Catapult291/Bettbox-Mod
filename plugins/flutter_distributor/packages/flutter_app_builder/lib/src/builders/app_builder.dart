@@ -57,11 +57,14 @@ abstract class AppBuilder {
       }
     }
 
+    // 版本号不能走 `--dart-define FLUTTER_BUILD_NAME` / `FLUTTER_BUILD_NUMBER`：这两个名字被
+    // Flutter 当保留名（`FlutterCommand._ensureReservedDartDefineIsUnset`），较新版本会直接报错
+    // （本机 3.47.2 实测 `BuildError: FLUTTER_BUILD_NAME is used by the framework and cannot be set
+    // using --dart-define`）。`--build-name` / `--build-number` 才是框架的正式入口，同名 dart-define
+    // 由框架自己按这两个值注入。
     buildArguments.addAll([
-      '--dart-define',
-      'FLUTTER_BUILD_NAME=$appBuildName',
-      '--dart-define',
-      'FLUTTER_BUILD_NUMBER=$appBuildNumber',
+      '--build-name=$appBuildName',
+      '--build-number=$appBuildNumber',
     ]);
 
     ProcessResult processResult = await flutter.withEnv(environment).build(

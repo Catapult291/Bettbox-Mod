@@ -2120,7 +2120,47 @@ package`）。子步骤失败也沿 `execute` → `run` → `main` 正常抛出�
 
 **未决**：本次没有用真实工具链跑整条 `--out app`（真 `go` / `cargo` / `flutter build windows` /
 ISCC），所以「解码 + 串行两处修好后整条链能一次跑通」仍是推断而非实测；上面 A/B 只证明串行顺序
-这一条性质。
+这一条性质。**（已由第 43 节闭环：真机链路跑通，两处修复都被证实）**
+
+---
+
+## 43. vendored `flutter_app_builder` 的版本号改走 `--build-name` / `--build-number`
+
+**文件**：`plugins/flutter_distributor/packages/flutter_app_builder/lib/src/builders/app_builder.dart`
+
+**问题**：`flutter_distributor` 0.3.7 的 `AppBuilder.build()` 把 pubspec 版本号当
+`--dart-define FLUTTER_BUILD_NAME=1.19.15 --dart-define FLUTTER_BUILD_NUMBER=2026101001` 传下去，而这两个
+名字被 Flutter 当保留名（`FlutterCommand._ensureReservedDartDefineIsUnset`）：本机 Flutter **3.47.2** 直接报
+`BuildError: FLUTTER_BUILD_NAME is used by the framework and cannot be set using --dart-define or
+--dart-define-from-file`，整条 `dart setup.dart windows --out app` 在 `flutter build` 这一步就断掉。CI 固定
+Flutter **3.44.9**（`.github/workflows/build.yaml`），而 CI 的 android 腿走的就是同一条 distributor 路径
+（`dart setup.dart android`）且一直绿——差异来自本机 SDK 比 CI 新，不是这两处改动引入的。
+
+**改动**：换成框架的正式入口 `--build-name=$appBuildName` / `--build-number=$appBuildNumber`。值不变，同名
+dart-define 改由框架自己注入，语义等价。
+
+**验证**（本机实测，真实工具链）：`dart setup.dart windows --arch amd64 --out app`（21:45:58 起，95.8s）
+**退出码 0**。日志里程碑：`run go mod tidy` → `run build core` → `run build helper`（打印出自己的
+``Finished `release` profile [optimized] target(s)``）→ `run build rust libs` → `run clean distributor` →
+`run upgrade distributor` → `run get distributor`（`Activated flutter_distributor 0.3.7`）→ `run windows` →
+`✓ Built build\windows\x64\runner\Release\Bettbox.exe` →
+`Successfully packaged dist//Bettbox-1.19.15-windows-amd64-setup.exe` → `SETUP_EXIT=0`。
+
+- 同一份日志顺带证实了前两处改动：全程 0 处 `FormatException`（第 41 节的解码修复），helper 的 cargo 在
+  distributor 之前就打印了自己的 `Finished`（第 42 节的 `await` 修复）。
+- 语义等价有直接证据：`frontend_server` 的编译命令行里仍带
+  `-DFLUTTER_BUILD_NAME=1.19.15 -DFLUTTER_BUILD_NUMBER=2026101001`，即框架按 `--build-name` /
+  `--build-number` 注入了同名 dart-define。
+- 产物：`dist/Bettbox-1.19.15-windows-amd64-setup.exe`（41,292,575 字节，sha256 `1b7031b2…`；本次是
+  `APP_ENV=pre`、内核 hash `d7fb09f4…`）。`dist/` 里原先那份（sha256 `652b849e…`）已备份到 `%TEMP%`。
+- `go mod tidy` 会把 `core/go.mod` 的行尾写回 CRLF（`git status` 显示被改、`git diff` 为空），已
+  `git checkout -- core/go.mod` 抹掉。
+
+**未决**：
+
+- 这次改动同时改了 CI android 腿的构建参数（同一条 distributor 路径）。`--build-name` / `--build-number`
+  是 Flutter 长期存在的选项，但**本机无法验证 CI**，要等一次 CI 运行确认。
+- 本机 Flutter 3.47.2 与 CI 固定的 3.44.9 的版本差仍在，后续还可能有别的行为差异。
 
 ---
 
