@@ -394,6 +394,36 @@ class ClashService extends ClashHandlerInterface {
     }
   }
 
+  /// 内核没应答停止指令时用：不再指望 IPC，直接把内核按进程收掉。
+  ///
+  /// 助手托管时 `process` 恒为 null，只有助手收得掉它拉起的那个内核（`core.stop`
+  /// 对自己记录的子进程做 `TerminateProcess`，挂起/卡死的内核同样收得掉）；普通
+  /// 形态由本进程 `kill`。返回"是否真的动了手"：两个来源都不可用时返回 false，
+  /// 调用方不能据此声称内核已停。
+  Future<bool> forceStopCore() async {
+    var handled = false;
+    if (system.isWindows) {
+      handled = await helperClient.stopCore().catchError((_) => false);
+    }
+    final current = process;
+    if (current != null) {
+      process = null;
+      handled = true;
+      current.kill();
+      await current.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          current.kill(ProcessSignal.sigkill);
+          return -1;
+        },
+      );
+    }
+    // 内核已经不应答，旧 socket 留着只会让下一次启动的 `_destroySocket()` 继续
+    // 等它优雅关闭（最坏 2 秒），这里直接断开。
+    await _destroySocket();
+    return handled;
+  }
+
   @override
   shutdown() async {
     _isDestroying = true;

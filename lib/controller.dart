@@ -391,9 +391,10 @@ class AppController {
       if (stopped) {
         _ref.read(runTimeProvider.notifier).value = null;
       } else {
-        // 内核没应答停止指令（IPC 超时）：别把开关停在"已关闭"这个假状态上
-        // （内核可能还在代理，而界面已经说停了）。交给对账按事实定夺。
-        commonPrint.log('Core did not acknowledge the stop request');
+        // 停止指令没被应答、按进程也没收掉（助手不可达，内核也不是本进程拉起的）：
+        // 别把开关停在"已关闭"这个假状态上（内核可能还在代理，而界面已经说停了）。
+        // 交给对账按事实定夺。
+        commonPrint.log('Core could not be stopped');
         await reconcileCoreState(force: true);
       }
       addCheckIpNumDebounce();

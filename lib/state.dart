@@ -425,10 +425,13 @@ class GlobalState {
     }
   }
 
-  /// 返回内核是否应答了停止指令。
+  /// 返回内核是否已停止。
   ///
   /// 内核没应答（IPC 超时）时不再清掉运行状态：以前 `startTime` 先被置空，
-  /// 界面随即显示"已停止"，而内核仍在代理，用户只能退出重进应用才恢复。
+  /// 界面随即显示"已停止"，而内核仍在代理，用户只能退出重进应用才恢复。现在这种
+  /// 情况会补一次**按进程**的强制停止（见 `ClashService.forceStopCore`），真收掉了
+  /// 才落"已停止"；连进程都收不掉（助手不可达、内核也不是本进程拉起的）才返回
+  /// false，交给对账按事实定夺。
   Future<bool> handleStop([bool includeVpnService = true]) async {
     bool stopped = true;
     if (system.isAndroid && isService) {
@@ -437,8 +440,14 @@ class GlobalState {
       stopped = await clashCore.stopListener();
     }
     if (!stopped) {
+      // 内核不应答停止指令：界面若就此显示"已停止"，内核可能仍在代理（TUN、
+      // 系统代理都还生效），"本应在运行"的意图也仍留着 true。这里按进程收一次。
       commonPrint.log('Core did not acknowledge the stop request');
-      return false;
+      stopped = await clashService?.forceStopCore() ?? false;
+      if (!stopped) {
+        commonPrint.log('Core could not be stopped by process');
+        return false;
+      }
     }
     startTime = null;
     final prefs = await preferences.sharedPreferencesCompleter.future;
