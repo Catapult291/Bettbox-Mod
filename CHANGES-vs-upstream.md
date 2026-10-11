@@ -2156,11 +2156,24 @@ dart-define 改由框架自己注入，语义等价。
 - `go mod tidy` 会把 `core/go.mod` 的行尾写回 CRLF（`git status` 显示被改、`git diff` 为空），已
   `git checkout -- core/go.mod` 抹掉。
 
+**CI 实测（2026-10-11，`2f7ee4e` 推送后手动 `workflow_dispatch` 跑 `build.yaml`）**：`build`
+38144957875、`android-device` 38144948064、`rust` 38144948051 三个 run 在该提交上**全部
+completed / success**（`release` job 因 `if: startsWith(github.ref, 'refs/tags/v')` 被跳过，未发版）。
+
+- android 腿走的就是这条 distributor 路径，日志里实际执行的命令行是
+  `flutter build apk --target-platform android-arm64 --dart-define=APP_ASSET_SUFFIX=android-arm64-v8a.apk
+  --dart-define=APP_ENV=stable --verbose --split-per-abi --build-name=1.19.15 --build-number=2026101001`
+  （Flutter 3.44.9），随后 `Successfully packaged dist//Bettbox-1.19.15-android-arm64-v8a.apk`——
+  即 CI 上跑的就是本节的写法，`--dart-define FLUTTER_BUILD_NAME` 已消失，3.44.9 接受
+  `--build-name` / `--build-number`。
+- 该腿命令是 `dart setup.dart android --arch arm64 --env stable`（第 42 节改的 `--out app` 分支），
+  所以第 42 节的 `await` 也随这次 CI 一起被跑过。
+
 **未决**：
 
-- 这次改动同时改了 CI android 腿的构建参数（同一条 distributor 路径）。`--build-name` / `--build-number`
-  是 Flutter 长期存在的选项，但**本机无法验证 CI**，要等一次 CI 运行确认。
 - 本机 Flutter 3.47.2 与 CI 固定的 3.44.9 的版本差仍在，后续还可能有别的行为差异。
+- `push` 到 main 只触发 `rust` 与 `android-device`（后者用 `--out config`，不碰 distributor）；
+  要跑 `build.yaml` 得靠 `v*` tag 或手动 dispatch。
 
 ---
 
