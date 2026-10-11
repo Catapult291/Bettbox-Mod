@@ -53,6 +53,13 @@
 | 38 | 安全 | helper 请求加 nonce：签名消息改为 `timestamp:nonce:body`，helper 侧按窗口去重防重放（协议版本 1 → 2） | v1.19.15 |
 | 39 | 界面 | 扫码页权限：未授权时不再自行判定「拒绝」，改由 mobile_scanner 申请系统授权（「每次使用时询问」下弹不出授权框） | 待发布 |
 | 40 | 工程 | 安装器不再拼 `sc`/`schtasks`（改调 helper 子命令）；helper 被停后不再被崩溃恢复策略自动拉起 | 待发布 |
+| 41 | 工程 | 构建脚本：子进程输出解码容忍非 UTF-8 字节，不再中断整个 `setup.dart` | 待发布 |
+| 42 | 工程 | `setup.dart` 的 `--out app` 分支补上缺的 `await`：helper 构建不再被后续步骤带走 | 待发布 |
+| 43 | 工程 | vendored `flutter_app_builder` 的版本号改走 `--build-name` / `--build-number` | 待发布 |
+| 44 | 工程 | 本机 Flutter 对齐 CI 的 3.44.9；版本收敛到 `pubspec.yaml` 单一来源 | 待发布 |
+| 45 | 工程 | 服务卸载入口留在安装器侧：应用侧不新增（结论，无代码改动） | 待发布 |
+| 46 | 工程 | helper CLI 端到端联调进 CI（新增 workflow `helper-e2e`） | 待发布 |
+| 47 | 工程 | 升级安装清掉上一版遗留的文件：打包随包写出文件清单，安装器按清单差集删除 | 待发布 |
 
 ---
 
@@ -2306,6 +2313,53 @@ CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI
   同提交上 `rust` 38152788278（`test` / `helper` 两个 job）与 `android-device` 38152788157 亦 success。
 
 **未决**：无。本节关掉第 35 节遗留的第 3 条未决（`stage-log.md` §107 / §117 B③）。
+
+---
+
+## 47. 升级安装清掉上一版遗留的文件：随包写出文件清单，安装器按清单差集删除
+
+**文件**：`windows/packaging/exe/package_windows.dart`、`windows/packaging/exe/inno_setup.iss`
+
+**问题**（第 37 节遗留，见 `.grok/stage-log.md` §109 未决 / §117 B④）：安装器的 `[Files]` 只有
+`Source: "{SOURCE_DIR}\*" ... ignoreversion recursesubdirs`——装什么由本包决定，但**不会**清掉上一版
+装进去、本版已不再提供的文件。`bettbox_config.dll` / `bettbox_script.dll`（Rust 迁移阶段 4 合并成
+`bettbox_native.dll` 后下线）与 `flutter_qjs_plugin.dll` / `proxy_plugin.dll`（插件下线）就是这样在
+升级后一直留在安装目录里的死重量：Dart 只加载 `bettbox_native.dll`，它们不会被加载，却一直占着目录、
+干扰排查。第 37 节只堵住了「构建目录 → 安装包」这一环（打包前按插件清单删掉构建目录里的旧插件 dll），
+安装目录这一侧仍开着。
+
+**改动**：
+
+- **打包时随包写出文件清单**：`package_windows.dart` 在删掉过期插件 dll **之后**，把 `Release/` 的
+  全部文件按相对路径（反斜杠、排序、不含清单自身）写成 `bettbox_install_manifest.txt` 放进包里；
+  它随包安装到 `{app}`，供下一次升级读取。
+- **安装器按「上一版清单 − 本版清单」的差集删除**：`ssInstall` 时先把 `{app}` 里的旧清单备份到 `{tmp}`
+  （等 `[Files]` 复制完，同名清单已被本包覆盖，那时再读就是本版的了）；`ssPostInstall` 时读两份清单，
+  逐条删掉「旧有新无」的文件，并把因此空掉的子目录一并清掉。
+- **只删安装器自己写进去的文件**：判据是「上一版清单里记过」，用户自己放进 `{app}` 的东西不受影响；
+  两份清单任一读不出来就直接跳过清理——宁可留下死文件，也不误删。
+- **清单机制上线前的安装按已知下线文件名补一次**：没有旧清单时删 `bettbox_config.dll` /
+  `bettbox_script.dll` / `flutter_qjs_plugin.dll` / `proxy_plugin.dll`（一次性迁移，之后各版都走差集）。
+- **为什么不用静态 `[InstallDelete]`**：静态清单要么写死文件名（下次再下线文件还得回来补一行），
+  要么按扩展名整片删（会连用户自己放进安装目录的 dll 一起删）。清单差集是自维护的，且不碰非安装器文件。
+
+**验证**（本机实测）：
+
+- 打包：`dart windows/packaging/exe/package_windows.dart --arch amd64 --env stable` 通过（ISCC 25.3s），
+  日志 `Install manifest: bettbox_install_manifest.txt (60 files)`，ISCC 清单里
+  `Compressing: …\bettbox_install_manifest.txt`；清单内容与 `Release/` 的实际文件集合逐条一致
+  （61 个文件 − 清单自身 = 60 条）。
+- 隔离探针（**真实模板** + 假载荷，最低权限装到 `%LOCALAPPDATA%\BettboxB4Probe`，探针 AppId / 可执行名 /
+  服务名 / 任务名，不碰现网安装）跑通三条路径：
+  - 装 v1（无清单）→ 升级 v2：四个已知下线 dll 全部被清掉，`data/app.so` 更新为本版，清单出现；
+  - 在装好的目录里放 `stale_probe.dll` 与 `data/oldplugin/x.dll` 并写进已装清单 → 再升级：两者被删
+    （安装日志 `removed file dropped from package: …`），空掉的 `data\oldplugin` 一并清掉；
+  - 同一次升级里，用户自己放的 `user_note.txt` 与本版仍提供的 `data/flutter_assets/keep.txt` 都保留。
+  - 探针用完已清干净：安装目录、开始菜单项、探针服务（`sc query` 返回 1060）与探针计划任务都不存在。
+
+**未决**：现网安装目录的升级实测未跑。本轮要覆盖的清理逻辑已由探针走通（模板与生产逐字相同），而现网
+那份是正在使用的安装副本，不宜用「同版本号的本地构建」覆盖它。另：清单机制上线前的安装只能按已知文件名
+迁移，更早版本遗留的**其它**未知文件仍会留下——清单差集只对装了清单的版本生效。
 
 ---
 

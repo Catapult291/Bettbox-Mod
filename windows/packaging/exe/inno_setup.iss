@@ -90,6 +90,106 @@ begin
     Result := RunHelperCommand('service uninstall', ServiceJson);
 end;
 
+{ 本包带进来的文件清单，由 package_windows.dart 在打包时写出（{{MANIFEST_FILE_NAME}}），
+  随包装到安装目录。升级安装时按「上一版清单 - 本版清单」的差集删文件，清掉本版已不再提供的
+  旧 dll / 下线插件；只删安装器自己写进去的文件，用户自己放进安装目录的东西不动。 }
+procedure BackupPreviousManifest;
+var
+  ManifestPath: String;
+begin
+  ManifestPath := ExpandConstant('{app}\{{MANIFEST_FILE_NAME}}');
+  if FileExists(ManifestPath) then
+  begin
+    { 必须先备份：ssInstall 时安装目录里还是上一版内容，等 [Files] 复制完，同名清单已被本包覆盖。 }
+    if CopyFile(ManifestPath, ExpandConstant('{tmp}\bettbox_prev_manifest.txt'), False) then
+      Log('previous install manifest saved for stale file cleanup')
+    else
+      Log('could not save previous install manifest');
+  end;
+end;
+
+procedure RemoveStaleFiles;
+var
+  PrevManifest: String;
+  CurrManifest: String;
+  PrevLines: TArrayOfString;
+  CurrLines: TArrayOfString;
+  StaleDirs: TArrayOfString;
+  RelPath: String;
+  FullPath: String;
+  i, j, StaleCount, Pass: Integer;
+  Found: Boolean;
+begin
+  PrevManifest := ExpandConstant('{tmp}\bettbox_prev_manifest.txt');
+  CurrManifest := ExpandConstant('{app}\{{MANIFEST_FILE_NAME}}');
+
+  if not (FileExists(PrevManifest) and FileExists(CurrManifest)) then
+  begin
+    { 没有上一版清单，说明这次升级来自清单机制上线前的版本：按已知下线的文件名清一遍
+      （一次性迁移，之后各版都靠清单差集）。这些文件不会被任何版本加载，属死重量。 }
+    DeleteFile(ExpandConstant('{app}\bettbox_config.dll'));
+    DeleteFile(ExpandConstant('{app}\bettbox_script.dll'));
+    DeleteFile(ExpandConstant('{app}\flutter_qjs_plugin.dll'));
+    DeleteFile(ExpandConstant('{app}\proxy_plugin.dll'));
+    Exit;
+  end;
+
+  if not LoadStringsFromFile(PrevManifest, PrevLines) then
+  begin
+    Log('previous install manifest unreadable, skipping stale file cleanup');
+    Exit;
+  end;
+
+  if not LoadStringsFromFile(CurrManifest, CurrLines) then
+  begin
+    Log('install manifest unreadable, skipping stale file cleanup');
+    Exit;
+  end;
+
+  SetArrayLength(StaleDirs, GetArrayLength(PrevLines));
+  StaleCount := 0;
+
+  for i := 0 to GetArrayLength(PrevLines) - 1 do
+  begin
+    RelPath := Trim(PrevLines[i]);
+    if RelPath <> '' then
+    begin
+      Found := False;
+      j := 0;
+      while (not Found) and (j < GetArrayLength(CurrLines)) do
+      begin
+        if Trim(CurrLines[j]) = RelPath then
+          Found := True;
+        j := j + 1;
+      end;
+
+      if not Found then
+      begin
+        FullPath := ExpandConstant('{app}\') + RelPath;
+        if FileExists(FullPath) then
+        begin
+          if DeleteFile(FullPath) then
+            Log('removed file dropped from package: ' + RelPath)
+          else
+            Log('failed to remove file dropped from package: ' + RelPath);
+        end;
+        StaleDirs[StaleCount] := ExtractFileDir(FullPath);
+        StaleCount := StaleCount + 1;
+      end;
+    end;
+  end;
+
+  { RemoveDir 只在目录为空时成功，所以由深到浅多跑几遍，把因此空掉的子目录也清掉。 }
+  for Pass := 0 to 7 do
+  begin
+    for i := 0 to StaleCount - 1 do
+    begin
+      if StaleDirs[i] <> '' then
+        RemoveDir(StaleDirs[i]);
+    end;
+  end;
+end;
+
 function IsProcessRunning(ProcessName: String): Boolean;
 var
   ResultCode: Integer;
@@ -270,10 +370,12 @@ begin
   begin
     { Let Inno Setup try CloseApplications first; force-kill any leftovers before files are copied. }
     ForceKillProcesses(False);
+    BackupPreviousManifest;
   end;
 
   if CurStep = ssPostInstall then
   begin
+    RemoveStaleFiles;
     RegisterHelperService;
   end;
 end;

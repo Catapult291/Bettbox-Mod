@@ -80,6 +80,22 @@ void main(List<String> arguments) async {
     print('Removed stale plugin dll(s) not in the current plugin list: ${removedDlls.join(', ')}');
   }
 
+  // 3.6 Record the files this package ships. The manifest is installed into {app} and
+  // read by the next upgrade, which deletes the files of that install that the new
+  // package no longer contains (obsolete native libs, dropped plugins). It must be
+  // written after the stale plugin dlls are dropped, so it describes the final package.
+  final manifestName = 'bettbox_install_manifest.txt';
+  final manifestFile = File(path.join(sourceDir, manifestName));
+  final shippedFiles = Directory(sourceDir)
+      .listSync(recursive: true)
+      .whereType<File>()
+      .map((file) => path.relative(file.path, from: sourceDir).replaceAll('/', '\\'))
+      .where((relative) => relative != manifestName)
+      .toList()
+    ..sort();
+  manifestFile.writeAsStringSync('${shippedFiles.join('\r\n')}\r\n');
+  print('Install manifest: $manifestName (${shippedFiles.length} files)');
+
   // 4. Map variables for Inno Setup template
   final coreExecutableName = isDev ? 'BettboxDevCore.exe' : 'BettboxCore.exe';
   final helperExecutableName = isDev ? 'BettboxDevHelperService.exe' : 'BettboxHelperService.exe';
@@ -121,6 +137,7 @@ void main(List<String> arguments) async {
     'HELPER_EXECUTABLE_NAME': helperExecutableName,
     'HELPER_SERVICE_NAME': helperServiceName,
     'TASK_NAME': taskName,
+    'MANIFEST_FILE_NAME': manifestName,
   };
 
   // 5. Render Liquid template
