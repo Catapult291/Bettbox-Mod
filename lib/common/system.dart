@@ -536,70 +536,22 @@ class Windows {
 
   /// 以一次提权调用 helper 的子命令，并把结果文件读回来。
   ///
-  /// 参数走请求文件而不是命令行：路径可能带空格与非 ASCII 字符，服务 Environment 的值里
-  /// 还有 `\0`，拼进命令行迟早出错。`ShellExecuteW` 也拿不到子进程的退出码，所以结果由
-  /// helper 写进结果文件，这里轮询它出现。
+  /// 协议本体在 `helper_cli.dart` 的 `runHelperCommand()` 里（可注入 launcher，便于测试）；
+  /// 这里只提供应用侧的 helper 路径、临时目录与提权方式。
   Future<HelperCliResult> _runHelperCommand(
     String group,
     String action,
     Map<String, Object?> request,
   ) async {
-    final helperPath = appPath.helperPath;
-    if (!await File(helperPath).exists()) {
-      return HelperCliResult.localFailure(
-        'HELPER_MISSING',
-        'helper executable not found: $helperPath',
-      );
-    }
-
-    final tempPath = await appPath.tempPath;
-    final stamp = DateTime.now().microsecondsSinceEpoch;
-    final requestFile = File(
-      join(tempPath, 'bettbox_helper_$stamp.request.json'),
+    return runHelperCommand(
+      helperPath: appPath.helperPath,
+      group: group,
+      action: action,
+      request: request,
+      tempDirPath: await appPath.tempPath,
+      launch: runas,
     );
-    final resultFile = File(join(tempPath, 'bettbox_helper_$stamp.result.json'));
-
-    try {
-      await requestFile.writeAsString(jsonEncode(request), flush: true);
-
-      final arguments = quoteWindowsArguments([
-        group,
-        action,
-        requestFile.path,
-        resultFile.path,
-      ]);
-      final launched = await runas(helperPath, arguments);
-      if (!launched) {
-        return const HelperCliResult.localFailure(
-          'ELEVATION_DENIED',
-          'helper was not started (elevation refused or launch failed)',
-        );
-      }
-
-      final deadline = DateTime.now().add(_helperCommandTimeout);
-      while (DateTime.now().isBefore(deadline)) {
-        if (await resultFile.exists()) {
-          return HelperCliResult.parse(await resultFile.readAsString());
-        }
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-
-      return HelperCliResult.localFailure(
-        'HELPER_TIMEOUT',
-        'helper did not return a result within ${_helperCommandTimeout.inSeconds}s',
-      );
-    } catch (e) {
-      return HelperCliResult.localFailure('HELPER_FAILED', '$e');
-    } finally {
-      for (final file in [requestFile, resultFile]) {
-        try {
-          if (await file.exists()) await file.delete();
-        } catch (_) {}
-      }
-    }
   }
-
-  static const _helperCommandTimeout = Duration(seconds: 60);
 }
 
 final windows = system.isWindows ? Windows() : null;

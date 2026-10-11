@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' show join;
 
 /// `helper.exe` 子命令的结果文件内容（见 `services/helper/src/cli.rs`）。
 ///
@@ -96,4 +99,81 @@ String quoteWindowsArgument(String value) {
 /// 把参数列表拼成一条 Windows 命令行。
 String quoteWindowsArguments(List<String> arguments) {
   return arguments.map(quoteWindowsArgument).join(' ');
+}
+
+/// 启动提权子进程：成功返回 true。生产实现是 `System.runas`（`ShellExecuteW(..., "runas", ...)`）。
+typedef HelperLauncher =
+    Future<bool> Function(String command, String arguments);
+
+/// 默认等结果文件出现的上限。
+const Duration defaultHelperCommandTimeout = Duration(seconds: 60);
+
+/// 以一次提权调用 helper 的子命令，并把结果文件读回来。
+///
+/// 参数走请求文件而不是命令行：路径可能带空格与非 ASCII 字符，服务 `Environment` 的值里
+/// 还有 `\0`，拼进命令行迟早出错。`ShellExecuteW` 也拿不到子进程的退出码，所以结果由
+/// helper 写进结果文件，这里轮询它出现。
+///
+/// `launch` 与 `tempDirPath` 是参数而不是直接取全局量：这样这条协议（引号、结果文件轮询、
+/// 临时文件清理）既能用假 launcher 做单测，也能在 `test/helper_cli_e2e_test.dart` 里接上
+/// 真实的提权与真实 helper.exe 跑端到端。
+Future<HelperCliResult> runHelperCommand({
+  required String helperPath,
+  required String group,
+  required String action,
+  required Map<String, Object?> request,
+  required String tempDirPath,
+  required HelperLauncher launch,
+  Duration timeout = defaultHelperCommandTimeout,
+}) async {
+  if (!await File(helperPath).exists()) {
+    return HelperCliResult.localFailure(
+      'HELPER_MISSING',
+      'helper executable not found: $helperPath',
+    );
+  }
+
+  final stamp = DateTime.now().microsecondsSinceEpoch;
+  final requestFile = File(
+    join(tempDirPath, 'bettbox_helper_$stamp.request.json'),
+  );
+  final resultFile = File(join(tempDirPath, 'bettbox_helper_$stamp.result.json'));
+
+  try {
+    await requestFile.writeAsString(jsonEncode(request), flush: true);
+
+    final arguments = quoteWindowsArguments([
+      group,
+      action,
+      requestFile.path,
+      resultFile.path,
+    ]);
+    if (!await launch(helperPath, arguments)) {
+      return const HelperCliResult.localFailure(
+        'ELEVATION_DENIED',
+        'helper was not started (elevation refused or launch failed)',
+      );
+    }
+
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      if (await resultFile.exists()) {
+        return HelperCliResult.parse(await resultFile.readAsString());
+      }
+      await Future.delayed(const Duration(milliseconds: 200));
+    }
+
+    return HelperCliResult.localFailure(
+      'HELPER_TIMEOUT',
+      'helper did not return a result within ${timeout.inSeconds}s',
+    );
+  } catch (e) {
+    return HelperCliResult.localFailure('HELPER_FAILED', '$e');
+  } finally {
+    for (final file in [requestFile, resultFile]) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+  }
 }
