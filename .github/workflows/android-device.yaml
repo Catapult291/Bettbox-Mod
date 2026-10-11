@@ -78,7 +78,8 @@ jobs:
           channel: stable
           cache: true
           cache-key: flutter-android-device-${{ hashFiles('**/pubspec.lock') }}
-          flutter-version: '3.44.9'
+          # 版本单一来源：pubspec.yaml 的 environment.flutter
+          flutter-version-file: pubspec.yaml
 
       # 生成代码（*.freezed.dart / *.g.dart）已入库，这里只拉取依赖；setup.dart 也依赖它。
       - name: Install Dependencies

@@ -99,7 +99,8 @@ jobs:
           channel: stable
           cache: true
           cache-key: flutter-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('**/pubspec.lock') }}
-          flutter-version: '3.44.9'
+          # 版本单一来源：pubspec.yaml 的 environment.flutter
+          flutter-version-file: pubspec.yaml
 
       - name: Clean Gradle (Android)
         if: matrix.platform == 'android'

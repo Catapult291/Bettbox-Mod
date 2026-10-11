@@ -2171,9 +2171,51 @@ completed / success**（`release` job 因 `if: startsWith(github.ref, 'refs/tags
 
 **未决**：
 
-- 本机 Flutter 3.47.2 与 CI 固定的 3.44.9 的版本差仍在，后续还可能有别的行为差异。
+- ~~本机 Flutter 3.47.2 与 CI 固定的 3.44.9 的版本差仍在，后续还可能有别的行为差异。~~
+  已于第 44 节关闭：本机 SDK 切到 3.44.9，版本收敛到 `pubspec.yaml` 单一来源。
 - `push` 到 main 只触发 `rust` 与 `android-device`（后者用 `--out config`，不碰 distributor）；
   要跑 `build.yaml` 得靠 `v*` tag 或手动 dispatch。
+
+---
+
+## 44. 本机 Flutter 对齐 CI 的 3.44.9；版本收敛到 pubspec 单一来源
+
+**文件**：`pubspec.yaml`、`.github/workflows/build.yaml`、`.github/workflows/android-device.yaml`。
+机器级、不入库的改动：`C:\Users\bypassnro\tools\flsdk\flutter`（Flutter 的 git checkout）从 3.47.2 切到 3.44.9。
+
+**问题**：第 43 节留下的唯一已知风险——本机 Flutter 3.47.2 比 CI 固定的 3.44.9 新，行为差异会先在本地暴露。
+已经兑现过一次：`--dart-define FLUTTER_BUILD_NAME` 在 3.47.2 上直接报错、在 3.44.9 上被接受（第 43 节）。
+
+**改动**：
+
+- 本机 SDK 就地切版：`git checkout 3.44.9`（该仓库自带 1120 个 tag，3.44.9 已在本地，不必重新克隆）。
+  首跑自动重下 Dart SDK（3.13.2 → 3.12.2）并重建 flutter 工具，116s。切回：`git checkout stable`。
+- `pubspec.yaml` 的 `environment` 加 `flutter: '3.44.9'`（精确 pin）。
+- 两个 workflow 的 `flutter-version: '3.44.9'` 改成 `flutter-version-file: pubspec.yaml`：版本只写一处，
+  本机 SDK 不匹配时 `flutter pub get` 当场失败，而不是先跑出不同行为。`flutter-action` 会自行装它需要的 `yq`。
+
+**顺带查出的真实漂移**：切版后 `flutter pub get` 改动了 `pubspec.lock` 的 5 条，方向全是**降级**——
+`intl` 0.20.3→0.20.2、`matcher` 0.12.20→0.12.19、`meta` 1.19.0→1.18.0、`test_api` 0.7.12→0.7.11、
+`vector_math` 2.4.2→2.2.0（3.44.9 对这几个是指定版本的 pin）。查历史，这 5 条是 `666d831`（2026-09-12）
+一次本机 `pub get` 顶上去的。也就是说：**仓库里的锁文件从 9 月起就是 3.47.2 侧的解析结果，与 CI 不一致**，
+CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI 构建实际用的并不是仓库锁文件写的那版。
+切版后锁文件回到 3.44.9 侧，二次 `pub get` 不再产生改动。
+
+**验证**（本机实测，Flutter 3.44.9 / Dart 3.12.2）：
+
+- `flutter pub get` 幂等；工作区只剩本节这 4 个文件的改动。
+- `flutter analyze lib test` → `No issues found!`。
+- `flutter test` → **134/134 全过**。
+- `flutter build windows --debug` → `✓ Built build\windows\x64\runner\Debug\Bettbox.exe`（445s，即本机出包
+  链路在 3.44.9 上跑得通；`dist/` 里的交付件未被触碰）。
+- 护栏生效：另建一个 pubspec 写 `flutter: "3.44.9"`，在本机 3.47.2 上跑 `pub get` 直接失败——
+  `Because pintest requires Flutter SDK version 3.44.9, version solving failed.`
+
+**未决**：
+
+- 本机与 CI 仍有 JDK 差（本机 21.0.2，CI temurin 17）与 Go 差（本机 1.26.5，CI 1.25.x）；NDK 已一致
+  （项目 pin `28.2.13676358`），Rust 由 `rust-toolchain.toml`（1.98.0）钉住。
+- 本节的 CI 侧改动（`flutter-version-file`）尚未经 CI 实跑验证，需一次 `gh workflow run build.yaml` 或 `v*` tag。
 
 ---
 
