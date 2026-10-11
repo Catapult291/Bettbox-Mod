@@ -822,9 +822,9 @@ class BuildCommand extends Command {
         final token = target != Target.android
             ? await Build.calcSha256(corePaths.first)
             : null;
-        Build.buildHelper(target, token!);
+        await Build.buildHelper(target, token!);
         await Build.buildRustLibs(target);
-        _buildDistributor(
+        await _buildDistributor(
           target: target,
           targets: 'exe',
           args: ' --description $desc --build-dart-define=CORE_SHA256=$token',
@@ -875,7 +875,7 @@ class BuildCommand extends Command {
             ? ' --build-target-platform ${defaultTargets.join(",")} --description universal'
             : ',split-per-abi --build-target-platform ${defaultTargets.join(",")}';
 
-        _buildDistributor(
+        await _buildDistributor(
           target: target,
           targets: 'apk',
           args: buildArgs,
@@ -896,7 +896,7 @@ class BuildCommand extends Command {
           Build.getExecutable('pod install --repo-update'),
           workingDirectory: 'macos',
         );
-        _buildDistributor(
+        await _buildDistributor(
           target: target,
           targets: 'dmg',
           args: ' --description $desc',

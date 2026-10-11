@@ -2083,7 +2083,44 @@ release key 签的，同 versionCode 会报签名冲突）；debug 包名为 `co
   乱码（英文输出不受影响）。真要可读，需要按控制台代码页解码（`dart:convert` 不带 GBK，得引依赖）。
 - `--out app` 分支里 `Build.buildHelper(target, token!)` 与 `_buildDistributor(...)` 都没有 `await`：
   解码崩溃时会把正在跑的 cargo 构建一起带走（第 40 节记的现象）。解码修掉后它不再引发崩溃，但仍是
-  独立隐患，本次未动。
+  独立隐患，本次未动。**（2026-10-11 起由第 42 节闭环）**
+
+---
+
+## 42. `setup.dart` 的 `--out app` 分支补上缺的 `await`：helper 构建不再被后续步骤带走
+
+**文件**：`setup.dart`
+
+**问题**（第 41 节未决第 2 条）：`--out app` 分支里 `Build.buildHelper(target, token!)` 与三处
+`_buildDistributor(...)`（windows / android / macos；linux 那处本来就 `await` 了）都是发射后不管，
+流程不等这些子进程结束就继续往下走。第 40 节真机验证时，解码异常在 `clean distributor` 处终止进程，
+把仍在跑的 cargo helper 构建一起带走——表现是 helper 产物没更新、日志里只有 `Compiling helper`
+没有它自己的 `Finished`。
+
+**改动**：这四处补 `await`，`--out app` 现在是严格串行：core → helper → Rust 原生库 → distributor
+（内部 `flutter clean` / `flutter pub upgrade` / `dart pub global activate` → `flutter_distributor
+package`）。子步骤失败也沿 `execute` → `run` → `main` 正常抛出，而不是变成 `await` 之外的未捕获异步
+错误。
+
+**验证**（本机实测，假工具链 A/B）：在 `%TEMP%` 下搭一份只有目录骨架（空 `core/`、`services/helper/`、
+`rust/`、`plugins/flutter_distributor/packages/flutter_distributor/`）加一份复制来的
+`.dart_tool/package_config.json` 的临时工程，PATH 前置一组假 `go` / `cargo` / `flutter` / `dart` /
+`flutter_distributor`（`.bat`，各自往同一个日志追加开始/结束行；假 cargo 在 `services/helper` 下睡
+8 秒、在 `rust` 下睡 1 秒），用真实 Dart 跑真实 `setup.dart windows --arch amd64 --out app`，只比较
+修复前（`49d0feb` 的 `setup.dart`）与修复后的日志行序：
+
+- 修复前：`cargo-start …\rust` 与 `cargo-start …\services\helper` 同时出现；`cargo-end …\rust` 之后
+  流程就进了 distributor（`flutter clean` → `flutter pub upgrade` → `dart pub global activate` →
+  `distributor-start`），helper 的 `cargo-end` 落在 `distributor-start` **之后**——流程在 helper 构建
+  还在跑时就往下走了，这正是第 40 节「异常一出就带走 helper 构建」的成因。
+- 修复后：helper 的 `cargo-start` / `cargo-end` 成对完成后才出现 `cargo-start …\rust`，两个 cargo
+  都结束后才 `distributor-start`，退出码 0。
+- 假工具链只跑在 `%TEMP%` 的临时工程里，本仓库工作区 `git status` 无变化。
+- `flutter analyze setup.dart` 无问题。
+
+**未决**：本次没有用真实工具链跑整条 `--out app`（真 `go` / `cargo` / `flutter build windows` /
+ISCC），所以「解码 + 串行两处修好后整条链能一次跑通」仍是推断而非实测；上面 A/B 只证明串行顺序
+这一条性质。
 
 ---
 
