@@ -2232,3 +2232,33 @@ CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI
 
 ---
 
+## 45. 服务卸载入口留在安装器侧：应用侧不新增（结论，无代码改动）
+
+**文件**：无（仅结论记录）。
+
+**问题**（第 35 节引入 helper 子命令时留下的开放问题，见 `.grok/stage-log.md` §107 未决 / §117 B②）：
+应用侧没有任何调用 `service uninstall` 的入口——Dart 侧只调 `service install`
+（`lib/common/system.dart` 的 `_configureHelperService`）与 `task register` / `task unregister`，
+卸载服务目前只有安装器（第 40 节）和手工诊断会用。
+
+**结论**：设计如此，应用侧不新增卸载服务的入口。
+
+**依据**：
+
+- **运行期删服务会直接断掉内核托管**：helper 服务就是内核的托管者（内核由 `BettboxHelperService.exe`
+  拉起），应用运行中删掉它，正在跑的内核就失去托管者；而用户关掉总开关时服务仍需保留，否则每次开机
+  都要重新提权建服务。
+- **真正的卸载归安装器**：卸载器在 `usUninstall` 里调 `helper.exe service uninstall`（第 40 节，真机实测
+  服务、计划任务、安装目录同时消失）。应用被卸载时它已不在，任何应用侧入口都用不上。
+- **应用侧的「重装/修复」已被 `service install` 覆盖**：helper 的 `install()` 就是
+  「停 → 等真的停下 → 删 → 等真的消失 → 建 → 写 `Environment` → 配恢复策略 → 拉起」
+  （`services/helper/src/ops/service.rs`），已包含卸载那一半。触发点也齐：helper 不健康、服务
+  `Environment` 里残留旧版明文 key、新 app 对上旧 helper（`helper.ping` 失败 → `checkService()` 判
+  `presence` → `registerService()`）都会走到它，其中「新 app 对旧 helper」已实测。
+- **与计划任务的不对称是刻意的**：开机自启（`registerTask` / `unregisterTask`）是用户可切换的选项，所以
+  成对；服务不是用户可切换项，因此只有安装一侧。
+
+**未决**：无。本节与第 40 节共同关掉第 35 节遗留的两条未决（安装器写法、应用侧入口）。
+
+---
+
