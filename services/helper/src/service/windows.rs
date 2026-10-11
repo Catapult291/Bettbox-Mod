@@ -1,6 +1,7 @@
 use crate::service::hub::run_service;
 
 use std::ffi::OsString;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use tokio::runtime::Runtime;
@@ -11,13 +12,17 @@ use windows_service::{
         ServiceControl, ServiceControlAccept, ServiceExitCode, ServiceState, ServiceStatus,
         ServiceType,
     },
-    service_control_handler::{self, ServiceControlHandlerResult},
+    service_control_handler::{self, ServiceControlHandlerResult, ServiceStatusHandle},
     service_dispatcher, Result,
 };
 
 const DEFAULT_SERVICE_NAME: &str = "BettboxHelperService";
 
 const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
+
+/// 停止请求发生在控制线程上，而状态句柄要等 `register` 返回后才有——句柄本身是线程安全的
+/// （见 windows-service 的 `unsafe impl Send/Sync`），用一个静态槽把它交给控制线程。
+static STATUS_HANDLE: OnceLock<ServiceStatusHandle> = OnceLock::new();
 
 fn service_name() -> String {
     std::env::var("HELPER_SERVICE_NAME").unwrap_or_else(|_| {
@@ -80,6 +85,7 @@ async fn run_windows_service() -> anyhow::Result<()> {
                 ServiceControl::Stop => {
                     std::thread::spawn(|| {
                         crate::service::hub::stop();
+                        report_stopped();
                         std::process::exit(0);
                     });
                     ServiceControlHandlerResult::NoError
@@ -88,6 +94,7 @@ async fn run_windows_service() -> anyhow::Result<()> {
             }
         },
     )?;
+    let _ = STATUS_HANDLE.set(status_handle);
 
     status_handle.set_service_status(ServiceStatus {
         service_type: SERVICE_TYPE,
@@ -127,4 +134,24 @@ async fn run_windows_service() -> anyhow::Result<()> {
     });
 
     result
+}
+
+/// 向 SCM 报 `Stopped` 之后再退出。
+///
+/// 少了这一步，服务进程直接退出会被 SCM 记成「意外终止」（`sc query` 里
+/// `WIN32_EXIT_CODE` = 1067 `ERROR_PROCESS_ABORTED`），于是已配好的崩溃恢复策略会
+/// 在 5 秒后把服务重新拉起来——「停掉」变成「重启一次」。安装器要在覆盖 helper.exe 之前
+/// 让它真的停下，这一步不能省。
+fn report_stopped() {
+    if let Some(handle) = STATUS_HANDLE.get() {
+        let _ = handle.set_service_status(ServiceStatus {
+            service_type: SERVICE_TYPE,
+            current_state: ServiceState::Stopped,
+            controls_accepted: ServiceControlAccept::empty(),
+            exit_code: ServiceExitCode::Win32(0),
+            checkpoint: 0,
+            wait_hint: Duration::default(),
+            process_id: None,
+        });
+    }
 }

@@ -52,6 +52,7 @@
 | 37 | 工程 | 打包前清掉构建目录里已下线插件的 dll；本机 Windows 构建环境改开开发者模式 | v1.19.15 |
 | 38 | 安全 | helper 请求加 nonce：签名消息改为 `timestamp:nonce:body`，helper 侧按窗口去重防重放（协议版本 1 → 2） | v1.19.15 |
 | 39 | 界面 | 扫码页权限：未授权时不再自行判定「拒绝」，改由 mobile_scanner 申请系统授权（「每次使用时询问」下弹不出授权框） | 待发布 |
+| 40 | 工程 | 安装器不再拼 `sc`/`schtasks`（改调 helper 子命令）；helper 被停后不再被崩溃恢复策略自动拉起 | 待发布 |
 
 ---
 
@@ -1926,3 +1927,129 @@ Android 模拟器（`bb_rust_verify`，x86_64，Android 16 / API 36，1080×2400
 release key 签的，同 versionCode 会报签名冲突）；debug 包名为 `com.appshub.bettbox.debug`，可与官方版并存。
 包内 `libclash.so` 是本机 Go 1.26.5 重编的（官方是 CI 的 go1.25.14），内核源码相同（`core/` 自 2026-10-06 未改）、
 体积大 ~10 MB；Android 侧不校验内核 hash（`coreSHA256` 只用于 Windows 的 helper ping），无功能影响。
+
+---
+
+## 40. 安装器改调 helper 子命令；helper 被停后不再被崩溃恢复策略自动拉起
+
+**文件**：`windows/packaging/exe/inno_setup.iss`、`services/helper/src/cli.rs`、`services/helper/src/ops/service.rs`、
+`services/helper/src/service/windows.rs`　**测试**：`services/helper` 单测（子命令解析 2 项）
+
+**问题**（第 35 节的遗留未决）：安装器仍自己拼 `sc stop` / `sc config` / `sc create` / `sc start` / `sc delete` /
+`schtasks /Delete`，与应用侧已经改掉的写法不一致，失败时也只剩一个退出码。
+
+**顺带发现并修掉的真问题**：helper 被停掉后会被自己的崩溃恢复策略重新拉起来。停止处理只做 `hub::stop()` +
+`process::exit(0)`，从不向 SCM 报 `SERVICE_STOPPED`，SCM 因此记成「意外终止」（`sc query` 的
+`WIN32_EXIT_CODE` = 1067 `ERROR_PROCESS_ABORTED`），第 35 节配的 `FailureActions`（5s/10s/30s 各重启一次）
+随即生效。本机实测（一次性探测服务 `BettboxB1Probe`）：`service stop` 后 `sc query` 连续 6 秒 STOPPED、
+第 7 秒变回 RUNNING。安装器要在覆盖 helper.exe 之前让它真的停下，而「停掉 5 秒后又自己起来、正好落在文件
+复制中间」很可能就是真机那次「安装阶段卡死」（§96/§98，此前未定位）的成因。
+
+**改动**：
+
+- helper 新增两个服务子命令：`service stop`（幂等：服务不存在或已停都算成功）与 `service config`
+  （服务已存在时只 `ChangeServiceConfigW` 改 binPath 与启动类型，**不删服务**，`Environment`——key 文件
+  路径与管道 ACL——因此保留；服务不存在时按 `service install` 的方式建）。`install` 里重复的「建服务
+  参数」与「启动并等 RUNNING」抽成 `service_info()` / `start_and_wait()` 供三者共用。
+- `service/windows.rs`：停止处理在 `hub::stop()` 之后先向 SCM 报 `Stopped` 再退出；状态句柄经静态槽
+  交给控制线程（`ServiceStatusHandle` 本身是 Send+Sync）。
+- 安装器 `[Code]` 新增 `RunHelperCommand()`（请求 JSON 与结果都走文件，和 `lib/common/system.dart` 同一条
+  路；只把结果里的 `"ok": true` 当成功）与 `StopHelperForUpgrade()`；`ForceKillProcesses` /
+  `RegisterHelperService` / `UnregisterHelperService` / `UnregisterTaskScheduler` 全部改调
+  `service stop` / `service config` / `service uninstall` / `task unregister`，`sc` 与 `schtasks` 从安装器里消失。
+- `StopHelperForUpgrade` 先试 `service stop`，失败（更早的 helper 不认这个子命令）才退回
+  `service uninstall`（停 + 删服务）：只停不删的话服务会被恢复策略拉起，删掉的服务没法被拉起来，
+  服务由 `ssPostInstall` 的 `RegisterHelperService` 重建。
+- 卸载流程里服务的注销与计划任务的删除从 `usPostUninstall` 移到 `usUninstall`：这两步现在要调
+  `{app}\helper.exe`，而 `usPostUninstall` 时该文件已被删除。
+
+**验证**（本机实测）：
+
+- Rust：`cargo test --features windows-service` 17 项全过；`cargo fmt --all --check` 干净；带与不带
+  `windows-service` feature 的 `cargo clippy --all-targets -- -D warnings` 都无告警（`TOKEN` 要给值，
+  见第 35 节）。
+- **提权后的功能路径**（探测服务 `BettboxB1Probe`，机器上原有的 `BettboxHelperService` 与 `\Bettbox` 任务
+  全程未被触碰）：`service install` → RUNNING、binPath = 运行中的 helper、`AUTO_START`、`Environment`
+  是 `REG_MULTI_SZ`；重装一次 → 仍 RUNNING；`service stop` → STOPPED；`service config` → RUNNING 且
+  `Environment` 逐字保留；服务已在跑时再 `service config` → ok；`service uninstall` → `sc query` 1060；
+  对不存在的服务 `service stop` / `service uninstall` → ok（幂等）；`service config` 的服务不存在分支
+  → 服务被建出来，binPath 与 `AUTO_START` 都对。
+- **停止不再被拉起**：同一探测服务 `service stop` 后每秒查一次 `sc query`，连续 12 秒都是 STOPPED
+  （修复前第 7 秒变回 RUNNING）。
+- **非提权路径**：`service stop` / `service config` 对已存在的服务 → `ACCESS_DENIED` / osError 5；用法
+  错误与未知子命令 → 退出码 2（usage 串已更新）；请求文件缺失 → 退出码 3 + `REQUEST_READ_FAILED`；
+  请求内容非法 → `INVALID_REQUEST`；无参数 → 1063（与改动前一致）。
+- **安装器**：`dart run windows/packaging/exe/package_windows.dart --arch amd64` 渲染 + ISCC 编译通过
+  （28.3s，只剩既有的 `ChineseSimplified.isl` 缺消息告警）；另用一次性脚本渲染模板，确认 `[Code]` 里的
+  JSON 字面量替换正确（`'{"serviceName":"BettboxHelperService","startType":"auto"}'`、
+  `'{"taskName":"Bettbox"}'`）。
+
+**真机安装/升级实测（2026-10-11，现网 `Documents\Bettbox`，两次升级）**：
+
+- 构建链路（本机环境的两处坑，均与本改动无关）：`dart setup.dart windows --arch amd64` 会抛
+  `FormatException: Unexpected extension byte`——`setup.dart:164` 的 `exec` 把子进程输出按 UTF-8 解码，
+  而本机子进程吐 GBK。第一层是 `C:\Users\bypassnro\tools\flsdk\flutter\bin` 原先不在 PATH 上，
+  `clean distributor` 调不到 `flutter`（子进程的中文「不是内部或外部命令」被当 UTF-8 解）；
+  **2026-10-11 把该目录加进持久化用户 PATH 后**，`flutter_distributor` 能被激活、流程走到 `run windows`，
+  但**第二层仍在**：`flutter_distributor run windows`（内部跑 `flutter build windows`）的输出同样含非
+  UTF-8 字节，又卡在 `setup.dart:164`。另外 `--out app` 分支里 `Build.buildHelper` 又**没有被 await**，
+  异常退出会把它正在跑的 cargo 构建一起带走（表现为 helper 产物没更新、日志里只有
+  `Compiling helper` 没有它自己的 `Finished`）。改用可用的那几步手工串起来：
+  `--out core-only` → 手工 `cargo build --release --features windows-service`（`TOKEN` = 内核 sha256）
+  → 复制到 `libclash/windows/` → `--out config` → `flutter build windows --release
+  --dart-define=CORE_SHA256=<同一 hash>` → `package_windows.dart --arch amd64`。三处 hash 一致：
+  内核 `db80e8ec…`、helper `04a0ac7c…`、`data/app.so` 里含同一串。
+- **升级（旧 helper → 新 helper，走回退分支）**：Setup 日志出现
+  `helper did not report ok: service stop (exit 2)`（旧 helper 不认该子命令），随后**没有**任何
+  `service uninstall` 的失败记录（即它 ok）。1.2 秒后 `BettboxHelperService.exe` 落盘，无占用错误。
+  1 秒采样时间线：`20:06:37`~`20:06:40` 服务不存在、helper 进程 `none`（**复制窗口内没有任何 helper
+  进程**，恢复策略无从拉起），`20:06:41` 服务 RUNNING（新 helper，PID 45260）。`Environment` 按预期为空
+  ——这一跳走的是删服务分支，由应用下次启动补齐。
+- **再跑一次同一安装器（盘上已是新 helper，走就地分支）**：日志里**没有**任何
+  `helper did not report ok`；时间线 `20:09:55` 服务 STOPPED 并连续保持到 `20:09:58`（此时
+  `helper.exe` 正被覆盖），`20:10:00` **同一个服务**重新 RUNNING（PID 9328），`Environment` 的 4 条
+  **逐字保留**。这正是「停得住」那条修复在真机上生效的样子：修复前 STOPPED 会在第 5 秒被恢复策略拉起，
+  正好落在文件复制中间。
+- **恢复**：升级后应用 `registerService()` 自动重发 `Environment`（4 条）、内核起、`7890` 监听、
+  `ProxyEnable=1`、经代理 `generate_204` 返回 204（0.12s）；UI 显示运行中、网络检测为境外出口 IP。
+  注意**不能**说成「`autoRun=false`，所以必须手点总开关」：`AppController._initStatus` 在
+  `hasProfile && (isStart || autoRun)` 时就会自己 `updateStatus(true)`——本轮重装后应用启动约 20 秒内
+  内核就自己起来了（第一次升级时是点了总开关才起，两次都落在这条判定里，但触发时机没细究）。
+- 另用探测任务验证 `task register` / `task unregister`（含幂等），机器上真实的 `Bettbox` 任务与
+  `BettboxHelperService` 服务全程未被触碰。
+
+**真机卸载/重装实测（2026-10-11）**：
+
+- 卸载器（`unins000.exe /SILENT /SUPPRESSMSGBOXES /NORESTART`）：日志 `Uninstallation process
+  succeeded` / `Removed all? Yes` / `Need to restart Windows? No`。1 秒采样：`20:27:07` 服务 STOPPED、
+  `20:27:09` 应用被结束、`20:27:10` 服务（`sc query` 1060）、计划任务 `\Bettbox`、安装目录**同时**消失
+  ——即 `usUninstall` 里的 `task unregister` 与 `service uninstall` 确实跑在 `{app}` 被删之前，且都成功
+  （这两个删除动作在 `.iss` 里只此一处，别处不会删服务或任务）。数据目录
+  `%APPDATA%\Catapult291\Bettbox` 完整：`config.yaml`、3 个订阅、两个 key 文件逐字节一致，只有
+  `core_listener_running` 转 false 与系统代理快照被清（应用正常停止行为）。
+- 「是否删除用户数据」弹框在 `/SUPPRESSMSGBOXES` 下**仍然弹出**（约 15 秒后按默认「是」继续）：
+  `CleanUserData` / `CleanRegistry` 只删 `com.appshub` 那套旧路径与旧键，本机都不存在，两种答案等效。
+- 卸载过程中应用曾把 helper 重新拉起一次（采样里 helper PID 变过一次），随后被 `service uninstall`
+  清掉；最终态正确。
+- **卸载会清掉 Inno 记录的安装路径**：紧接着重装时安装器落回 `DefaultDirName` = `{autopf64}\Bettbox`
+  （`C:\Program Files\Bettbox`），不再回到用户原来的 `Documents\Bettbox`。这不是本次改动引入的
+  （`DefaultDirName` 一直是 `{autopf64}`），但「卸载再装」会换目录，要留在原处得显式传 `/DIR=`。
+  按 `/DIR=C:\Users\bypassnro\Documents\Bettbox` 重装后：服务 binPath 指回原处且 `AUTO_START`；
+  应用启动时自动重发 `Environment`（4 条）、重建开机任务 `\Bettbox`（指向原路径）、拉起内核，
+  `7890` 监听、`ProxyEnable=1`、经代理 204。
+
+**未决**：
+
+- 卸载器只跑过「带数据清理」的那一支（`/SUPPRESSMSGBOXES` 下默认「是」），而那两个旧路径本机不存在，
+  所以「真的删掉用户数据」的分支没有被实际数据覆盖过；「选否」的分支也没单独跑（代码上是跳过两步清理）。
+- 从 1.19.15 升到 1.19.16 这一跳，`service stop` 会被旧 helper 拒绝，走的是 `service uninstall`
+  （删服务）分支：服务 `Environment` 因此在升级后为空（实测确认），helper 会拒绝所有请求，直到应用
+  下次启动重新下发（`registerService` 会自动走到，实测确认）。中间窗口里管道 ACL 是旧版的宽松值，但
+  helper 无 key 会拒绝一切请求，没有实际暴露面。
+- 卸载时若 `{app}\helper.exe` 已被用户手工删掉，服务与计划任务都不会被注销（`RunHelperCommand` 直接跳过）。
+- 应用侧仍有只读的 `sc query`（`lib/common/system.dart` 三处）、`reg query` 一处，以及 `launch.dart` 的
+  `schtasks /Query`；`system.dart` 的 `stopHelperService()` 还有一条仅 dev 走的 `sc stop` 兜底。
+  这些都是读取或 dev 专用路径，本次未动。
+
+---
+

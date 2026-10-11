@@ -24,7 +24,7 @@ use windows_service::service::{
 use windows_service::service_manager::{ServiceManager, ServiceManagerAccess};
 use windows_service::Error as ServiceError;
 
-use crate::cli::{validate_name, CliError, ServiceInstallRequest};
+use crate::cli::{validate_name, CliError, ServiceConfigRequest, ServiceInstallRequest};
 
 /// 等服务停下来的上限。
 const STOP_TIMEOUT: Duration = Duration::from_secs(15);
@@ -58,16 +58,7 @@ const FAILURE_ACTIONS: [SC_ACTION; 3] = [
 pub fn install(request: &ServiceInstallRequest) -> Result<(), CliError> {
     validate_name("service name", &request.service_name)?;
 
-    let start_type = match request.start_type.as_str() {
-        "auto" => ServiceStartType::AutoStart,
-        "demand" => ServiceStartType::OnDemand,
-        other => {
-            return Err(CliError::new(
-                "INVALID_REQUEST",
-                format!("unsupported startType: {other}"),
-            ))
-        }
-    };
+    let start_type = parse_start_type(&request.start_type)?;
 
     let manager = ServiceManager::local_computer(
         None::<&str>,
@@ -77,20 +68,7 @@ pub fn install(request: &ServiceInstallRequest) -> Result<(), CliError> {
 
     stop_and_delete(&manager, &request.service_name)?;
 
-    let info = ServiceInfo {
-        name: OsString::from(&request.service_name),
-        display_name: OsString::from(&request.service_name),
-        service_type: ServiceType::OWN_PROCESS,
-        start_type,
-        error_control: ServiceErrorControl::Normal,
-        // 注册的就是正在跑的这个 helper.exe：调用方启动的路径与它一致，由进程自己取路径
-        // 比让调用方再传一个可能对不上的路径更稳。
-        executable_path: current_executable()?,
-        launch_arguments: Vec::new(),
-        dependencies: Vec::new(),
-        account_name: None,
-        account_password: None,
-    };
+    let info = service_info(&request.service_name, start_type)?;
 
     let service = create_with_retry(&manager, &info)?;
 
@@ -101,11 +79,7 @@ pub fn install(request: &ServiceInstallRequest) -> Result<(), CliError> {
 
     set_recovery(&service)?;
 
-    service
-        .start(&[] as &[&OsStr])
-        .map_err(|error| from_service_error("SERVICE_START_FAILED", error))?;
-
-    wait_for_state(&service, ServiceState::Running, START_TIMEOUT)
+    start_and_wait(&service)
 }
 
 /// 卸载服务：停掉并删除。服务本来就不存在时也算成功（幂等）。
@@ -118,6 +92,101 @@ pub fn uninstall(service_name: &str) -> Result<(), CliError> {
     stop_and_delete(&manager, service_name)
 }
 
+/// 停服务：本来就不存在、或者已经停下都算成功（幂等）。
+///
+/// 安装器在覆盖 helper.exe 之前用它让旧服务优雅退出（`hub::stop()` 会先停内核，
+/// 比直接 `taskkill` 少一次「内核被强杀」）。
+pub fn stop(service_name: &str) -> Result<(), CliError> {
+    validate_name("service name", service_name)?;
+
+    let manager = ServiceManager::local_computer(None::<&str>, ServiceManagerAccess::CONNECT)
+        .map_err(|error| from_service_error("SERVICE_MANAGER_FAILED", error))?;
+
+    let service = match open_for_stop(&manager, service_name)? {
+        Some(service) => service,
+        None => return Ok(()),
+    };
+
+    stop_service(&service)
+}
+
+/// 就地改指向：服务已存在时只改 binPath 与启动类型，**不删服务**；不存在时按 [`install`]
+/// 的方式建。两条路径都配恢复策略，最后把服务拉到 RUNNING。
+///
+/// 与 [`install`] 的区别只在「已存在」这一支。升级安装时服务仍托管着内核，先删再建会让
+/// 服务 `Environment`（key 文件路径、管道 ACL）一起丢掉，`install` 的停→删→建不适合这里。
+pub fn configure(request: &ServiceConfigRequest) -> Result<(), CliError> {
+    validate_name("service name", &request.service_name)?;
+
+    let start_type = parse_start_type(&request.start_type)?;
+
+    let manager = ServiceManager::local_computer(
+        None::<&str>,
+        ServiceManagerAccess::CONNECT | ServiceManagerAccess::CREATE_SERVICE,
+    )
+    .map_err(|error| from_service_error("SERVICE_MANAGER_FAILED", error))?;
+
+    let info = service_info(&request.service_name, start_type)?;
+
+    let access = ServiceAccess::CHANGE_CONFIG | ServiceAccess::QUERY_STATUS | ServiceAccess::START;
+    let service = match manager.open_service(&request.service_name, access) {
+        Ok(service) => {
+            service
+                .change_config(&info)
+                .map_err(|error| from_service_error("SERVICE_CONFIG_FAILED", error))?;
+            service
+        }
+        Err(error) if raw_os_error(&error) == Some(ERROR_SERVICE_DOES_NOT_EXIST) => {
+            create_with_retry(&manager, &info)?
+        }
+        Err(error) => return Err(from_service_error("SERVICE_OPEN_FAILED", error)),
+    };
+
+    set_recovery(&service)?;
+
+    start_and_wait(&service)
+}
+
+fn parse_start_type(value: &str) -> Result<ServiceStartType, CliError> {
+    match value {
+        "auto" => Ok(ServiceStartType::AutoStart),
+        "demand" => Ok(ServiceStartType::OnDemand),
+        other => Err(CliError::new(
+            "INVALID_REQUEST",
+            format!("unsupported startType: {other}"),
+        )),
+    }
+}
+
+/// binPath 取正在跑的 `current_exe()`，不由调用方传：调用方给的路径可能与实际不符。
+fn service_info(name: &str, start_type: ServiceStartType) -> Result<ServiceInfo, CliError> {
+    Ok(ServiceInfo {
+        name: OsString::from(name),
+        display_name: OsString::from(name),
+        service_type: ServiceType::OWN_PROCESS,
+        start_type,
+        error_control: ServiceErrorControl::Normal,
+        executable_path: current_executable()?,
+        launch_arguments: Vec::new(),
+        dependencies: Vec::new(),
+        account_name: None,
+        account_password: None,
+    })
+}
+
+/// 打开一个只用于停止的服务句柄；服务不存在返回 `None`。
+fn open_for_stop(
+    manager: &ServiceManager,
+    service_name: &str,
+) -> Result<Option<windows_service::service::Service>, CliError> {
+    let access = ServiceAccess::STOP | ServiceAccess::QUERY_STATUS;
+    match manager.open_service(service_name, access) {
+        Ok(service) => Ok(Some(service)),
+        Err(error) if raw_os_error(&error) == Some(ERROR_SERVICE_DOES_NOT_EXIST) => Ok(None),
+        Err(error) => Err(from_service_error("SERVICE_OPEN_FAILED", error)),
+    }
+}
+
 fn stop_and_delete(manager: &ServiceManager, service_name: &str) -> Result<(), CliError> {
     let access = ServiceAccess::STOP | ServiceAccess::QUERY_STATUS | ServiceAccess::DELETE;
     let service = match manager.open_service(service_name, access) {
@@ -126,6 +195,15 @@ fn stop_and_delete(manager: &ServiceManager, service_name: &str) -> Result<(), C
         Err(error) => return Err(from_service_error("SERVICE_OPEN_FAILED", error)),
     };
 
+    stop_service(&service)?;
+
+    service
+        .delete()
+        .map_err(|error| from_service_error("SERVICE_DELETE_FAILED", error))
+}
+
+/// 停到 `Stopped` 并等它真的停下。
+fn stop_service(service: &windows_service::service::Service) -> Result<(), CliError> {
     match service.query_status() {
         // 已经停下就不用再发停止指令。
         Ok(status) if status.current_state == ServiceState::Stopped => {}
@@ -142,11 +220,25 @@ fn stop_and_delete(manager: &ServiceManager, service_name: &str) -> Result<(), C
         },
     }
 
-    wait_for_state(&service, ServiceState::Stopped, STOP_TIMEOUT)?;
+    wait_for_state(service, ServiceState::Stopped, STOP_TIMEOUT)
+}
 
-    service
-        .delete()
-        .map_err(|error| from_service_error("SERVICE_DELETE_FAILED", error))
+/// 拉起服务并等它到 `Running`；已经在跑就直接返回。
+fn start_and_wait(service: &windows_service::service::Service) -> Result<(), CliError> {
+    if let Ok(status) = service.query_status() {
+        if status.current_state == ServiceState::Running {
+            return Ok(());
+        }
+    }
+
+    match service.start(&[] as &[&OsStr]) {
+        Ok(()) => {}
+        // 正在起或已经在跑都不是失败，等它到 Running 即可。
+        Err(error) if raw_os_error(&error) == Some(ERROR_SERVICE_ALREADY_RUNNING) => {}
+        Err(error) => return Err(from_service_error("SERVICE_START_FAILED", error)),
+    }
+
+    wait_for_state(service, ServiceState::Running, START_TIMEOUT)
 }
 
 /// 建服务。被标记删除的服务要等它真的消失才能复用同名，所以撞上这两个错误码时重试。
@@ -309,6 +401,7 @@ const ERROR_SERVICE_NOT_ACTIVE: i32 = 1062;
 const ERROR_SERVICE_CANNOT_ACCEPT_CTRL: i32 = 1061;
 const ERROR_SERVICE_MARKED_FOR_DELETE: i32 = 1072;
 const ERROR_SERVICE_EXISTS: i32 = 1073;
+const ERROR_SERVICE_ALREADY_RUNNING: i32 = 1056;
 
 #[cfg(test)]
 mod tests {

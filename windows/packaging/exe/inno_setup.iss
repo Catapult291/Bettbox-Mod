@@ -26,6 +26,70 @@ SetupLogging=yes
 var
   ShouldCleanUserData: Boolean;
 
+{ 调一次 helper 的子命令。请求 JSON 与结果都走文件，和 lib/common/system.dart 是同一条路：
+  参数不进命令行（路径可能带空格与非 ASCII 字符），helper 把结构化结果写进结果文件。 }
+function RunHelperCommand(const SubCommand, RequestJson: String): Boolean;
+var
+  ResultCode: Integer;
+  HelperPath: String;
+  RequestPath: String;
+  ResultPath: String;
+  Lines: TArrayOfString;
+  i: Integer;
+begin
+  Result := False;
+
+  HelperPath := ExpandConstant('{app}\{{HELPER_EXECUTABLE_NAME}}');
+  if not FileExists(HelperPath) then
+  begin
+    Log('helper not found, skipping: ' + SubCommand);
+    Exit;
+  end;
+
+  RequestPath := ExpandConstant('{tmp}\bettbox_helper.request.json');
+  ResultPath := ExpandConstant('{tmp}\bettbox_helper.result.json');
+  SaveStringToFile(RequestPath, RequestJson, False);
+  DeleteFile(ResultPath);
+
+  Exec(HelperPath, SubCommand + ' "' + RequestPath + '" "' + ResultPath + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  if LoadStringsFromFile(ResultPath, Lines) then
+  begin
+    for i := 0 to GetArrayLength(Lines) - 1 do
+    begin
+      if Pos('"ok": true', Lines[i]) > 0 then
+      begin
+        Result := True;
+        Break;
+      end;
+    end;
+  end;
+
+  if not Result then
+    Log('helper did not report ok: ' + SubCommand + ' (exit ' + IntToStr(ResultCode) + ')');
+
+  DeleteFile(RequestPath);
+  DeleteFile(ResultPath);
+end;
+
+{ 覆盖 helper.exe 之前让它真的停下。
+  先试 service stop：helper 1.19.16 起才有，它会先停内核、再向 SCM 报 Stopped，
+  已配好的崩溃恢复策略因此不会在 5 秒后把服务重新拉起来。
+  更早的 helper 不认这个子命令，而「只停不删」的话服务会被恢复策略拉起、正好落在文件
+  复制中间，所以退回 service uninstall（停 + 删服务）——删掉的服务没法被拉起来，
+  服务由 ssPostInstall 的 RegisterHelperService 重建。 }
+function StopHelperForUpgrade: Boolean;
+var
+  ServiceJson: String;
+begin
+  ServiceJson := '{"serviceName":"{{HELPER_SERVICE_NAME}}"}';
+
+  Result := RunHelperCommand('service stop', ServiceJson);
+
+  if not Result then
+    Result := RunHelperCommand('service uninstall', ServiceJson);
+end;
+
 function IsProcessRunning(ProcessName: String): Boolean;
 var
   ResultCode: Integer;
@@ -41,10 +105,10 @@ var
 begin
   if IsProcessRunning('{{HELPER_EXECUTABLE_NAME}}') then
   begin
-    Exec('sc', 'stop {{HELPER_SERVICE_NAME}}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    StopHelperForUpgrade;
 
     WaitCount := 0;
-    while (WaitCount < 5) and IsProcessRunning('{{HELPER_EXECUTABLE_NAME}}') do
+    while (WaitCount < 10) and IsProcessRunning('{{HELPER_EXECUTABLE_NAME}}') do
     begin
       Sleep(400);
       WaitCount := WaitCount + 1;
@@ -121,49 +185,20 @@ begin
 end;
 
 procedure RegisterHelperService;
-var
-  ResultCode: Integer;
-  HelperPath: String;
-  ServiceName: String;
 begin
-  ServiceName := '{{HELPER_SERVICE_NAME}}';
-  HelperPath := ExpandConstant('{app}\{{HELPER_EXECUTABLE_NAME}}');
-  
-  // 就地改指向而不是先删再建：升级安装时旧的 helper 服务仍在跑（内核由它托管），
-  // 删掉再建会让内核在中间窗口里失去托管者。服务不存在（全新安装）时 config 返回
-  // 非零，这时才走 create。
-  Exec('sc', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('sc', 'config ' + ServiceName + ' binPath= "' + HelperPath + '" start= auto', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  if ResultCode <> 0 then
-  begin
-    Exec('sc', 'create ' + ServiceName + ' binPath= "' + HelperPath + '" start= auto', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
-  Exec('sc', 'start ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  // 就地改指向（服务还在）或新建（服务不存在，或刚被 StopHelperForUpgrade 删掉）。
+  // 服务还在时不删服务：Environment（key 文件路径、管道 ACL）留着，应用侧不必每次升级都重发。
+  RunHelperCommand('service config', '{"serviceName":"{{HELPER_SERVICE_NAME}}","startType":"auto"}');
 end;
 
 procedure UnregisterHelperService;
-var
-  ResultCode: Integer;
-  ServiceName: String;
 begin
-  ServiceName := '{{HELPER_SERVICE_NAME}}';
-  
-  Exec('sc', 'stop ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec('sc', 'delete ' + ServiceName, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RunHelperCommand('service uninstall', '{"serviceName":"{{HELPER_SERVICE_NAME}}"}');
 end;
 
 procedure UnregisterTaskScheduler;
-var
-  ResultCode: Integer;
-  TaskNames: TArrayOfString;
-  i: Integer;
 begin
-  TaskNames := ['{{TASK_NAME}}'];
-  
-  for i := 0 to GetArrayLength(TaskNames)-1 do
-  begin
-    Exec('schtasks', '/Delete /TN ' + TaskNames[i] + ' /F', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  end;
+  RunHelperCommand('task unregister', '{"taskName":"{{TASK_NAME}}"}');
 end;
 
 procedure CleanRegistry;
@@ -249,14 +284,15 @@ begin
   begin
     ForceKillProcesses(True);
     CleanWintunDevices;
+
+    // 服务的注销与计划任务的删除都走 helper 的子命令，必须赶在 {app} 被删掉之前调用
+    // （usPostUninstall 时 helper.exe 已经不在了）。
+    UnregisterTaskScheduler;
+    UnregisterHelperService;
   end;
-  
+
   if CurUninstallStep = usPostUninstall then
   begin
-    UnregisterHelperService;
-    
-    UnregisterTaskScheduler;
-    
     if ShouldCleanUserData then
     begin
       CleanUserData;

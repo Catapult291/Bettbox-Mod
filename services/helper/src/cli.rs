@@ -6,6 +6,8 @@
 //! ```text
 //! helper.exe service install   <request.json> <result.json>
 //! helper.exe service uninstall <request.json> <result.json>
+//! helper.exe service stop      <request.json> <result.json>
+//! helper.exe service config    <request.json> <result.json>
 //! helper.exe task register     <request.json> <result.json>
 //! helper.exe task unregister   <request.json> <result.json>
 //! ```
@@ -33,7 +35,7 @@ pub const EXIT_USAGE: i32 = 2;
 /// 请求文件不可用（结果文件已写出）。
 pub const EXIT_REQUEST: i32 = 3;
 
-const USAGE: &str = "usage: helper.exe <service install|service uninstall|task register|task unregister> <request.json> <result.json>";
+const USAGE: &str = "usage: helper.exe <service install|service uninstall|service stop|service config|task register|task unregister> <request.json> <result.json>";
 
 /// 结构化错误：`code` 供应用侧判断，`message` 给人看。
 #[derive(Debug, Clone)]
@@ -91,6 +93,8 @@ impl CliError {
 enum Command {
     ServiceInstall,
     ServiceUninstall,
+    ServiceStop,
+    ServiceConfig,
     TaskRegister,
     TaskUnregister,
 }
@@ -100,6 +104,8 @@ impl Command {
         match self {
             Command::ServiceInstall => "service install",
             Command::ServiceUninstall => "service uninstall",
+            Command::ServiceStop => "service stop",
+            Command::ServiceConfig => "service config",
             Command::TaskRegister => "task register",
             Command::TaskUnregister => "task unregister",
         }
@@ -144,6 +150,8 @@ fn parse(args: &[OsString]) -> Parsed {
         "service" => match args.get(1).and_then(|arg| arg.to_str()) {
             Some("install") => Command::ServiceInstall,
             Some("uninstall") => Command::ServiceUninstall,
+            Some("stop") => Command::ServiceStop,
+            Some("config") => Command::ServiceConfig,
             Some(other) => return Parsed::Usage(format!("unknown service subcommand: {other}")),
             None => return Parsed::Usage("missing service subcommand".to_string()),
         },
@@ -210,6 +218,14 @@ fn run(command: Command, request_path: &Path) -> Result<(), CliError> {
             let request: ServiceUninstallRequest = parse_request(&raw)?;
             uninstall_service(&request.service_name)
         }
+        Command::ServiceStop => {
+            let request: ServiceStopRequest = parse_request(&raw)?;
+            stop_service(&request.service_name)
+        }
+        Command::ServiceConfig => {
+            let request: ServiceConfigRequest = parse_request(&raw)?;
+            configure_service(&request)
+        }
         Command::TaskRegister => {
             let request: TaskRegisterRequest = parse_request(&raw)?;
             crate::ops::task::register(&request)
@@ -240,6 +256,26 @@ fn uninstall_service(service_name: &str) -> Result<(), CliError> {
 
 #[cfg(not(feature = "windows-service"))]
 fn uninstall_service(_service_name: &str) -> Result<(), CliError> {
+    Err(unsupported_build())
+}
+
+#[cfg(feature = "windows-service")]
+fn stop_service(service_name: &str) -> Result<(), CliError> {
+    crate::ops::service::stop(service_name)
+}
+
+#[cfg(not(feature = "windows-service"))]
+fn stop_service(_service_name: &str) -> Result<(), CliError> {
+    Err(unsupported_build())
+}
+
+#[cfg(feature = "windows-service")]
+fn configure_service(request: &ServiceConfigRequest) -> Result<(), CliError> {
+    crate::ops::service::configure(request)
+}
+
+#[cfg(not(feature = "windows-service"))]
+fn configure_service(_request: &ServiceConfigRequest) -> Result<(), CliError> {
     Err(unsupported_build())
 }
 
@@ -277,6 +313,23 @@ fn default_start_type() -> String {
 #[serde(rename_all = "camelCase")]
 pub struct ServiceUninstallRequest {
     pub service_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceStopRequest {
+    pub service_name: String,
+}
+
+/// 就地改指向（升级安装用）。只认 `serviceName` 与 `startType`：`Environment` 由应用侧
+/// 在首次启动时下发，升级不该把它清掉。
+#[cfg_attr(not(feature = "windows-service"), allow(dead_code))]
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceConfigRequest {
+    pub service_name: String,
+    #[serde(default = "default_start_type")]
+    pub start_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -374,6 +427,14 @@ mod tests {
             (
                 ["service", "uninstall", "a.json", "b.json"],
                 Command::ServiceUninstall,
+            ),
+            (
+                ["service", "stop", "a.json", "b.json"],
+                Command::ServiceStop,
+            ),
+            (
+                ["service", "config", "a.json", "b.json"],
+                Command::ServiceConfig,
             ),
             (
                 ["task", "register", "a.json", "b.json"],
