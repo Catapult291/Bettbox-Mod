@@ -2262,3 +2262,50 @@ CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI
 
 ---
 
+## 46. helper CLI 端到端联调进 CI（新增 workflow `helper-e2e`）
+
+**文件**：`lib/common/helper_cli.dart`、`lib/common/system.dart`、`test/helper_cli_e2e_test.dart`（新增）、
+`test/common/helper_cli_test.dart`、`.github/workflows/helper-e2e.yaml`（新增）
+　**测试**：协议单测新增 4 项（假 launcher）、端到端用例新增 3 项（未设 `BETTBOX_E2E_HELPER` 时整组跳过）
+
+**问题**（第 35 节遗留，见 `.grok/stage-log.md` §107 未决 / §117 B③）：helper 子命令的端到端联调
+当时只是一次性 `flutter test`——跑完即删、未入库。它要管理员权限（建服务、注册计划任务）与仓库里已
+构建的 release helper，所以没进 CI。结果是「Dart 侧 → 提权 → `helper.exe` → SCM / Task Scheduler →
+结果文件 → Dart 侧」这条链只有人工跑过的证据：常规用例集（helper 的 `cargo test` 单测 + `flutter test`）
+即使被碰坏也不会红。
+
+**改动**：
+
+- **协议本体抽出来，改成可注入的**：`helper_cli.dart` 新增 `runHelperCommand()`，helper 路径、临时
+  目录与 launcher（启动提权子进程）都作参数；`system.dart` 的 `_runHelperCommand` 只提供应用侧的
+  `appPath.helperPath` / `appPath.tempPath` / `runas`，行为不变。协议因此既能用假 launcher 单测，
+  也能接上真实提权与真实 `helper.exe` 跑端到端。
+- **端到端用例入库**：`test/helper_cli_e2e_test.dart` 走生产路径（真实 `windows.runas` +
+  `quoteWindowsArguments` + 结果文件轮询）真建一次计划任务与服务，并用 `schtasks /Query /XML`、
+  `sc query` 与命名管道回读交叉核对，另覆盖重装的「停→删→建」替换路径与两次注销/卸载的幂等。
+  探针名字带时间戳、断言中途失败也有兜底清理；请求/结果文件放在带空格与非 ASCII 的临时目录里，
+  顺带把「路径很刁钻时引号还对不对」压进这条用例。未设 `BETTBOX_E2E_HELPER` 时整组跳过，常规
+  `flutter test` 不受影响。
+- **新增 workflow `helper-e2e`**：windows-2022 上构建带 `windows-service` 的 release helper → 装
+  Flutter（`flutter-version-file: pubspec.yaml`）→ 提权自检 → 跑上述用例。单独一条工作流而不并进
+  `rust.yml`：这条要管理员权限与现构建的 release helper，不属于常规用例集。带 `paths` 过滤（helper
+  crate、Dart 侧调用链、本用例、版本文件），文档与 Android 改动不必付一次 Windows 机器的代价。
+
+**验证**（本机实测）：
+
+- `cargo build --release --features windows-service` 通过；`actionlint` 1.7.12 过新 workflow。
+- `flutter analyze lib test` 无问题；`flutter test` **138 项全过 + 3 项跳过**（跳过的是端到端组，本机
+  默认不设 `BETTBOX_E2E_HELPER`；此前 134 项，本次新增 4 项协议单测）。
+- 端到端本机真跑：`BETTBOX_E2E_HELPER=services/helper/target/release/helper.exe flutter test
+  test/helper_cli_e2e_test.dart` → **3/3 通过**（`runas` 返回 42，即已启动）。跑完核对机器状态：
+  探针服务 `sc query` 1060、探针任务不存在、探针临时目录已删，现网 `BettboxHelperService`（RUNNING）
+  与 `\Bettbox` 任务全程未受影响。
+- CI（提交 `b4425f3`）：`helper-e2e` run 38152788215 **success**——提权自检输出
+  `elevated: runnervmtn0fv\runneradmin`，`Run helper CLI end-to-end test` 里 `🎉 3 tests passed.`、
+  7 次 `runas` 全部返回 42（即已启动），整条 5 分钟（含从源码构建 release helper 与装 Flutter）；
+  同提交上 `rust` 38152788278（`test` / `helper` 两个 job）与 `android-device` 38152788157 亦 success。
+
+**未决**：无。本节关掉第 35 节遗留的第 3 条未决（`stage-log.md` §107 / §117 B③）。
+
+---
+
