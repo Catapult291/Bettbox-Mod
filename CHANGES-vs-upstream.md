@@ -2053,3 +2053,37 @@ release key 签的，同 versionCode 会报签名冲突）；debug 包名为 `co
 
 ---
 
+## 41. 构建脚本：子进程输出解码容忍非 UTF-8 字节，不再中断整个 `setup.dart`
+
+**文件**：`setup.dart`　**测试**：`test/setup_exec_decode_test.dart`（新增，2 例）
+
+**问题**（第 40 节记的「本机环境的两处坑」之一）：`Build.exec` 把子进程输出直接交给严格 UTF-8 解码
+（`utf8.decode(data)`）。Windows 子进程会吐系统代码页字节——`flutter_distributor run windows` 内部跑的
+`flutter build windows` / MSBuild 的中文本地化消息是 CP936——一旦字节不是合法 UTF-8，`FormatException`
+就从流监听器逃出去、直接终止整个 `setup.dart` 流程（实测退出码 255），后面的构建步骤全部不执行。
+第 40 节那次真机验证因此只能把 core / helper / 原生库几步手工串起来跑。
+
+**改动**：`Build.exec` 改用带 `allowMalformed` 的**流式**解码器
+（`static const outputDecoder = Utf8Decoder(allowMalformed: true)`，`stdout`/`stderr` 都
+`transform(outputDecoder)`）。非法字节降级为替换字符而不是抛异常；用流式转换器而非逐块
+`utf8.decode(data, allowMalformed: true)`，是因为后者会把被 chunk 边界拆开的多字节字符解成乱码。
+
+**验证**（本机实测）：
+
+- 临时探针经真实 `Build.exec` 跑一个往 stdout 写 CP936「中文」原始字节（`D6 D0 CE C4`）的 pwsh
+  子进程：修复前退出码 255 + `FormatException: Missing extension byte`（栈顶在 `setup.dart` 的
+  `utf8.decode`），修复后退出码 0、其余输出正常。探针用后即删。
+- `test/setup_exec_decode_test.dart` 锁住两条性质：非 UTF-8 字节降级为替换字符不抛异常；逐字节喂入时
+  跨块的多字节字符仍能正确还原（2/2 通过）。
+- `flutter analyze setup.dart test/setup_exec_decode_test.dart` 无问题。
+
+**未决**：
+
+- 解码只是不再崩，CP936 字节仍按 UTF-8 解成替换字符：本机 Windows 构建日志里的中文本地化消息会是
+  乱码（英文输出不受影响）。真要可读，需要按控制台代码页解码（`dart:convert` 不带 GBK，得引依赖）。
+- `--out app` 分支里 `Build.buildHelper(target, token!)` 与 `_buildDistributor(...)` 都没有 `await`：
+  解码崩溃时会把正在跑的 cargo 构建一起带走（第 40 节记的现象）。解码修掉后它不再引发崩溃，但仍是
+  独立隐患，本次未动。
+
+---
+

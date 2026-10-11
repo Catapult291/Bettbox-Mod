@@ -142,6 +142,14 @@ class Build {
     return baseTags;
   }
 
+  /// 子进程输出的解码器。
+  ///
+  /// Windows 上子进程会吐系统代码页字节（`flutter` / MSBuild 的中文本地化消息是
+  /// CP936），按严格 UTF-8 解码会抛 `FormatException` 把整个构建流程打断。用带
+  /// `allowMalformed` 的流式解码器：非法字节降级成替换字符而不是抛异常，同时
+  /// 逐块喂入也能正确处理被 chunk 边界拆开的多字节字符。
+  static const outputDecoder = Utf8Decoder(allowMalformed: true);
+
   static Future<void> exec(
     List<String> executable, {
     String? name,
@@ -157,12 +165,8 @@ class Build {
       workingDirectory: workingDirectory,
       runInShell: runInShell,
     );
-    process.stdout.listen((data) {
-      print(utf8.decode(data));
-    });
-    process.stderr.listen((data) {
-      print(utf8.decode(data));
-    });
+    process.stdout.transform(outputDecoder).listen(print);
+    process.stderr.transform(outputDecoder).listen(print);
     final exitCode = await process.exitCode;
     if (exitCode != 0 && name != null) throw '$name error';
   }
