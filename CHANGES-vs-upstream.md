@@ -2366,3 +2366,52 @@ CI 每次 `flutter pub get` 都在 runner 里静默把这 5 个降级重解，CI
 
 ---
 
+## 48. 停止指令没被应答时按进程真停内核：不再留下「界面已停、内核仍在跑」
+
+**文件**：`lib/state.dart`、`lib/clash/service.dart`、`lib/controller.dart`
+
+**问题**（第 27 节遗留，见 `.grok/stage-log.md` §34 / §35 未决 ②、§117 B⑤）：桌面端点总开关停止时，
+`handleStop` 把停止指令发给内核后等应答；内核挂起/卡死（被调试器挂起、`runLock` 被长时间占用等）时
+IPC 超时，`handleStop` 返回 false，调用方转去对账，而对账判定「内核不应答」后只调 `_resyncCoreStopped`
+——它**只清界面状态**，既不碰内核也不清持久化意图。结果：界面显示已停止，内核进程还在跑、`7890` 仍被
+占着（挂起的进程不会关 socket），`core_listener_running` 仍是 true。用户侧的表现就是「点了停止，
+代理还是通的」。
+
+**改动**：
+
+- `ClashService.forceStopCore()`：按进程收掉内核，不再指望 IPC。助手托管时 `process` 恒为 null，所以先
+  调助手的 `core.stop`（它对自己拉起的子进程做 `TerminateProcess`，挂起/卡死的内核同样收得掉）；普通
+  形态（内核由本进程拉起）直接 `kill`，2 秒不退出再 `sigkill`。返回「是否真的动了手」，两个来源都不可用
+  时为 false。最后 `_destroySocket()` 断掉已经不应答的旧连接——留着只会让下一次启动的 `_destroySocket`
+  继续等它优雅关闭（最坏 2 秒）。
+- `GlobalState.handleStop()`：内核没应答停止指令时不再直接 `return false`，而是补一次 `forceStopCore()`；
+  收掉了就照常落「已停止」（清 `startTime`、`core_listener_running=false`、停 VPN / 虚拟网卡标记与每秒
+  刷新），连进程都收不掉才返回 false、交给对账按事实定夺。
+- `AppController._updateStatus()` 的停止分支：能走到 `else` 现在只意味着「连进程也收不掉」，注释与日志
+  按这个语义改写。
+
+**没动的地方**（有意）：`_resyncCoreStopped`（看门狗那条路）仍只清界面。它也会被「启动后内核还没连上
+IPC」这条路径命中——刚拉起、几秒内还没连上 IPC 的内核在它眼里就是死内核；在那里加进程级强杀会把慢启动
+的内核误杀，还会毁掉既有的「内核连上后自动拨回运行中」自愈。B⑤ 要覆盖的是用户点了停止之后的假状态，
+范围就收在 `handleStop`。
+
+**验证**（本机实测，正式身份 + 助手托管；对照组是改前的现网构建，实验组用本次构建覆盖现网安装目录，
+验完已还原）：
+
+- 对照组（改前）：把 `BettboxCore.exe` 用 `NtSuspendProcess` 挂起（提权 + `SeDebugPrivilege`）后立刻点
+  停止——30 秒后界面显示已停止、`core_listener_running` 仍为 true，**内核进程与 `7890` 监听都还在**，
+  「界面已停、内核仍跑」复现。
+- 实验组（改后）：同样操作，点击后 30 秒（IPC 超时那一刻）内核进程消失、`7890` 不再监听、
+  `core_listener_running` 转 false，此后连续 40 秒无回跳。应用日志按新分支走：
+  `Core did not acknowledge the stop request` → socket 断开（`10054`，即内核进程被杀）→
+  `lifecycle action "stop" finished after 30s` → `系统代理已还原（disable）`。
+- 回归：健康内核下点停止，1 秒内 `7890` 关闭、意图转 false，**内核进程保持暖态**（未被误杀）；再点启动
+  走 `Core is not reachable before start, restarting it` 起新内核。
+- 静态：`flutter analyze lib test` 无问题；`flutter test` 138/138（另 3 条 skip）。
+
+**未决**：连进程都收不掉的残余路径（助手不可达、内核又不是本进程拉起的）仍会落到对账，界面按「内核不
+应答」清成已停止——这种内核既杀不掉也停不下，本机无法构造，只在代码上成立。另：强制停止时
+`onCoreDisconnected` 会顺带触发一次对账并弹一条「内核已退出」提示（内核确实退出了），语义正确、只是多
+一条提示。
+
+---
