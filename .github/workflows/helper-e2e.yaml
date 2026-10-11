@@ -1,0 +1,100 @@
+name: helper-e2e
+
+# helper CLI 的端到端联调（`test/helper_cli_e2e_test.dart`）：Dart 侧 `windows.runas` 提权 →
+# `helper.exe` 子命令 → 真实 SCM / Task Scheduler → 结果文件 → Dart 侧解析，并用 `sc` /
+# `schtasks` / 管道名回读核对。
+#
+# 单独一条工作流（不并进 rust.yml）的原因：它需要①管理员权限（建服务、注册计划任务）与
+# ②现构建的 release helper.exe。两者都不属于常规用例集——`rust.yml` 的 helper job 只跑
+# 单测，`flutter test` 默认跳过本文件（未设 `BETTBOX_E2E_HELPER` 时）。
+#
+# 路径过滤：改动落在 helper crate、Dart 侧的 helper 调用链或本用例上才跑；这条会真建服务，
+# 没必要为文档/Android 改动付一次 Windows 机器的代价。
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/helper/**'
+      - 'lib/common/helper_cli.dart'
+      - 'lib/common/system.dart'
+      - 'lib/common/path.dart'
+      - 'test/helper_cli_e2e_test.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/helper-e2e.yaml'
+  pull_request:
+    paths:
+      - 'services/helper/**'
+      - 'lib/common/helper_cli.dart'
+      - 'lib/common/system.dart'
+      - 'lib/common/path.dart'
+      - 'test/helper_cli_e2e_test.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'rust-toolchain.toml'
+      - '.github/workflows/helper-e2e.yaml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: helper-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  helper-e2e:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # 出货形态就是带 `windows-service` 的 release 构建：不带它时 `service install` 只会
+      # 回 `UNSUPPORTED_BUILD`，端到端跑不起来。TOKEN 无关（用例不比对内核哈希）。
+      - name: Build helper (release)
+        working-directory: services/helper
+        run: cargo build --release --features windows-service
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: flutter-helper-e2e-${{ hashFiles('**/pubspec.lock') }}
+          # 版本单一来源：pubspec.yaml 的 environment.flutter
+          flutter-version-file: pubspec.yaml
+
+      # 生成代码（*.freezed.dart / *.g.dart）已入库，这里只拉取依赖。
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # 用例要建服务与计划任务，提权失败时它会一直等 UAC 弹窗（60s 后超时），
+      # 报错信息远不如这里直白，所以先卡一道。
+      - name: Require an elevated runner
+        shell: pwsh
+        run: |
+          $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+          $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+          if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            Write-Error "runner 未提权：helper CLI 端到端用例要建服务与计划任务，提权前会挂在 UAC 上"
+            exit 1
+          }
+          Write-Host "elevated: $($identity.Name)"
+
+      - name: Locate the built helper
+        shell: pwsh
+        run: |
+          $helper = (Resolve-Path services/helper/target/release/helper.exe).Path
+          Write-Host "helper: $helper"
+          Add-Content -Path $env:GITHUB_ENV -Value "BETTBOX_E2E_HELPER=$helper"
+
+      - name: Run helper CLI end-to-end test
+        run: flutter test test/helper_cli_e2e_test.dart
