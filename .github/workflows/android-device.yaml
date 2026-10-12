@@ -8,11 +8,42 @@ name: android-device
 # `cargo test`（含 golden）负责，两者不重叠。
 #
 # 不放进 build.yaml：那边只在打 tag 与手动触发时跑，而这条要当常规回归网。
+#
+# 路径过滤：改动落在会进 APK / 影响设备侧加载的链路上才跑——纯文档提交不再付一次
+# 13 分钟模拟器（§105 原先故意不加，怕漏跑；后与 helper-e2e 同款收窄，漏跑风险用
+# 下列清单的广度兜底：lib/android/rust/plugins 整目录 + 构建脚本与依赖锁）。
+# core/（Go 内核）不在清单里：本 job 用 `--out config` 跳过内核，用例也不启动它。
 on:
   push:
     branches:
       - main
+    paths:
+      - '.github/workflows/android-device.yaml'
+      - 'integration_test/**'
+      - 'lib/**'
+      - 'android/**'
+      - 'rust/**'
+      - 'plugins/**'
+      - 'assets/**'
+      - 'arb/**'
+      - 'setup.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'rust-toolchain.toml'
   pull_request:
+    paths:
+      - '.github/workflows/android-device.yaml'
+      - 'integration_test/**'
+      - 'lib/**'
+      - 'android/**'
+      - 'rust/**'
+      - 'plugins/**'
+      - 'assets/**'
+      - 'arb/**'
+      - 'setup.dart'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'rust-toolchain.toml'
   workflow_dispatch:
 
 env:
