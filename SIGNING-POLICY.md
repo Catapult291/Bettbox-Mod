@@ -41,7 +41,11 @@ To ensure that only trusted and reviewed code gets signed, the project should en
 Signing is fully automated; manual code signing for official releases is not permitted.
 
 - **CI/CD Automation**: All signing operations run in GitHub Actions
-  (`.github/workflows/build.yaml`).
+  (`.github/workflows/build.yaml`), calling the SignPath REST API
+  (`SubmitWithArtifact`, helper script `.github/scripts/signpath-sign.ps1`) with a
+  Bearer API token. The official GitHub Actions connector is not used while the org is
+  on the free trial (no Trusted Build System); it may be reintroduced after the OSS
+  subscription enables the GitHub.com trusted build system (origin verification).
 - **Trigger Conditions**: Signing only runs when **both** hold:
   1. `SIGNPATH_API_TOKEN` is configured as a repository secret;
   2. the run is on a version tag (`refs/tags/v*`) — plain branch/`workflow_dispatch`
