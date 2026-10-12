@@ -1,6 +1,7 @@
-//! DNS 节点覆写（Dart 侧 `lib/common/dns_override.dart` 的 Rust 移植）。
+//! DNS 节点覆写（原 Dart 镜像的 Rust 移植；镜像已删，行为由 golden 冻结）。
 //!
-//! 行为需与 Dart 逐字段一致，差分测试见 `test/rust/dns_override_diff_test.dart`。
+//! 生产入口是 `patch_config` 内部直接调用；无独立 FFI 导出（B⑧ 去掉对应 C ABI）。
+//! 差分测试见 `test/rust/dns_override_diff_test.dart`（已随 §93 删除）。
 //!
 //! 已知差异：Dart `List.sort` 对短列表是稳定插入排序、长列表是不稳定快排；这里用稳定排序
 //! 对齐。宿主的 `hosts` 条目数不大时两者一致；条目很多且 specificity 相同的情况下可能不同。

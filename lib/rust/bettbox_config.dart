@@ -46,6 +46,8 @@ abstract final class BettboxConfig {
   /// 节点过滤用的正则匹配（QuickJS libregexp 语义）：命中返回 true，未命中返回
   /// false，模式语法错误返回 null（配置管道遇到语法错误时跳过过滤，与 Dart 侧
   /// `try { RegExp(...) } catch (_) {}` 一致）。
+  ///
+  /// 测试专用：生产管道在 Rust 内部直接调匹配器，不经本入口。
   static bool? nodeFilterMatch(String pattern, String text) {
     final bindings = _require();
     final patternPtr = pattern.toNativeUtf8();
@@ -123,12 +125,15 @@ abstract final class BettboxConfig {
   }
 
   /// 解析 provider 列表原文，返回元数据数组 JSON（已剥掉全节点列表）。
+  ///
+  /// 测试专用：供 `provider_diff_test` 与 Dart `ClashCore` 对拍，生产不走本入口。
   static String? parseProviderMeta(String rawProvidersJson) {
     return _call(_require().bb_parse_provider_meta, rawProvidersJson);
   }
 
   /// 由内核代理表 + provider 原文构建分组，返回分组数组 JSON。
   ///
+  /// 测试专用：同 [parseProviderMeta]。
   /// [rawProviders] 传 null 或空串表示没有 provider 数据。
   static String? buildProxiesGroups(String proxiesJson, {String? rawProviders}) {
     final bindings = _require();
@@ -148,71 +153,6 @@ abstract final class BettboxConfig {
     } finally {
       malloc.free(proxiesPtr);
       if (providersPtr != null) malloc.free(providersPtr);
-    }
-  }
-
-  /// 应用分组开关，返回 `{"proxy-groups": [...], "rules": [...]}` JSON 文本。
-  ///
-  /// [groupSwitchesJson] 是 `{分组名: 是否启用}`；[scriptActive] 为真时不处理
-  /// （与配置管道内部的调用口径一致）。
-  static String? applyGroupSwitches(
-    String proxyGroupsJson,
-    String rulesJson,
-    String groupSwitchesJson, {
-    required bool scriptActive,
-  }) {
-    final bindings = _require();
-    final groupsPtr = proxyGroupsJson.toNativeUtf8();
-    final rulesPtr = rulesJson.toNativeUtf8();
-    final switchesPtr = groupSwitchesJson.toNativeUtf8();
-    try {
-      final outputPtr = bindings.bb_apply_group_switches(
-        groupsPtr.cast<Char>(),
-        rulesPtr.cast<Char>(),
-        switchesPtr.cast<Char>(),
-        scriptActive,
-      );
-      if (outputPtr == nullptr) return null;
-      try {
-        return outputPtr.cast<Utf8>().toDartString();
-      } finally {
-        bindings.bb_string_free(outputPtr);
-      }
-    } finally {
-      malloc.free(groupsPtr);
-      malloc.free(rulesPtr);
-      malloc.free(switchesPtr);
-    }
-  }
-
-  /// 就地应用 DNS 节点覆写，返回改写后的配置 JSON 文本。
-  ///
-  /// [originalDnsJson] / [originalHostsJson] 传 null 表示没有对应数据。
-  static String? applyDnsNodeOverride(
-    String rawConfigJson, {
-    String? originalDnsJson,
-    String? originalHostsJson,
-  }) {
-    final bindings = _require();
-    final rawPtr = rawConfigJson.toNativeUtf8();
-    final dnsPtr = originalDnsJson?.toNativeUtf8();
-    final hostsPtr = originalHostsJson?.toNativeUtf8();
-    try {
-      final outputPtr = bindings.bb_apply_dns_node_override(
-        rawPtr.cast<Char>(),
-        dnsPtr?.cast<Char>() ?? nullptr,
-        hostsPtr?.cast<Char>() ?? nullptr,
-      );
-      if (outputPtr == nullptr) return null;
-      try {
-        return outputPtr.cast<Utf8>().toDartString();
-      } finally {
-        bindings.bb_string_free(outputPtr);
-      }
-    } finally {
-      malloc.free(rawPtr);
-      if (dnsPtr != null) malloc.free(dnsPtr);
-      if (hostsPtr != null) malloc.free(hostsPtr);
     }
   }
 

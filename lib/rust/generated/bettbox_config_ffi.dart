@@ -47,37 +47,6 @@ class BettboxConfigFFI {
   late final _bb_rule_round_trip = _bb_rule_round_tripPtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
 
-  ffi.Pointer<ffi.Char> bb_apply_dns_node_override(
-    ffi.Pointer<ffi.Char> raw_config_json,
-    ffi.Pointer<ffi.Char> original_dns_json,
-    ffi.Pointer<ffi.Char> original_hosts_json,
-  ) {
-    return _bb_apply_dns_node_override(
-      raw_config_json,
-      original_dns_json,
-      original_hosts_json,
-    );
-  }
-
-  late final _bb_apply_dns_node_overridePtr =
-      _lookup<
-        ffi.NativeFunction<
-          ffi.Pointer<ffi.Char> Function(
-            ffi.Pointer<ffi.Char>,
-            ffi.Pointer<ffi.Char>,
-            ffi.Pointer<ffi.Char>,
-          )
-        >
-      >('bb_apply_dns_node_override');
-  late final _bb_apply_dns_node_override = _bb_apply_dns_node_overridePtr
-      .asFunction<
-        ffi.Pointer<ffi.Char> Function(
-          ffi.Pointer<ffi.Char>,
-          ffi.Pointer<ffi.Char>,
-          ffi.Pointer<ffi.Char>,
-        )
-      >();
-
   ffi.Pointer<ffi.Char> bb_parse_provider_meta(
     ffi.Pointer<ffi.Char> raw_providers_json,
   ) {
@@ -114,41 +83,6 @@ class BettboxConfigFFI {
         ffi.Pointer<ffi.Char> Function(
           ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>,
-        )
-      >();
-
-  ffi.Pointer<ffi.Char> bb_apply_group_switches(
-    ffi.Pointer<ffi.Char> proxy_groups_json,
-    ffi.Pointer<ffi.Char> rules_json,
-    ffi.Pointer<ffi.Char> group_switches_json,
-    bool script_active,
-  ) {
-    return _bb_apply_group_switches(
-      proxy_groups_json,
-      rules_json,
-      group_switches_json,
-      script_active,
-    );
-  }
-
-  late final _bb_apply_group_switchesPtr =
-      _lookup<
-        ffi.NativeFunction<
-          ffi.Pointer<ffi.Char> Function(
-            ffi.Pointer<ffi.Char>,
-            ffi.Pointer<ffi.Char>,
-            ffi.Pointer<ffi.Char>,
-            ffi.Bool,
-          )
-        >
-      >('bb_apply_group_switches');
-  late final _bb_apply_group_switches = _bb_apply_group_switchesPtr
-      .asFunction<
-        ffi.Pointer<ffi.Char> Function(
-          ffi.Pointer<ffi.Char>,
-          ffi.Pointer<ffi.Char>,
-          ffi.Pointer<ffi.Char>,
-          bool,
         )
       >();
 

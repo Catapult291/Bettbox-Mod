@@ -45,42 +45,10 @@ pub unsafe extern "C" fn bb_rule_round_trip(rule: *const c_char) -> *mut c_char 
     })
 }
 
-/// 就地应用 DNS 节点覆写，返回改写后的配置 JSON。
-///
-/// `original_dns_json` / `original_hosts_json` 传 NULL 表示没有对应数据。
-///
-/// # Safety
-///
-/// 三个入参都必须是 NUL 结尾的 UTF-8 C 字符串或 NULL；返回的指针所有权归调用方，
-/// 用完必须传给 [`bb_string_free`]。
-#[no_mangle]
-pub unsafe extern "C" fn bb_apply_dns_node_override(
-    raw_config_json: *const c_char,
-    original_dns_json: *const c_char,
-    original_hosts_json: *const c_char,
-) -> *mut c_char {
-    catch_panic(ptr::null_mut(), || -> *mut c_char {
-        let Some(raw) = (unsafe { borrow_str(raw_config_json) }) else {
-            return ptr::null_mut();
-        };
-        let Some(mut config) = parse_json_limited(raw) else {
-            return ptr::null_mut();
-        };
-
-        let original_dns = (unsafe { borrow_str(original_dns_json) }).and_then(parse_json_limited);
-        let original_hosts =
-            (unsafe { borrow_str(original_hosts_json) }).and_then(parse_json_limited);
-
-        crate::dns_override::apply_dns_node_override(
-            &mut config,
-            original_dns.as_ref(),
-            original_hosts.as_ref(),
-        );
-        into_c_string(&config.to_string())
-    })
-}
-
 /// 解析 provider 列表原文，返回元数据数组（已剥掉全节点列表）。
+///
+/// 测试专用 ABI：生产管道只走 [`bb_patch_config`] / [`bb_process_profile`]；本导出
+/// 供 `test/rust/provider_diff_test.dart` 与 Dart 侧 `ClashCore` 对拍，不改配置。
 ///
 /// # Safety
 ///
@@ -104,6 +72,7 @@ pub unsafe extern "C" fn bb_parse_provider_meta(raw_providers_json: *const c_cha
 
 /// 由内核代理表 + provider 原文构建分组，返回分组数组 JSON。
 ///
+/// 测试专用 ABI：同 [`bb_parse_provider_meta`]，供 provider 差分测试调用。
 /// `raw_providers` 传 NULL 或空串表示没有 provider 数据。
 ///
 /// # Safety
@@ -128,42 +97,6 @@ pub unsafe extern "C" fn bb_build_proxies_groups(
         }
         let groups = crate::provider::build_proxies_groups(&proxies, providers);
         into_c_string(&Value::Array(groups).to_string())
-    })
-}
-
-/// 应用分组开关，返回 `{"proxy-groups":[...],"rules":[...]}` JSON。
-///
-/// # Safety
-///
-/// 三个入参都必须是 NUL 结尾的 UTF-8 C 字符串或 NULL；返回的指针所有权归调用方，
-/// 用完必须传给 [`bb_string_free`]。
-#[no_mangle]
-pub unsafe extern "C" fn bb_apply_group_switches(
-    proxy_groups_json: *const c_char,
-    rules_json: *const c_char,
-    group_switches_json: *const c_char,
-    script_active: bool,
-) -> *mut c_char {
-    catch_panic(ptr::null_mut(), || -> *mut c_char {
-        let Some(groups_raw) = (unsafe { borrow_str(proxy_groups_json) }) else {
-            return ptr::null_mut();
-        };
-        let Some(rules_raw) = (unsafe { borrow_str(rules_json) }) else {
-            return ptr::null_mut();
-        };
-        let Some(groups) = parse_json_limited(groups_raw) else {
-            return ptr::null_mut();
-        };
-        let Some(rules) = parse_json_limited(rules_raw) else {
-            return ptr::null_mut();
-        };
-        let switches = (unsafe { borrow_str(group_switches_json) })
-            .and_then(parse_json_limited)
-            .unwrap_or_else(|| Value::Object(Default::default()));
-
-        let (groups, rules) =
-            crate::group_switch::apply_group_switches(&groups, &rules, &switches, script_active);
-        into_c_string(&serde_json::json!({"proxy-groups": groups, "rules": rules}).to_string())
     })
 }
 
@@ -268,6 +201,9 @@ pub unsafe extern "C" fn bb_process_profile(
 /// 节点过滤用的正则匹配（QuickJS libregexp）：命中返回 1，未命中返回 0，
 /// 模式无法编译返回 -1。
 ///
+/// 测试专用 ABI：生产管道在 [`crate::patch_config`] 内部直接调 `RegexMatcher`；
+/// 本导出供 `test/rust/regex_matcher_diff_test.dart` 与 Dart `RegExp` 对拍。
+///
 /// # Safety
 ///
 /// 两个入参都必须是 NUL 结尾的 UTF-8 C 字符串或 NULL。
@@ -291,9 +227,9 @@ pub unsafe extern "C" fn bb_node_filter_match(pattern: *const c_char, text: *con
 ///
 /// # Safety
 ///
-/// `value` 必须是本库通过 [`bb_rule_parse`] / [`bb_rule_round_trip`] / [`bb_apply_dns_node_override`] /
-/// [`bb_parse_provider_meta`] / [`bb_build_proxies_groups`] / [`bb_apply_group_switches`] /
-/// [`bb_patch_config`] 返回、且尚未释放的指针，或为 NULL。
+/// `value` 必须是本库通过 [`bb_rule_parse`] / [`bb_rule_round_trip`] /
+/// [`bb_parse_provider_meta`] / [`bb_build_proxies_groups`] /
+/// [`bb_patch_config`] / [`bb_process_profile`] 返回、且尚未释放的指针，或为 NULL。
 #[no_mangle]
 pub unsafe extern "C" fn bb_string_free(value: *mut c_char) {
     catch_panic((), || {

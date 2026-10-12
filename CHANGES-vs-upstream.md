@@ -2648,3 +2648,52 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   下次发版由 CI 重编）。Android `.so` 未随本轮重编，改动随下次 Android 构建生效。
 
 **未决**：无新开项。
+
+---
+
+## 53. 裁掉 2 个无调用方的配置 ABI 导出；其余 3 个标为测试专用（B⑧ 收尾）
+
+**文件**：`rust/bettbox-native/src/ffi.rs`、`rust/bettbox-native/include/bettbox_config.h`、
+`lib/rust/bettbox_config.dart`、`lib/rust/generated/bettbox_config_ffi.dart`（ffigen 重生成）、
+`rust/bettbox-native/src/{group_switch,dns_override}.rs`（仅模块注释）
+**测试**：`cargo test --workspace` 全过；`flutter analyze lib test` 无问题；`flutter test` **160 过 / 3 skip**
+
+**问题**：§93 删 Dart 镜像时有意不动 ABI 表面，留下 5 个无生产调用方的导出（§32 未决 / §117 B⑧）。
+重新核对后分成两组：
+
+| 导出 | 生产 | 测试 |
+| --- | --- | --- |
+| `bb_apply_group_switches` | 无 | 无（差分测试已随镜像删除） |
+| `bb_apply_dns_node_override` | 无 | 无（同上） |
+| `bb_node_filter_match` | 无 | `regex_matcher_diff_test.dart` |
+| `bb_parse_provider_meta` | 无 | `provider_diff_test.dart` |
+| `bb_build_proxies_groups` | 无 | `provider_diff_test.dart` |
+
+内部模块 `group_switch` / `dns_override` / `provider` / `regex_matcher` 仍由 `patch_config`
+直接调用，本轮不动实现。
+
+**改动**：
+
+- **删除** `bb_apply_group_switches` 与 `bb_apply_dns_node_override` 的 C 导出、头文件声明、
+  Dart 包装（`BettboxConfig.applyGroupSwitches` / `applyDnsNodeOverride`）与 ffigen 绑定。
+- **保留** 其余 3 个导出，在头文件、`ffi.rs`、Dart 包装三处标注「测试专用 ABI」：
+  供差分测试与 Dart 侧仍存活的实现（`ClashCore` provider 构组 / `RegExp`）对拍。
+- 模块注释同步：`group_switch.rs` / `dns_override.rs` 不再指向已删除的 Dart 镜像文件。
+
+**关键决定**：
+
+- **不全删 5 个**：provider / regex 的 Dart 对照实现仍在生产 UI 路径（`getProxiesGroups` /
+  节点过滤语义参考），差分测试还有价值；group_switch / dns_override 的 Dart 镜像已删，
+  对应 FFI 成了纯死表面。
+- **内部模块保留**：生产管道经 `patch_config` 调它们，删的是 C ABI 入口而非实现。
+
+**验证**：
+
+- `cargo fmt --all --check`、`cargo clippy --all-targets -- -D warnings` 干净。
+- `cargo test --workspace`：单元 + fixtures + golden + rules + script_engine 全过。
+- `flutter analyze lib test` 无问题；`flutter test` **160 过 / 3 skip**
+  （含 `provider_diff_test` 3 条、`regex_matcher_diff_test` 覆盖的差分路径）。
+- 全仓搜索 `bb_apply_group_switches` / `bb_apply_dns_node_override`：源码零残留
+  （仅 §32 / 历史 CHANGES 文字仍提及）。
+
+**未决**：无新开项。B 列剩余以 §117 为准（⑨起）。

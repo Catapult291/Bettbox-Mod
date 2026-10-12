@@ -1,12 +1,11 @@
 //! 分组开关：禁用分组从 `proxy-groups` 移除，命中禁用分组目标的规则改判为 `PASS`。
 //!
-//! 对应 Dart 侧 `lib/common/group_switch.dart` 的 `applyGroupSwitches`
-//! （由 `lib/state.dart` 的 `patchRawConfig` 调用）。差分测试见
-//! `test/rust/group_switch_diff_test.dart`。
+//! 生产入口是 `patch_config` 内部直接调用；无独立 FFI 导出（§93 删 Dart 镜像后
+//! `test/rust/group_switch_diff_test.dart` 已删，B⑧ 一并去掉对应 C ABI）。
 //!
-//! 与 Dart 的差异（仅在畸形输入上体现）：Dart 的 `groupSwitches` 是
-//! `Map<String, bool>`，值必为 bool；这里把非 bool 的值当作「启用」（跳过），
-//! `rules` 不是数组时原样返回。
+//! 与原 Dart 镜像的差异（仅在畸形输入上体现，镜像已删，这里按历史口径保留说明）：
+//! Dart 的 `groupSwitches` 是 `Map<String, bool>`，值必为 bool；这里把非 bool 的值
+//! 当作「启用」（跳过），`rules` 不是数组时原样返回。
 
 use std::collections::HashSet;
 
