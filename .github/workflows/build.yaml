@@ -11,6 +11,9 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   SENTRY_BACKEND: none
   IS_STABLE: ${{ !contains(github.ref, '-') }}
+  IS_PRERELEASE: ${{ contains(github.ref_name, 'pre') }}
+  # SignPath 未配置时为空串，全部签名步骤按 env.SIGNPATH_API_TOKEN != '' 跳过（与上游一致）。
+  SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
 
 jobs:
   build:
@@ -193,6 +196,57 @@ jobs:
         run: |
           dart setup.dart windows --arch ${{ matrix.arch }} --out core-only
 
+      # 签名策略 slug 按版本通道选择（只设环境变量，无副作用；未配置 token 或非 tag 时后续签名步骤全跳过）：
+      # 正式 tag → exe/安装器都用 release-signing；预发布 tag → exe 用 test-signing、安装器用 release-signing；
+      # 其余（非 v 触发的边缘情形）→ 都用 test-signing。slug 名必须与 SignPath 项目里的签名策略一致。
+      - name: Set Signing Policy Slug (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $isStable = '${{ env.IS_STABLE }}' -eq 'true'
+          $isPre = '${{ env.IS_PRERELEASE }}' -eq 'true'
+
+          if ($isStable) {
+            $exePolicy = "release-signing"
+            $installerPolicy = "release-signing"
+          } elseif ($isPre) {
+            $exePolicy = "test-signing"
+            $installerPolicy = "release-signing"
+          } else {
+            $exePolicy = "test-signing"
+            $installerPolicy = "test-signing"
+          }
+          Write-Host "Setting EXE_SIGNING_POLICY_SLUG to $exePolicy"
+          Write-Host "Setting INSTALLER_SIGNING_POLICY_SLUG to $installerPolicy"
+          "EXE_SIGNING_POLICY_SLUG=$exePolicy" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "INSTALLER_SIGNING_POLICY_SLUG=$installerPolicy" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      # core 必须在编 helper 之前签好：helper 的 TOKEN 是对（已签名）core 的 SHA256——
+      # setup.dart --out helper 不重建内核，签完原地覆盖即是后续 Build Helper / Build Bettbox 的输入。
+      - name: Upload Unsigned Core
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-core
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-core-${{ matrix.arch }}
+          path: libclash/windows/BettboxCore.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Core (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.EXE_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-core.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'libclash/windows'
+
       - name: Build HelperService (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -200,6 +254,30 @@ jobs:
           $coreHash = (Get-FileHash libclash/windows/BettboxCore.exe -Algorithm SHA256).Hash.ToLower()
           Write-Host "Core SHA256 (TOKEN for Helper): $coreHash"
           dart setup.dart windows --arch ${{ matrix.arch }} --out helper --core-hash $coreHash
+
+      - name: Upload Unsigned HelperService
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-helper
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-helper-${{ matrix.arch }}
+          path: libclash/windows/BettboxHelperService.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign HelperService (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.EXE_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-helper.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'libclash/windows'
 
       # 必须在 flutter build 之前产出 libclash/windows/bettbox_native.dll，
       # windows/CMakeLists.txt 才会把它装进 bundle（该文件在 .gitignore 里，只能现造）。
@@ -232,6 +310,32 @@ jobs:
             $flutterArgs += "--dart-define=IPINFO_TOKEN=$env:IPINFO_TOKEN"
           }
           flutter @flutterArgs
+
+      # CMake 安装阶段把 libclash/windows 里已签名的 core/helper 拷进 bundle，
+      # 所以这里签的 Bettbox.exe 与前两步签的文件一起构成「打包前的已签名输入」。
+      - name: Upload Unsigned Bettbox
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-bettbox
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-bettbox-${{ matrix.arch }}
+          path: build/windows/${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}/runner/Release/Bettbox.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Bettbox (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.EXE_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-bettbox.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'build/windows/${{ matrix.arch == ''arm64'' && ''arm64'' || ''x64'' }}/runner/Release'
 
       # Rust 原生库（配置管道 + 脚本引擎）是唯一实现，缺 dll 时应用会直接报错而不是
       # 静默降级，所以这里硬断言它真的在包里。
@@ -279,6 +383,90 @@ jobs:
           }
           Write-Host "test/rust passed"
 
+      # bettbox_native.dll / WindowsLoopbackManager.exe 只签 bundle 里那份（打包用的就是它）：
+      # 上面的 Verify 断言 bundle dll 与 cargo 产物逐字节一致，必须等它和 Dart 测试都过了再签，
+      # 否则签名改写会让哈希比对失败。libclash/windows 与 windows/ 源树里的原件保持未签名。
+      - name: Upload Unsigned Rust native lib
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-native
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-native-${{ matrix.arch }}
+          path: build/windows/${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}/runner/Release/bettbox_native.dll
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Rust native lib (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.EXE_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-native.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'build/windows/${{ matrix.arch == ''arm64'' && ''arm64'' || ''x64'' }}/runner/Release'
+
+      - name: Upload Unsigned WindowsLoopbackManager
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-loopback
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-loopback-${{ matrix.arch }}
+          path: build/windows/${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}/runner/Release/WindowsLoopbackManager.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign WindowsLoopbackManager (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.EXE_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-loopback.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'build/windows/${{ matrix.arch == ''arm64'' && ''arm64'' || ''x64'' }}/runner/Release'
+
+      # 打包前对 bundle 里 5 个一方 PE 做签名存在性硬断言（SignerCertificate 非空）。
+      # Status 只打印不卡：test-signing 策略若用测试证书，链在 runner 上不一定是 Trusted，
+      # 硬卡 Valid 会把预发布通道误杀；action wait-for-completion 本身已保证拿到签名结果。
+      - name: Verify Authenticode Signatures (bundle, Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $dir = if ('${{ matrix.arch }}' -eq 'arm64') { 'arm64' } else { 'x64' }
+          $bundleDir = "build/windows/$dir/runner/Release"
+          $files = @(
+            'Bettbox.exe',
+            'BettboxCore.exe',
+            'BettboxHelperService.exe',
+            'bettbox_native.dll',
+            'WindowsLoopbackManager.exe'
+          )
+          $bad = 0
+          foreach ($name in $files) {
+            $f = Join-Path $bundleDir $name
+            if (-not (Test-Path $f)) {
+              Write-Error "missing $f"
+              $bad++
+              continue
+            }
+            $s = Get-AuthenticodeSignature $f
+            Write-Host "$name -> $($s.Status); signer=$($s.SignerCertificate.Subject)"
+            if ($null -eq $s.SignerCertificate) {
+              Write-Error "$name has no Authenticode signature"
+              $bad++
+            }
+          }
+          if ($bad -gt 0) { exit 1 }
+
       - name: Ensure Inno Setup (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -293,6 +481,49 @@ jobs:
         run: |
           dart windows/packaging/exe/package_windows.dart --arch ${{ matrix.arch }} --env ${{ env.IS_STABLE == 'true' && 'stable' || 'pre' }}
 
+      - name: Find Installer Path
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $installer = (Resolve-Path "dist/Bettbox-*-windows-${{ matrix.arch }}-setup.exe").Path
+          echo "INSTALLER_PATH=$installer" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "INSTALLER_FILENAME=$(Split-Path -Leaf $installer)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload Unsigned Installer
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        id: upload-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: unsigned-installer-${{ matrix.arch }}
+          path: ${{ env.INSTALLER_PATH }}
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign Installer (Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        uses: signpath/github-action-submit-signing-request@v2
+        timeout-minutes: 60
+        with:
+          api-token: '${{ env.SIGNPATH_API_TOKEN }}'
+          github-token: '${{ secrets.GITHUB_TOKEN }}'
+          organization-id: '${{ vars.SIGNPATH_ORG_ID }}'
+          project-slug: '${{ vars.SIGNPATH_PROJECT_SLUG }}'
+          signing-policy-slug: '${{ env.INSTALLER_SIGNING_POLICY_SLUG }}'
+          github-artifact-id: '${{ steps.upload-installer.outputs.artifact-id }}'
+          wait-for-completion: true
+          output-artifact-directory: 'dist'
+
+      - name: Verify Authenticode Signature (installer, Windows)
+        if: matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $s = Get-AuthenticodeSignature $env:INSTALLER_PATH
+          Write-Host "$($env:INSTALLER_PATH) -> $($s.Status); signer=$($s.SignerCertificate.Subject)"
+          if ($null -eq $s.SignerCertificate) {
+            Write-Error "installer has no Authenticode signature"
+            exit 1
+          }
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -300,6 +531,20 @@ jobs:
           path: ./dist/*
           archive: false
           overwrite: true
+
+      # 签名用的中间产物（未签名原件）不留在 Actions 里，发布物只从上面的 Bettbox-* 拿。
+      - name: Clean up intermediate unsigned artifacts
+        if: always() && matrix.platform == 'windows' && env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/')
+        continue-on-error: true
+        uses: geekyeggo/delete-artifact@v6
+        with:
+          name: |
+            unsigned-core-${{ matrix.arch }}
+            unsigned-helper-${{ matrix.arch }}
+            unsigned-bettbox-${{ matrix.arch }}
+            unsigned-native-${{ matrix.arch }}
+            unsigned-loopback-${{ matrix.arch }}
+            unsigned-installer-${{ matrix.arch }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

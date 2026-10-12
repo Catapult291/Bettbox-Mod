@@ -2,6 +2,7 @@
 *.md
 !/README.md
 !/CHANGES-vs-upstream.md
+!/SIGNING-POLICY.md
 !/readme/*.md
 !.github/release-notes/**/*.md
 *.class
