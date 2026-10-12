@@ -1305,8 +1305,11 @@ Windows 安装包级验证（CMake install + CI 断言）未在本机执行，�
   脚本生效、`customOptions` 合并进 `ruleOptionsEnable`、脚本失败回传 `scriptError`、非对象 `rawConfig`→null、
   非法 JSON→null）；`flutter test test/rust` 41 项、`flutter test` 156 项全过；`flutter analyze lib test` 干净。
 
-**未决**：合并入口的端到端行为已在 v1.19.12 前补齐（真实 profile 原文 + 真实脚本 + 已安装 dll 验证；
-接线另有确定性测试，见 `.grok/stage-log.md` §85）；「合并入口返回 NULL → 回退两段式」仍未实机验证。
+**未决（已闭环，stage-log §138）**：合并入口的端到端行为已在 v1.19.12 前补齐（真实 profile 原文 +
+真实脚本 + 已安装 dll 验证；接线另有确定性测试，见 `.grok/stage-log.md` §85）。失败路径原表述
+「合并入口返回 NULL → 回退两段式」随 §32（v1.19.14）删除两段式而失效——现行为是 `processProfile`
+抛 `StateError`、上一份可用运行配置原样保留；已用已安装 v1.19.16 的 dll 实机验证（裸 FFI 返回 NULL +
+包装层抛错），并新增永久用例 `test/rust/process_profile_null_test.dart`。
 
 ---
 

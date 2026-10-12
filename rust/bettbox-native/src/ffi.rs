@@ -132,7 +132,8 @@ pub unsafe extern "C" fn bb_patch_config(input_json: *const c_char) -> *mut c_ch
 ///   `{"ok":true,"config":{…}}`                     正常
 ///   `{"ok":true,"config":{…},"scriptError":"…"}`   脚本失败：沿用原 `rawConfig` 继续 patch，
 ///                                                 调用方据此提示用户（与 Dart 侧一致）
-///   NULL                                           ABI 级失败（入参非法 / patch 失败）→ 调用方回退两段式
+///   NULL                                           ABI 级失败（入参非法 / patch 失败）→ 调用方
+///                                                  （Dart `processProfile`）抛 `StateError`
 ///
 /// # Safety
 ///
