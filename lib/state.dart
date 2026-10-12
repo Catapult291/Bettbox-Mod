@@ -356,16 +356,27 @@ class GlobalState {
   /// 成功。这里真连一次端口才算数，失败重试一次（新内核刚起来时监听可能还在建）。
   Future<bool> _startListenerChecked() async {
     final port = config.patchClashConfig.mixedPort;
-    // 内核已死时没必要再等 startListener 的整段 IPC 超时：先探一次健康度，
-    // 探测失败就直接判失败（2 秒），不把用户晾在几十秒的空等里。内核正在重启
-    // 过渡中（isStarting）时探测本身就会报"不应答"，那种情况交给下面的
-    // startListener 去等。
     final service = clashService;
+    // 内核正处在重启过渡（isStarting）：健康探测会误报"不应答"，socket 也可能
+    // 还没重建，此时发下去的 startListener 会被 sendMessage 立刻丢弃——两次
+    // 重试（500ms 间隔）都落在窗口里就会把本可成功的首点判成失败，用户只能再
+    // 点一次（§33/§34「点开关首次失败、第二次才成功」的机械成因）。先给过渡
+    // 一个有界窗口落地，再判死活、发指令。
+    if (service != null && service.isStarting) {
+      await service.waitUntilNotStarting();
+    }
+    // 内核已死时没必要再等 startListener 的整段 IPC 超时：先探一次健康度，
+    // 探测失败就直接判失败（2 秒），不把用户晾在几十秒的空等里。
     if (service != null &&
         !service.isStarting &&
         !await service.checkCoreHealth()) {
-      commonPrint.log('Core is not reachable, listener not started');
-      return false;
+      // 单次探测可能撞上瞬时 IPC 失误（丢包/超时）：隔一拍再确认一次，把
+      // "首点失败、再点就好"的瞬时窗口吸收进本次点击，而不是让用户点第二次。
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!await service.checkCoreHealth()) {
+        commonPrint.log('Core is not reachable, listener not started');
+        return false;
+      }
     }
     for (var attempt = 1; attempt <= 2; attempt++) {
       // 内核处理启动指令是同步的内存操作，正常毫秒级返回；这里不必给长任务

@@ -366,6 +366,27 @@ class ClashService extends ClashHandlerInterface {
     }
   }
 
+  /// 等内核脱离重启过渡（[isStarting] 清掉），返回是否已脱离。
+  ///
+  /// 过渡期间旧 socket 已拆、新连接可能还没建立，[sendMessage] 会把指令立刻
+  /// 丢掉；启动自检需要"等过渡落地再发"，否则几次重试都会烧在同一个窗口里。
+  Future<bool> waitUntilNotStarting([
+    Duration timeout = const Duration(seconds: 10),
+  ]) async {
+    if (!isStarting) return true;
+    final deadline = DateTime.now().add(timeout);
+    while (isStarting) {
+      if (!DateTime.now().isBefore(deadline)) {
+        commonPrint.log(
+          'Core is still starting after ${timeout.inSeconds}s, continuing',
+        );
+        return false;
+      }
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+    return true;
+  }
+
   Future<void> _deleteSocketFile() async {
     if (_transportType == TransportType.unixSocket && _socketPath != null) {
       final file = File(_socketPath!);
