@@ -2697,3 +2697,49 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   （仅 §32 / 历史 CHANGES 文字仍提及）。
 
 **未决**：无新开项。B 列剩余以 §117 为准（⑨起）。
+
+---
+
+## 54. 接入 cargo-fuzz 与 proptest（B⑨ 收尾）
+
+**文件**：`rust/bettbox-native/Cargo.toml`（dev-deps 加 proptest）、
+`rust/bettbox-native/tests/property.rs`（新增）、
+`rust/fuzz/{Cargo.toml,rust-toolchain.toml,README.md,fuzz_targets/*,seed_corpus/*}`（新增）、
+`rust/Cargo.lock`、`.gitignore`、路线稿 §4.2
+**测试**：`cargo test --workspace`（debug + release）全过，property 9 条；fmt / clippy 干净
+
+**问题**：路线稿 §4.2 只结了 release/debug 分歧那一半（§106），`cargo-fuzz` / `proptest`
+未接入（§117 B⑨）。golden 是固定快照，覆盖「已知输入 → 已知输出」；删掉 Dart 镜像后
+缺少「任意输入不炸 / 序列化可稳定 / 管道结构不变量」这类属性网。
+
+**改动**：
+
+- **proptest**（`tests/property.rs`，随 `cargo test`，CI 已覆盖）：9 条属性——
+  规则 parse 不 panic 且二次序列化稳定；常见写法字符串 round-trip；action 必在表内；
+  `src`/`no-resolve` 只对 `has_params` 动作输出；正则编译/匹配不 panic；
+  字面量正则匹配自身；`patch_config` 合法信封不 panic 且成功时带 rules/external-ui-url/
+  port/socks-port/tun 结构不变量；最小信封（`patch.tun`+`patch.dns`+`profile.overrideData`）
+  必成功；分组开关 no-op / 全禁用剔除。
+- **cargo-fuzz**（`rust/fuzz/` 独立工作区，不进 `cargo test --workspace`）：
+  `rule_parse` / `regex_matcher` / `patch_config` 三个 target + `seed_corpus/` 种子。
+
+**关键决定**：
+
+- **日常回归靠 proptest，fuzz 供本地更长探索**：libFuzzer 不进 CI（时长不可控；
+  Windows MSVC 下 cdylib 链不过，见下）。
+- **Windows MSVC 已知限制**：cargo-fuzz 给依赖图注入 `/include:main`，`bettbox_native.dll`
+  链接 `LNK2001 main`——是 libFuzzer 与「库同时出 DLL」的组合限制，Linux/WSL 可跑。
+  属性覆盖由 proptest 在 Windows CI 上兜住。
+- **最小信封必须带 `tun`/`dns`/`overrideData`**：`nested_object` 硬性要求对象，
+  空 `patch: {}` 会 Err（属性测试踩到后写进注释，避免后人当回归）。
+
+**验证**：
+
+- `cargo fmt --all --check`、`cargo clippy --all-targets -- -D warnings` 干净。
+- `cargo test --workspace`：**101 过 / 2 skip**（单元 66 + fixtures 3 + golden 2 +
+  **property 9** + rules 2 + script_engine 19；skip 仍是 regenerate_golden 与一处手动用例）。
+- `cargo test --workspace --release` 同上全过。
+- `RUSTUP_TOOLCHAIN=nightly cargo fuzz run rule_parse`：编译到链接阶段确认 MSVC
+  cdylib 限制（见 README），未跑通执行；target 源码与种子已就位。
+
+**未决**：无新开项。B 列剩余以 §117 为准（⑩起）。

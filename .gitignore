@@ -55,6 +55,12 @@ migrate_working_dir/
 /services/helper/target/
 /rust/target/
 
+# cargo-fuzz 运行产物（初始种子在 rust/fuzz/seed_corpus/，运行时增量写 corpus/ 不入库）
+/rust/fuzz/artifacts/
+/rust/fuzz/crashes/
+/rust/fuzz/corpus/
+/rust/fuzz/target/
+
 # Symbolication related
 app.*.symbols
 

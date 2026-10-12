@@ -24,6 +24,10 @@ windows = { version = "0.52", features = [
     "Win32_System_Memory",
 ] }
 
+[dev-dependencies]
+# 属性测试：随机规则/配置输入上的不变量（tests/property.rs）。随 `cargo test` 一起跑。
+proptest = "1"
+
 [build-dependencies]
 # 编译仓库里那份 vendored QuickJS（见 build.rs 的说明）。
 cc = "1"

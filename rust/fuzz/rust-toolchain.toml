@@ -1,0 +1,4 @@
+# 父目录 rust-toolchain.toml 锁的是 1.98.0 稳定版；cargo-fuzz 需要 nightly 的
+# sanitizer 支持。本目录覆盖父锁定，仅影响 fuzz crate 自身。
+[toolchain]
+channel = "nightly"
