@@ -32,13 +32,16 @@ class _ProxyManagerState extends ConsumerState<ProxyManager> {
         () => SystemProxy.enable(port: port, bypass: proxyState.bypassDomain),
       );
     } else {
-      _schedule(SystemProxy.disable);
+      _schedule(() => SystemProxy.disable(port: port));
     }
   }
 
   @override
   void initState() {
     super.initState();
+    // Windows：拉起系统代理看门狗——应用被强杀时它在进程死后就地还原系统代理，
+    // 不必等下次启动（§108 未决⑪的「残留窗口」那半）。失败只记日志，不阻断启动。
+    SystemProxy.guard.start();
     ref.listenManual(proxyStateProvider, (prev, next) {
       if (prev != next) {
         _updateProxy(next);

@@ -123,6 +123,13 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/bettbox_native.dll")
     COMPONENT Runtime)
 endif()
 
+# 系统代理看门狗（同一次 cargo build 的副产物，GUI 子系统、无窗口）。同样用
+# EXISTS 守卫：缺失时应用侧退化为「等下次启动还原系统代理」的旧行为。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${CLASH_DIR}/BettboxProxyGuard.exe")
+  install(PROGRAMS "${CLASH_DIR}/BettboxProxyGuard.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    COMPONENT Runtime)
+endif()
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

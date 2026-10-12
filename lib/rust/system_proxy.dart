@@ -12,7 +12,7 @@ import 'package:bett_box/rust/native_library.dart';
 /// （`ffigen.bettbox_system_proxy.yaml`）。与配置管道/脚本引擎共用同一个动态库
 /// （`bettbox_native`）。
 ///
-/// 与另外两块不同，这里的三个入口返回的总是 JSON 信封
+/// 与另外两块不同，这里的入口返回的总是 JSON 信封
 /// （`{"ok":true,...}` / `{"ok":false,"message":"..."}`），只有 ABI 级失败才是 NULL：
 /// Win32 层的失败原因要交给调用方（见 `lib/common/system_proxy.dart`），
 /// 失败策略与配置管道一致——**抛错，不回退到第二套实现**。
@@ -64,6 +64,21 @@ abstract final class RustSystemProxy {
     } finally {
       malloc.free(snapshotPtr);
     }
+  }
+
+  /// 认领没有快照可还原的残留（升级过渡期 / 偏好丢失）。
+  ///
+  /// 只动「服务器串正好是 `127.0.0.1:<port>`、显式代理开着、且该端口已无监听」的
+  /// 连接；端口有人监听（别的代理客户端占着）时整轮跳过。
+  static RustSystemProxyClaimReport claimResidual(int port) {
+    final envelope = _call(
+      (bindings) => bindings.bb_system_proxy_claim_residual(port),
+    );
+    return RustSystemProxyClaimReport(
+      claimed: (envelope['claimed'] as num?)?.toInt() ?? 0,
+      listening: envelope['listening'] == true,
+      warnings: _stringList(envelope['warnings']),
+    );
   }
 
   /// 调用一个返回信封的入口：解析 JSON、按 `ok` 决定抛错还是把信封交回调用方。
@@ -151,6 +166,23 @@ class RustSystemProxyRestoreReport {
 
   /// 跳过的连接数（期间被用户或别的程序改过、或已不存在）。
   final int skipped;
+
+  final List<String> warnings;
+}
+
+/// [RustSystemProxy.claimResidual] 的结果。
+class RustSystemProxyClaimReport {
+  const RustSystemProxyClaimReport({
+    required this.claimed,
+    required this.listening,
+    required this.warnings,
+  });
+
+  /// 本次关掉 `ProxyEnable` 的连接数。
+  final int claimed;
+
+  /// 认领前探测到端口上有监听者（此时未动注册表）。
+  final bool listening;
 
   final List<String> warnings;
 }

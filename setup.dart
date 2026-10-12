@@ -295,6 +295,17 @@ class Build {
     final outPath = join(current, 'rust', 'target', 'release', name);
     final targetPath = join(Build.outDir, target.name, name);
     await File(outPath).copy(targetPath);
+
+    // 系统代理看门狗（`BettboxProxyGuard.exe`，同一次 cargo build 的副产物），
+    // 由 CMake 从 libclash/windows/ 装进 bundle；缺了不报错——应用侧会退化成
+    // 「等下次启动还原」的旧行为（同 dll 的 EXISTS 守卫语义）。
+    const guardName = 'BettboxProxyGuard.exe';
+    final guardOut = join(current, 'rust', 'target', 'release', guardName);
+    if (File(guardOut).existsSync()) {
+      await File(guardOut).copy(join(Build.outDir, target.name, guardName));
+    } else {
+      print('warning: $guardOut 不存在，看门狗不会进安装包');
+    }
   }
 
   /// 交叉编译 Android 用的 Rust cdylib：每个 ABI 出一份 `libbettbox_native.so`，

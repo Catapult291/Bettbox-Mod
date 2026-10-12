@@ -63,6 +63,18 @@ class BettboxSystemProxyFFI {
   late final _bb_system_proxy_restore = _bb_system_proxy_restorePtr
       .asFunction<ffi.Pointer<ffi.Char> Function(ffi.Pointer<ffi.Char>)>();
 
+  ffi.Pointer<ffi.Char> bb_system_proxy_claim_residual(int port) {
+    return _bb_system_proxy_claim_residual(port);
+  }
+
+  late final _bb_system_proxy_claim_residualPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Char> Function(ffi.Int)>>(
+        'bb_system_proxy_claim_residual',
+      );
+  late final _bb_system_proxy_claim_residual =
+      _bb_system_proxy_claim_residualPtr
+          .asFunction<ffi.Pointer<ffi.Char> Function(int)>();
+
   void bb_string_free(ffi.Pointer<ffi.Char> ptr) {
     return _bb_string_free(ptr);
   }

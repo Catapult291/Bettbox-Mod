@@ -119,6 +119,34 @@ class AppPath {
     return join(directory.path, 'shared_preferences.json');
   }
 
+  /// 系统代理看门狗可执行文件：优先取与应用同目录的那份（CMake install 的结果），
+  /// 开发态再退回仓库 cargo 产物（与 `lib/rust/native_library.dart` 同一套候选）。
+  String get proxyGuardPath {
+    final fileName = 'BettboxProxyGuard.exe';
+    final candidates = [
+      join(executableDirPath, fileName),
+      for (final profile in ['release', 'debug'])
+        join(Directory.current.path, 'rust', 'target', profile, fileName),
+    ];
+    for (final candidate in candidates) {
+      if (File(candidate).existsSync()) return candidate;
+    }
+    return candidates.first;
+  }
+
+  /// 看门狗的快照文件：应用在系统代理启用成功后写入，还原成功后删除；
+  /// 看门狗在应用进程退出后读它决定是否还原。
+  Future<String> get proxyGuardSnapshotPath async {
+    final directory = await dataDir.future;
+    return join(directory.path, 'system_proxy_guard.snapshot.json');
+  }
+
+  /// 看门狗日志（应用拉起前会先清掉上一轮的）。
+  Future<String> get proxyGuardLogPath async {
+    final directory = await dataDir.future;
+    return join(directory.path, 'system_proxy_guard.log');
+  }
+
   Future<String> get helperAuthKeyPath async {
     final directory = await dataDir.future;
     return join(directory.path, 'helper_auth.key');

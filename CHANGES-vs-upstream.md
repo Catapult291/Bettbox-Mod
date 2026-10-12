@@ -65,6 +65,9 @@
 | 50 | 稳定性 | 点开关「首次失败、第二次才成功」收尾：启动自检等重启过渡落地，健康探测补一次瞬时重试 | v1.19.16 |
 | 51 | 稳定性 | registerService 不再在 ping 无应答时改写跨目录现网 helper 服务：ping 分类 + binPath 守卫 + 瞬时重试 | v1.19.16 |
 | 52 | 稳定性 | 内核 startListener 核对自己是否持有 mixed-port：被别的程序占用时不再误报启动成功（B⑦） | v1.19.17 |
+| 53 | 工程 | 裁掉 2 个无调用方的配置 ABI 导出；其余 3 个标为测试专用（B⑧） | v1.19.17 |
+| 54 | 工程 | 接入 cargo-fuzz 与 proptest（B⑨） | v1.19.17 |
+| 55 | 稳定性 | 「被强杀 → 下次启动」残留就地闭合：系统代理看门狗 + 无快照残留认领（B⑪） | v1.19.17 |
 
 ---
 
@@ -1745,10 +1748,12 @@ group_switch_test,json_diff}.dart`
   `.NET` 默认代理恢复，快照重写为 `{applied:127.0.0.1:7890, flags:1}`（记的是「启用前是直连」）。
   归属判定也补了一条 GUI 级实测：把服务器串改成等价的 `localhost:7890`（别的程序改过的样子）后再点关，
   注册表三项原样不动、`.NET` 仍解析到 `localhost:7890`，即没覆盖别人改过的连接。
-- **升级过渡期**：旧版本（本改动之前）从不写快照，所以「被强杀 → 直接装新版本 → 启动」这条窄路上，
+- ~~**升级过渡期**：旧版本（本改动之前）从不写快照，所以「被强杀 → 直接装新版本 → 启动」这条窄路上，
   新版本没有快照可还原，残留会留在系统里（重新打开一次「系统代理」开关即可恢复）。没有按端口
   （`127.0.0.1:<混合端口>`）去「认领」这类残留，是因为默认混合端口 7890 被别的代理客户端占用的情形
-  很常见，按端口认领会把「清掉别人的代理」这个正在修的毛病又引回来。
+  很常见，按端口认领会把「清掉别人的代理」这个正在修的毛病又引回来。~~
+  **已闭环（第 55 节）**：认领补上存活探测（端口已死才认领，占着端口的不碰）；
+  「被强杀 → 下次启动」的窗口本身也由 `BettboxProxyGuard` 看门狗就地闭合。
 
 ---
 
@@ -2746,3 +2751,86 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   cdylib 限制（见 README），未跑通执行；target 源码与种子已就位。
 
 **未决**：无新开项。B 列剩余以 §117 为准（⑩起）。
+
+---
+
+## 55. 「被强杀 → 下次启动」残留窗口就地闭合 + 升级过渡期无快照的残留认领（B⑪ 收尾）
+
+**文件**：`rust/bettbox-native/src/system_proxy.rs`（`claim_residual` + 端口存活探测 + 机器用例互斥）、
+`rust/bettbox-native/src/bin/bettbox_proxy_guard.rs`（新增看门狗）、
+`rust/bettbox-native/src/system_ffi.rs` / `include/bettbox_system_proxy.h` /
+`lib/rust/generated/bettbox_system_proxy_ffi.dart`（ffigen 重生成）/ `lib/rust/system_proxy.dart`、
+`lib/common/system_proxy.dart`（无快照时认领 + 看门狗快照读写）、`lib/common/proxy_guard.dart`（新增）、
+`lib/common/path.dart`、`lib/manager/proxy_manager.dart`（启动拉起看门狗、disable 带端口）、
+`setup.dart`、`windows/CMakeLists.txt`、`.github/workflows/build.yaml`（拷贝 / 安装 / 签名与断言）
+**测试**：`cargo test --workspace`（debug + release）、`flutter test`；另有多条 `#[ignore]` 机器用例
+与一次性实机 E2E（见验证，E2E 跑完即删）
+
+**问题**（§108 未决 / §117 B⑪，两半）：
+
+1. **被强杀 → 下次启动的残留窗口**：强杀后系统代理仍指向死端口，要等下次启动才按快照还原，
+   期间用户上不了网。§108 的结论是「要消除得有用户会话里的看门狗」，当时超出范围。
+2. **升级过渡期无快照**：旧版本从不写快照，「被强杀 → 直接升级 → 启动」这条窄路上新版本无快照
+   可还原；且 `enable` 会把这份残留**当作「启用前的设置」存进新快照**，之后每次关闭系统代理都
+   还原回死残留（关了等于没关）。§108 拒绝按端口认领，因为默认混合端口 7890 被别的代理客户端
+   占用的情形很常见。
+
+**改动**：
+
+- **`bb_system_proxy_claim_residual(port)`（新 FFI，第四个系统代理入口）**：没有快照可还原时，
+  把「服务器串正好是 `127.0.0.1:<port>`、显式代理开着、且该端口**已无监听**」的连接的
+  `ProxyEnable` 关掉（服务器串保留）。端口有监听者 → 整轮跳过；没有匹配连接 → 纯 no-op
+  （正常启动的常态，连端口探测都不做）。Dart 门面在 `_restorePersisted` 的快照缺失分支按端口
+  调用：`enable` 必带端口；`disable` 由 ProxyManager 传入 `proxyState.port`；退出流程不传端口
+  就不认领——那种情形下次启动照样会认领。
+- **`BettboxProxyGuard.exe`（新守护进程，`bettbox-native` 的 bin target）**：GUI 子系统，
+  无窗口无控制台。应用启动时（`ProxyManager.initState`）以
+  `--pid <应用PID> --snapshot <快照路径> --log <日志路径>` 拉起，先握住进程句柄再等
+  （PID 复用不影响）；进程退出后读看门狗快照 → 走与应用内**完全同源**的
+  `system_proxy::restore`（同一 crate 编译，归属判定一致）→ 成功后删文件、写日志。
+  应用启用系统代理时门面先写这份快照文件，还原成功后删除；它与偏好设置里的
+  `system_proxy_snapshot` 互为兜底（一个管进程死后，一个管下次启动）。
+- **产物链路**：`setup.dart buildRustLibs` 把 exe 拷进 `libclash/windows/`；CMake 装进 bundle
+  （EXISTS 守卫，缺失只退化为旧行为）；CI 在 flutter build 之后签 bundle 里那份（同 dll 约定，
+  保证哈希断言仍对 cargo 原件成立）、硬断言在场且与 cargo 产物逐字节一致、Authenticode 清单
+  5 → 6 个一方 PE。
+
+**关键决定**：
+
+- **认领判据 = 「本应用写法 + 端口已死」两条同时满足**：`localhost:7890` 这类别的程序的写法不算
+  （§113 验证过要原样不动）；端口活着不碰。相比 §108 拒绝的「裸按端口认领」多了一层存活探测，
+  把「清掉别人的代理」的风险收窄到「对方客户端恰好也用本应用的混合端口、且恰好处于没监听的
+  瞬间」——而那种状态下它自己的代理本来就是死的。
+- **看门狗与应用各存一份快照**：任一侧缺失只是退化到旧行为（下次启动还原），多跑的一次还原由
+  归属判定（服务器串 + 显式代理位）吞成幂等 no-op，不会碰别人改过的设置。
+- **看门狗的通知语义与应用内还原保持一致**（只做 WinINet 的 SETTINGS_CHANGED/REFRESH，
+  不额外广播 WM_SETTINGCHANGE），避免引入第二套行为。
+- **会改机器状态的 `#[ignore]` 用例必须串行**：cargo 默认并行跑测试，两条用例互相覆盖对方的
+  快照与残留（实测 `during` 被另一条的 restore 冲回基线），用 `MACHINE_PROXY_LOCK` 互斥。
+
+**验证**（本机实测）：
+
+- **静态与用例**：`cargo fmt --all --check`、`cargo clippy --all-targets -- -D warnings`
+  （debug + release）干净；`cargo test --workspace`（debug + release）全过——含看门狗 bin 的
+  5 项（参数解析、进程死后还原并删快照、无快照不碰、还原失败留快照、坏输入拒绝）与认领判定
+  用例；`flutter analyze lib test` 无问题；`flutter test` **170 过 / 3 skip**
+  （新增门面 3 项 + ProxyManager 1 项）。
+- **真实注册表往返（`--ignored` 手工用例）**：`enable_then_restore_round_trips` 与
+  `claim_residual_round_trips`（监听时跳过 + 死端口认领 + 断言失败也会 catch_unwind 清理还原）
+  串行跑过，最终注册表逐项等于开跑前的基线。
+- **一次性实机 E2E（跑完即删、未入库）**：
+  - A（认领，真实门面 → 真实 dll → 注册表）：无快照 + `7991` 无监听 → 日志
+    `系统代理残留已认领（disable）：1 项`、`ProxyEnable` 关闭而服务器串保留；先占住 `7991`
+    再认领 → 日志 `有监听`、注册表原样不动；收尾把注册表逐项还原到基线。
+  - B（看门狗生产链路）：真实 `NativeProxyGuard.start()` 拉起 `BettboxProxyGuard.exe`
+    （`EnumWindows` 顶层窗口 0、`MainWindowHandle` 0，无任务栏项、无控制台窗口）→ 真实
+    `enable(7992)` 写下看门狗快照 → 测试进程退出（等价被强杀，不经 `disable`）→ 外部轮询
+    **第 1 拍** `ProxyServer` 已回到 `127.0.0.1:7890`、守护进程退出、快照文件删除、日志
+    `已还原 1 项，跳过 0 项`；.NET 默认代理复核 `http://127.0.0.1:7890/`，`7890` 持续监听，
+    现网实例全程未受影响。
+- **覆盖边界**：ProxyManager 启动时调 `guard.start()` 这一环由单测覆盖（替身记录拉起）；
+  未在整机强杀完整应用的场景下复跑（现网实例在用，且本机新起生产实例会与现网抢同一份
+  服务/端口），拉起之后的链路已由 E2E B 的真实 `start()` + 真实守护进程验证。
+
+**未决**：无新开项。有意保留的边界：别的客户端**占用**混合端口时不认领（存活探测）；看门狗被
+手动结束时退化为「下次启动还原」；macOS / Linux 不涉及（仍走 `plugins/proxy`，不发布产物）。

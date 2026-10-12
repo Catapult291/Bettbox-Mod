@@ -89,6 +89,31 @@ pub unsafe extern "C" fn bb_system_proxy_restore(snapshot_json: *const c_char) -
     })
 }
 
+/// 认领没有快照可还原的残留（升级过渡期 / 偏好丢失）：
+/// 把「服务器串正好是 `127.0.0.1:<port>`、显式代理开着、且该端口已无监听」的
+/// 连接的 `ProxyEnable` 关掉；端口有人监听时整轮跳过。
+///
+/// # Safety
+///
+/// 同 [`bb_system_proxy_query`]。
+#[no_mangle]
+pub unsafe extern "C" fn bb_system_proxy_claim_residual(port: i32) -> *mut c_char {
+    catch_panic(ptr::null_mut(), || {
+        if !(1..=65535).contains(&port) {
+            return envelope(json!({ "ok": false, "message": format!("端口非法：{port}") }));
+        }
+        match system_proxy::claim_residual(port as u16) {
+            Ok(report) => envelope(json!({
+                "ok": true,
+                "claimed": report.claimed,
+                "listening": report.listening,
+                "warnings": report.warnings,
+            })),
+            Err(message) => envelope(json!({ "ok": false, "message": message })),
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +143,16 @@ mod tests {
     fn enable_rejects_out_of_range_port() {
         let bypass = CString::new("<local>").unwrap();
         let ptr = unsafe { bb_system_proxy_enable(0, bypass.as_ptr()) };
+        assert!(!ptr.is_null());
+        let text = unsafe { borrow_str(ptr) }.expect("utf-8").to_string();
+        unsafe { crate::ffi::bb_string_free(ptr) };
+        let value: Value = serde_json::from_str(&text).expect("json");
+        assert_eq!(value["ok"], json!(false));
+    }
+
+    #[test]
+    fn claim_residual_rejects_out_of_range_port() {
+        let ptr = unsafe { bb_system_proxy_claim_residual(0) };
         assert!(!ptr.is_null());
         let text = unsafe { borrow_str(ptr) }.expect("utf-8").to_string();
         unsafe { crate::ffi::bb_string_free(ptr) };

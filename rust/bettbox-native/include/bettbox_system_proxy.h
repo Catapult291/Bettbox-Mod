@@ -7,7 +7,7 @@
  * 约定：
  *   - 字符串一律为 UTF-8 C 字符串，Rust 侧分配。
  *   - 调用方用完必须用 `bb_string_free` 释放；传 NULL 是合法的空操作。
- *   - 三个入口返回的**总是**一个 JSON 信封，不是 NULL：
+ *   - 四个入口返回的**总是**一个 JSON 信封，不是 NULL：
  *       {"ok":true,...}                 成功
  *       {"ok":false,"message":"..."}    失败（含非 Windows 平台、Win32 调用失败、
  *                                       快照非法）；message 是给人看的失败原因。
@@ -42,6 +42,12 @@ char *bb_system_proxy_enable(int port, const char *bypass);
  * 用户或别的程序在这期间改过的连接不动。
  * 信封：{"ok":true,"restored":1,"skipped":0,"warnings":[...]} */
 char *bb_system_proxy_restore(const char *snapshot_json);
+
+/* 认领没有快照可还原的残留（升级过渡期 / 偏好丢失时的兜底）：把「服务器串正好是
+ * 127.0.0.1:<port>、显式代理开着、且该端口已无监听」的连接的 ProxyEnable 关掉；
+ * 端口上有监听者（别的代理客户端占着同一端口）时整轮跳过；没有匹配连接时是 no-op。
+ * 信封：{"ok":true,"claimed":1,"listening":false,"warnings":[...]} */
+char *bb_system_proxy_claim_residual(int port);
 
 /* 释放本库返回的字符串。 */
 void bb_string_free(char *ptr);

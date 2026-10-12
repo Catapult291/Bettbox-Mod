@@ -10,6 +10,14 @@
 //!      会连带清掉其他程序设置的系统代理；
 //!   3. 崩溃/强杀后留下的设置由下次启动用持久化的快照还原（见 Dart 侧
 //!      `lib/common/system_proxy.dart`），旧实现只能等下次启动无差别清掉。
+//!
+//! 另有两条针对「没有快照」场景的补路径：
+//!   - 升级过渡期 / 偏好丢失导致快照缺失时，`claim_residual` 认领
+//!     「服务器串正是本应用会写的 `127.0.0.1:<port>`、显式代理开着、且该端口
+//!     已经没人监听」的残留——端口还活着的（别的代理客户端占着 7890 之类）不碰，
+//!     避免把 §108 修掉的「清掉别人的代理」又引回来；
+//!   - 应用进程被强杀后的残留由同目录的 `BettboxProxyGuard` 看门狗在进程死后
+//!     按同一份快照还原（它与本库同源编译，语义完全一致）。
 
 use serde::{Deserialize, Serialize};
 
@@ -78,6 +86,16 @@ pub struct RestoreReport {
     pub warnings: Vec<String>,
 }
 
+/// 认领残留的结果。`listening` 为 true 表示端口上有监听者、按保守策略整轮未动。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct ClaimReport {
+    /// 本次把 `ProxyEnable` 关掉的连接数。
+    pub claimed: usize,
+    /// 认领前探测到 `127.0.0.1:<port>` 有人监听（此时不碰注册表）。
+    pub listening: bool,
+    pub warnings: Vec<String>,
+}
+
 /// 由绕过域名列表拼出 `INTERNET_PER_CONN_PROXY_BYPASS` 的值。
 ///
 /// 与旧插件一致：固定以 `<local>` 开头，其后逐个追加；空项被跳过（旧实现会留下
@@ -107,6 +125,16 @@ pub fn restore(snapshot: &ProxySnapshot) -> Result<RestoreReport, String> {
 /// 当前设置是否仍是本应用写下的那一份（服务器串一致且开着显式代理）。
 pub(crate) fn is_ours(current: &ConnectionSnapshot, applied: &str) -> bool {
     current.server.as_deref() == Some(applied) && current.flags & PROXY_TYPE_PROXY != 0
+}
+
+/// 认领没有快照可还原的残留：把「指向本应用端口且端口已死」的连接关掉。
+///
+/// 判定复用 [`is_ours`]（服务器串必须正好是本应用 `enable` 会写的
+/// `127.0.0.1:<port>`，所以别的程序的 `localhost:7890` 之类不算——§113 验证过
+/// 要原样不动）。端口上有监听者时整轮跳过：那多半是别的代理客户端占着同一
+/// 端口，按 §108 的结论不能碰。没有匹配的连接时是纯 no-op（正常启动的多数情形）。
+pub fn claim_residual(port: u16) -> Result<ClaimReport, String> {
+    platform::claim_residual(port)
 }
 
 #[cfg(windows)]
@@ -397,6 +425,56 @@ mod platform {
         }
         Ok(report)
     }
+
+    /// 本机回环上该端口是否有监听者。连接得上就算活着（250ms 上限）。
+    pub(super) fn probe_listening(port: u16) -> bool {
+        use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+        use std::time::Duration;
+        let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+        TcpStream::connect_timeout(&address, Duration::from_millis(250)).is_ok()
+    }
+
+    pub(super) fn claim_residual(port: u16) -> Result<super::ClaimReport, String> {
+        let snapshot = query_snapshot()?;
+        let our_server = format!("127.0.0.1:{port}");
+        if !snapshot
+            .connections
+            .iter()
+            .any(|connection| super::is_ours(connection, &our_server))
+        {
+            // 没有指向本应用端口的残留：连端口探测都不用做（启动时的常态）。
+            return Ok(super::ClaimReport::default());
+        }
+        if probe_listening(port) {
+            return Ok(super::ClaimReport {
+                claimed: 0,
+                listening: true,
+                warnings: Vec::new(),
+            });
+        }
+
+        let mut report = super::ClaimReport::default();
+        for connection in &snapshot.connections {
+            if !super::is_ours(connection, &our_server) {
+                continue;
+            }
+            let label = connection.name.clone().unwrap_or_else(|| "LAN".to_string());
+            match set_connection(
+                connection.name.as_deref(),
+                connection.flags & !super::PROXY_TYPE_PROXY,
+                connection.server.as_deref().unwrap_or(EMPTY),
+                connection.bypass.as_deref().unwrap_or(EMPTY),
+                connection.autoconfig_url.as_deref().unwrap_or(EMPTY),
+            ) {
+                Ok(()) => report.claimed += 1,
+                Err(error) => report.warnings.push(format!("{label}: {error}")),
+            }
+        }
+        if report.claimed > 0 {
+            refresh();
+        }
+        Ok(report)
+    }
 }
 
 #[cfg(not(windows))]
@@ -417,6 +495,10 @@ mod platform {
     }
 
     pub(super) fn restore(_snapshot: &ProxySnapshot) -> Result<RestoreReport, String> {
+        Err(UNSUPPORTED.to_string())
+    }
+
+    pub(super) fn claim_residual(_port: u16) -> Result<super::ClaimReport, String> {
         Err(UNSUPPORTED.to_string())
     }
 }
@@ -485,11 +567,103 @@ mod tests {
         };
         assert!(!is_ours(&other_server, "127.0.0.1:7890"));
 
+        let other_form = ConnectionSnapshot {
+            server: Some("localhost:7890".to_string()),
+            ..ours.clone()
+        };
+        assert!(!is_ours(&other_form, "127.0.0.1:7890"));
+
         let direct_only = ConnectionSnapshot {
             flags: 0x1,
             ..ours.clone()
         };
         assert!(!is_ours(&direct_only, "127.0.0.1:7890"));
+    }
+
+    /// 端口存活探测：绑着的端口算活着，释放后算死的。
+    #[cfg(windows)]
+    #[test]
+    fn probe_listening_tracks_bind_and_drop() {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        assert!(super::platform::probe_listening(port));
+        drop(listener);
+        assert!(!super::platform::probe_listening(port));
+    }
+
+    /// 会改动本机系统代理的 `#[ignore]` 用例共用的互斥：cargo 默认并行跑测试，
+    /// 两条机器用例同时执行会互相覆盖对方写下的残留与快照（实测 during 快照被
+    /// 另一条的 restore 冲回基线），必须串行。
+    #[cfg(windows)]
+    static MACHINE_PROXY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[cfg(windows)]
+    fn lock_machine_proxy() -> std::sync::MutexGuard<'static, ()> {
+        MACHINE_PROXY_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// 只在手工验证时跑（会真的改动本机系统代理，跑完逐项还原）：
+    /// `cargo test -p bettbox-native --lib system_proxy -- --ignored --nocapture`
+    ///
+    /// 覆盖认领的两条分支：端口活着整轮跳过、端口死了才关 `ProxyEnable`。
+    /// 断言失败也会把注册表还原（清理放在 catch_unwind 之后），不留残留。
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "会改动本机系统代理设置"]
+    fn claim_residual_round_trips_on_this_machine() {
+        use std::net::TcpListener;
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+        const DEAD_PORT: u16 = 7991;
+        let our_server = format!("127.0.0.1:{DEAD_PORT}");
+        let _machine = lock_machine_proxy();
+
+        let before = query().expect("query");
+        let (residual, warnings) = enable(DEAD_PORT, &[]).expect("enable");
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(!super::platform::probe_listening(DEAD_PORT));
+
+        let outcome = catch_unwind(AssertUnwindSafe(|| {
+            let during = query().expect("query during");
+
+            // 1) 端口被占住（装作别的代理客户端活着）：整轮跳过，注册表不动。
+            let listener = TcpListener::bind(("127.0.0.1", DEAD_PORT)).expect("bind");
+            let report = claim_residual(DEAD_PORT).expect("claim while listening");
+            assert_eq!(report.claimed, 0, "{report:?}");
+            assert!(report.listening, "{report:?}");
+            assert_eq!(query().expect("query live"), during);
+            drop(listener);
+
+            // 2) 端口已死：所有指向该端口的连接都被认领（ProxyEnable 关掉、服务器串保留）。
+            let report = claim_residual(DEAD_PORT).expect("claim dead");
+            assert!(!report.listening, "{report:?}");
+            assert_eq!(report.claimed, residual.connections.len(), "{report:?}");
+            let after_claim = query().expect("query claimed");
+            for connection in &after_claim.connections {
+                assert_eq!(connection.flags & PROXY_TYPE_PROXY, 0, "{connection:?}");
+            }
+        }));
+
+        // 清理：把注册表逐项还原成开跑前的样子。认领把 flags 关掉后
+        // restore 会因「不再是我们写的」跳过，所以先重新 enable 放行归属判定。
+        let current = query().expect("query cleanup");
+        let lan = current
+            .connections
+            .iter()
+            .find(|connection| connection.name.is_none())
+            .expect("LAN");
+        if !super::is_ours(lan, &our_server) {
+            let _ = enable(DEAD_PORT, &[]);
+        }
+        let report = restore(&residual).expect("restore");
+        assert_eq!(report.restored, residual.connections.len(), "{report:?}");
+        assert_eq!(query().expect("query restored"), before);
+
+        if let Err(payload) = outcome {
+            std::panic::resume_unwind(payload);
+        }
     }
 
     /// 只读：查询结果必须与注册表里的 LAN 代理值一致（`ProxyEnable` /
@@ -532,6 +706,7 @@ mod tests {
     #[test]
     #[ignore = "会改动本机系统代理设置"]
     fn enable_then_restore_round_trips_on_this_machine() {
+        let _machine = lock_machine_proxy();
         let before = query().expect("query");
         let (snapshot, warnings) = enable(7890, &[]).expect("enable");
         assert_eq!(snapshot.applied.as_deref(), Some("127.0.0.1:7890"));
