@@ -351,9 +351,10 @@ class GlobalState {
 
   /// 启动内核监听，并确认端口真的在听。
   ///
-  /// 内核的 `startListener` 只回报"指令被接受"（内部只置运行标志，建立监听失败
-  /// 也只写日志），所以指令被丢、IPC 超时、或 mixed-port 没建立起来时它照样报
-  /// 成功。这里真连一次端口才算数，失败重试一次（新内核刚起来时监听可能还在建）。
+  /// 内核侧 `handleStartListener` 已会核对自己是否持有 mixed-port（被别的程序
+  /// 占用时回报 false，见 B⑦），但 IPC 超时、指令被丢时仍拿不到真实结果，且
+  /// 探测能兜住「内核报成功但端口没起来」的残余窗口。这里真连一次端口才算数，
+  /// 失败重试一次（新内核刚起来时监听可能还在建）。
   Future<bool> _startListenerChecked() async {
     final port = config.patchClashConfig.mixedPort;
     final service = clashService;

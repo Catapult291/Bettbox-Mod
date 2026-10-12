@@ -63,6 +63,18 @@ func handleStartListener() bool {
 	isRunning = true
 	updateListeners()
 	resolver.ResetConnection()
+	// mixed-port 被别的程序占用时 ReCreateMixed 只写日志、不建监听。这里按
+	// 配置核对内核是否真的持有该端口——「有东西在听」不等于「我们在听」，
+	// 否则上层端口探测会把别人的监听误报成启动成功。失败即回滚并停掉本轮
+	// 可能已建起的其他监听，不留半启动态。
+	if currentConfig != nil && currentConfig.General != nil && currentConfig.General.MixedPort > 0 {
+		if listener.GetPorts().MixedPort != currentConfig.General.MixedPort {
+			log.Errorln("[APP] startListener failed: mixed port %d is not held by core", currentConfig.General.MixedPort)
+			isRunning = false
+			listener.StopListener()
+			return false
+		}
+	}
 	return true
 }
 

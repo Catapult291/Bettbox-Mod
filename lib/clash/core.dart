@@ -306,10 +306,11 @@ class ClashCore {
     return clashInterface.parseExternalProviderContent(providerName);
   }
 
-  /// 返回内核是否接受了启动指令。
+  /// 返回内核是否真的把监听建起来了。
   ///
-  /// 接受不代表监听已经建立（内核侧只置运行标志，建立失败也只写日志），要确认
-  /// 端口得用 [isLoopbackPortListening] 自己探测。
+  /// 内核侧 `handleStartListener` 会核对自己是否持有 mixed-port（被别的程序
+  /// 占用时会回报 false，而不是只置运行标志）。IPC 超时/指令被丢时仍可能拿
+  /// 不到真实结果，调用方最好再配合 [isLoopbackPortListening] 探测一次。
   Future<bool> startListener({
     Duration timeout = const Duration(seconds: 30),
   }) async {

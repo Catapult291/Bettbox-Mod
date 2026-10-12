@@ -64,6 +64,7 @@
 | 49 | 工程 | Windows 代码签名接入 CI：SignPath 全链路（等 SignPath 申请落地） | v1.19.16 |
 | 50 | 稳定性 | 点开关「首次失败、第二次才成功」收尾：启动自检等重启过渡落地，健康探测补一次瞬时重试 | v1.19.16 |
 | 51 | 稳定性 | registerService 不再在 ping 无应答时改写跨目录现网 helper 服务：ping 分类 + binPath 守卫 + 瞬时重试 | v1.19.16 |
+| 52 | 稳定性 | 内核 startListener 核对自己是否持有 mixed-port：被别的程序占用时不再误报启动成功（B⑦） | v1.19.17 |
 
 ---
 
@@ -2610,3 +2611,40 @@ project-slug / token 都是上游账号的，本仓库不能复用。
 **未决**：无新开项。第 50 节未决① 的「首因」保持不可回溯（当时无日志），由本节分类日志前瞻覆盖。
 
 ---
+
+## 52. 内核 startListener 核对自己是否持有 mixed-port（B⑦ 收尾）
+
+**文件**：`core/hub.go`、`core/Clash.Meta/listener/listener.go`；注释同步 `lib/clash/core.dart`、`lib/state.dart`
+**测试**：内核探针（占用端口 → false / 空闲 → true）；`flutter test` 160 过 / 3 skip
+
+**问题**：mixed-port 被别的程序占用时，内核 `ReCreateMixed` 绑定失败只写日志，`handleStartListener`
+仍无条件 `return true`。应用侧 `isLoopbackPortListening` 只能证明「端口上有东西在听」，分不清是谁，
+于是开关停在「运行中」、代理实际不通（§32 / §117 B⑦）。
+
+**改动**：
+
+- `handleStartListener`：`updateListeners()` 之后按配置核对 `listener.GetPorts().MixedPort` 是否等于
+  `General.MixedPort`（仅在配置了 mixed-port 时）。不相等则记 Error、把 `isRunning` 拨回 false、
+  `StopListener()` 清掉本轮可能已建起的其他监听，返回 false。
+- `ReCreateMixed`：UDP 绑定失败时把 `mixedListener` 一并置 nil——原先只 `Close()` 不清引用，
+  `GetPorts` 仍会把已关的 TCP 报成在监听。
+- Dart 侧只改注释：`startListener` 现在回报的是「内核是否真的持有监听」；`_startListenerChecked`
+  的端口探测保留，兜住 IPC 超时/指令被丢的残余窗口。
+
+**关键决定**：
+
+- **只核对 mixed-port，不管 HTTP/SOCKS 等其他监听**：应用启动自检只连 mixed-port，其他端口即使
+  失败也不影响本缺陷的判定；全面核对会改变「仅 mixed-port 被占」以外的失败面，超出 B⑦ 范围。
+- **失败时回滚 `isRunning` 并 `StopListener()`**：不留「半启动态」（部分监听在跑、运行标志却为 true）。
+- **探测保留**：内核修好后「有东西在听」仍可能是内核报成功但监听在竞态窗口内未就绪的残余情况。
+
+**验证**：
+
+- 探针（`%TEMP%\b7_port_occupied_probe.py`，走真实 `BettboxCore.exe` + 长度前缀 JSON IPC）：
+  占用 `127.0.0.1:17890` → `startListener → data=false`；释放后 `17891` → `data=true`。RESULT: PASS。
+- 新内核二进制 `strings` 含 `[APP] startListener failed: mixed port %d is not held by core`。
+- 静态：`flutter analyze lib` 无问题；`flutter test` **160 过 / 3 skip**。
+- `libclash/windows/BettboxCore.exe` / `BettboxDevCore.exe` 已用同参数重编覆盖（gitignore 不入库；
+  下次发版由 CI 重编）。Android `.so` 未随本轮重编，改动随下次 Android 构建生效。
+
+**未决**：无新开项。

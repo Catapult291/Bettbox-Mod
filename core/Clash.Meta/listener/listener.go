@@ -489,6 +489,9 @@ func ReCreateMixed(port int, tunnel C.Tunnel) {
 	mixedUDPLister, err = socks.NewUDP(addr, tunnel)
 	if err != nil {
 		mixedListener.Close()
+		// TCP 已关，引用一并清掉：否则 GetPorts 仍会把这里报成在监听，
+		// 掩盖 UDP 绑定失败。
+		mixedListener = nil
 		return
 	}
 
