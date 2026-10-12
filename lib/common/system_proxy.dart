@@ -128,7 +128,8 @@ abstract final class SystemProxy {
       for (final warning in report.warnings) {
         commonPrint.log('系统代理还原：$warning');
       }
-      // 看门狗快照先删：万一随后被强杀，看门狗最多多跑一次幂等还原。
+      // 看门狗快照先删：随后被强杀时看门狗已无文件可跑（本应用刚还原过，
+      // 没有可做的动作）；偏好设置那份留给下次启动做幂等清理。
       await guard.clearPayload();
       await prefs?.remove(snapshotKey);
       commonPrint.log(
