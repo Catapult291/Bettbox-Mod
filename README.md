@@ -61,8 +61,8 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | Windows | `Bettbox-<版本>-windows-amd64-setup.exe` |
 
 Windows 安装包与随包主程序的代码签名由 CI 在发版时自动提交至 [SignPath](https://signpath.io)
-云签名服务（证书由 [SignPath Foundation](https://signpath.org) 持有），策略见
-[代码签名策略](#代码签名策略code-signing-policy)。
+云签名服务（当前为自签测试证书 `CN=Bettbox-Mod Test`，非 CA 签发；SmartScreen 仍可能提示未知发布者），
+策略见[代码签名策略](#代码签名策略code-signing-policy)。
 
 ## 自行构建
 
@@ -95,8 +95,8 @@ Release 标题只写版本号，正文取自 [.github/release-notes/versions/](.
 
 ## 代码签名策略（Code signing policy）
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
+Free code signing provided by [SignPath.io](https://signpath.io). 本 fork 的 Foundation 开源
+证书申请因 Reputation 未达标未通过，已放弃；正式产物继续用 SignPath 云端签名 + 项目自签测试证书。
 
 - **范围**：Windows 安装包及随包的一方主程序（`Bettbox.exe`、`BettboxCore.exe`、
   `BettboxHelperService.exe`、`bettbox_native.dll`、`WindowsLoopbackManager.exe`）；签名由

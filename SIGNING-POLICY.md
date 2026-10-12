@@ -1,11 +1,12 @@
 # Code Signing Policy
 
 This document defines the code signing policy for the **Bettbox-Mod** project (a fork of
-[appshubcc/Bettbox](https://github.com/appshubcc/Bettbox)), utilizing the free open-source
-code signing service provided by the [SignPath Foundation](https://signpath.org/).
+[appshubcc/Bettbox](https://github.com/appshubcc/Bettbox)), utilizing cloud code signing via
+[SignPath.io](https://signpath.io).
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
+Free code signing infrastructure by [SignPath.io](https://signpath.io). 本 fork 的
+[SignPath Foundation](https://signpath.org) 开源证书申请因 Reputation 未达标未通过，已放弃
+（2026-10-13）；正式产物使用项目自签测试证书 `CN=Bettbox-Mod Test`，不是 CA 签发证书。
 
 ## 1. Scope
 
@@ -83,6 +84,7 @@ each has its own SignPath OSS registration.
 If a security breach, unauthorized commit, or CI token compromise is suspected:
 
 1. Maintainers immediately revoke any exposed tokens.
-2. If malicious code was signed, maintainers immediately contact SignPath Foundation to
-   request revocation of the code signing certificate.
+2. If malicious code was signed, maintainers immediately revoke exposed SignPath API tokens
+   and request certificate revocation / artifact invalidation through SignPath support
+   (the signing organization remains Bettbox-Mod on SignPath.io; there is no Foundation-issued cert to revoke).
 3. An advisory is published on the repository to notify users.
