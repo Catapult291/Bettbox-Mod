@@ -60,6 +60,10 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | Android | `Bettbox-<版本>-android-arm64-v8a.apk`（主流机型）、`Bettbox-<版本>-android-universal.apk`（通用） |
 | Windows | `Bettbox-<版本>-windows-amd64-setup.exe` |
 
+Windows 安装包与随包主程序的代码签名由 CI 在发版时自动提交至 [SignPath](https://signpath.io)
+云签名服务（证书由 [SignPath Foundation](https://signpath.org) 持有），策略见
+[代码签名策略](#代码签名策略code-signing-policy)。
+
 ## 自行构建
 
 以 Windows 为例（需要 Git、Visual Studio、Flutter 3.44.x、Golang、Inno Setup、Rust）：
@@ -88,6 +92,23 @@ Release 标题只写版本号，正文取自 [.github/release-notes/versions/](.
 
 - 感谢 **[linux.do](https://linux.do) 社区**。
 - 感谢 [Bettbox](https://github.com/appshubcc/Bettbox)、[FlClash](https://github.com/chen08209/FlClash)、[Mihomo](https://github.com/MetaCubeX/mihomo) 及其贡献者。
+
+## 代码签名策略（Code signing policy）
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+- **范围**：Windows 安装包及随包的一方主程序（`Bettbox.exe`、`BettboxCore.exe`、
+  `BettboxHelperService.exe`、`bettbox_native.dll`、`WindowsLoopbackManager.exe`）；签名由
+  CI 在推送版本标签时自动提交，不允许人工签名出货。完整流程与不变量见
+  [SIGNING-POLICY.md](SIGNING-POLICY.md)。
+- **角色**：本项目为单人维护仓库。Author、Reviewer、Approver 均为仓库维护者
+  [Catapult291](https://github.com/Catapult291)（GitHub 仓库 admin）；外部 PR 一律经审阅后合入。
+- **隐私**：本程序不上传遥测或崩溃数据（发行构建不包含崩溃上报）。对外网络访问仅发生在以下
+  用户可见场景：添加/更新订阅（访问用户自己提供的订阅地址）、检查更新（访问本仓库的
+  GitHub Releases，自动检查可在设置中关闭）、网络检测页查询出口 IP（点击时才触发，
+  查询 ipinfo.io）。除此之外不向任何第三方系统传输信息。
+- 事故响应与吊销流程见 [SIGNING-POLICY.md](SIGNING-POLICY.md) 第 6 节。
 
 ## 许可证
 

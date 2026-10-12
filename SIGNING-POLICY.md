@@ -4,6 +4,9 @@ This document defines the code signing policy for the **Bettbox-Mod** project (a
 [appshubcc/Bettbox](https://github.com/appshubcc/Bettbox)), utilizing the free open-source
 code signing service provided by the [SignPath Foundation](https://signpath.org/).
 
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
 ## 1. Scope
 
 This policy applies to all Windows executable artifacts distributed by this project:
