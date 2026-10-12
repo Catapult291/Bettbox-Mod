@@ -2424,3 +2424,51 @@ IPC」这条路径命中——刚拉起、几秒内还没连上 IPC 的内核在
   正确、只是多一条提示。
 
 ---
+
+## 49. Windows 代码签名接入 CI：SignPath 全链路（A① 收尾，等 SignPath 申请落地）
+
+**文件**：`.github/workflows/build.yaml`、`SIGNING-POLICY.md`、`.gitignore`
+
+**问题**（`.grok/stage-log.md` §117 A①，Rust 路线阶段 2 唯一残余）：Windows 产物一直未签名。代理类
+软件没有 Authenticode 签名容易被 SmartScreen 拦截、被杀软误报；此前长期挂在「需证书、属用户决策」上。
+上游 `appshubcc/Bettbox` 已有完整的 SignPath（SignPath Foundation 开源免费签名）集成
+（workflow + `SIGNING-POLICY.md`），本 fork 分叉时没带上这段；而上游的 organization-id /
+project-slug / token 都是上游账号的，本仓库不能复用。
+
+**改动**：
+
+- `.github/workflows/build.yaml` 移植上游 SignPath 结构并适配本仓库流水线：
+  - **门控**：签名只在「配置了 `SIGNPATH_API_TOKEN` 且 run 在 `refs/tags/v*`」时执行——分支推送与
+    `workflow_dispatch` 一律不签（上游工作流只由 tag 触发，本仓库多了 dispatch，故显式加 tag 门）。
+  - **策略 slug 按通道选**（与上游逐分支一致）：正式 tag → exe/安装器都 `release-signing`；
+    预发布 tag → exe `test-signing`、安装器 `release-signing`；其余 `test-signing`。
+  - **签名顺序是硬约束**（注释写进工作流）：core 先签 → 再编 helper（helper 的 TOKEN 是对已签名
+    core 的 SHA256，`setup.dart --out helper` 不重建内核）→ flutter build（CMake 把已签名的
+    core/helper 拷进 bundle）→ 签 `Bettbox.exe` → Verify + Dart 测试通过后再签 bundle 里的
+    `bettbox_native.dll` 与 `WindowsLoopbackManager.exe`（签名改写文件，早于 Verify 会让
+    「bundle dll == cargo 产物」的哈希断言翻车）→ Inno 打包 → 签安装器。
+  - **两道 Authenticode 存在性硬断言**（打包前 bundle 5 个一方 PE、打包后安装器）：只硬卡
+    `SignerCertificate` 非空，`Status` 只打印不卡——test-signing 若用测试证书，硬卡 Valid 会把
+    预发布通道误杀。
+  - 中间未签名产物收尾用 `geekyeggo/delete-artifact` 删掉，发布物仍只从 `Bettbox-*` 上传；
+    organization-id / project-slug 走 `vars.SIGNPATH_ORG_ID` / `vars.SIGNPATH_PROJECT_SLUG`，不写死。
+- 新增根目录 `SIGNING-POLICY.md`（按上游文档改写：范围为 5 个一方 PE + 安装器、仓库配置表、
+  顺序不变量）；`.gitignore` 在 `*.md` 全排除下显式放行它。
+
+**验证**：
+
+- `actionlint .github/workflows/build.yaml` 通过（exit 0）；PyYAML 解析 41 个步骤，插入位置与设计
+  一致（签名步骤全部落在对应构建步骤之后、打包/上传之前）。
+- 当前仓库未配置 `SIGNPATH_API_TOKEN`，全部签名步骤 `if` 为 false——分支构建行为与改前一致。
+- **真实签名链路未跑过**：需 SignPath 申请落地后打 tag 才能端到端验证（见未决）。
+
+**未决**（都要用户侧动作）：
+
+- SignPath OSS 申请：signpath.io 注册组织 → GitHub App 挂到 `Catapult291/Bettbox-Mod` → 注册项目
+  → 建两条签名策略（slug 必须是 `release-signing` / `test-signing`）→ 生成 API token。
+- 仓库配置三件：secret `SIGNPATH_API_TOKEN`、variable `SIGNPATH_ORG_ID`（组织 UUID）、variable
+  `SIGNPATH_PROJECT_SLUG`。配好后打 tag 首跑即端到端验证。
+- 另一条线（不属 A①）：Android release keystore 仍缺，CI 无 `KEYSTORE` secret 时 release APK 回退
+  debug 签名（§116）——这个不用外部申请，生成 keystore 填 secret 即可。
+
+---
