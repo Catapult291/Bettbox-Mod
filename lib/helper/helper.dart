@@ -118,20 +118,93 @@ class HelperRpcException implements Exception {
   String toString() => '$code: $message';
 }
 
+/// `helper.ping` 探测的分类结果。
+///
+/// 折叠成布尔值会丢掉「为什么不健康」：`registerService` 拿不到区分度就只能
+/// 一律走 `service install`，而 helper 的 `service install` 用 `current_exe()`
+/// 重写 binPath——ping 瞬时失败会把现网服务改指到当前 exe 目录（CHANGES 第 50
+/// 节未决① 的事故）。分类后才能区分「helper 有应答的确定性不兼容」与「管道/
+/// 鉴权没走通的瞬时失败」。
+enum HelperPingStatus {
+  /// helper 有应答，TOKEN 与期望一致。
+  healthy,
+
+  /// helper 有应答，但 TOKEN 不一致或协议/请求形态不兼容——重装升级的正向证据。
+  incompatible,
+
+  /// 请求走到了鉴权环节但被拒（`UNAUTHORIZED` / `AUTH_NOT_READY` 等）。
+  authFailed,
+
+  /// 没拿到应答：连接失败、超时、响应无法解析。
+  unreachable,
+}
+
+/// 把一次 `helper.ping` 的结果按 [expectedToken] 归类（纯函数，供单测钉住）。
+///
+/// [error] 非空是抛出路径（`_request` 的异常），否则 [data] 是成功应答的
+/// `data` 字段。`HelperRpcException` 以外的异常（管道状态错、超时、帧解析
+/// 失败）一律视为没有拿到有效应答。
+HelperPingStatus classifyHelperPing({
+  required String expectedToken,
+  Object? data,
+  Object? error,
+}) {
+  if (error != null) {
+    if (error is HelperRpcException) {
+      if (error.code == 'UNAUTHORIZED' ||
+          error.code == 'AUTH_NOT_READY' ||
+          error.code.startsWith('AUTH_')) {
+        return HelperPingStatus.authFailed;
+      }
+      // UNSUPPORTED_VERSION / INVALID_REQUEST 等：helper 有应答，只是和我们
+      // 讲的不是同一套协议——保留重装以覆盖「新 app 对旧 helper」升级路径。
+      return HelperPingStatus.incompatible;
+    }
+    return HelperPingStatus.unreachable;
+  }
+  if (expectedToken.isEmpty) return HelperPingStatus.unreachable;
+  return data == expectedToken
+      ? HelperPingStatus.healthy
+      : HelperPingStatus.incompatible;
+}
+
 class HelperClient {
   HelperClient({required HelperTransport transport}) : _transport = transport;
 
   final HelperTransport _transport;
   final Random _random = Random.secure();
 
-  Future<bool> ping(String expectedToken) async {
+  /// 带分类的 ping：[ping] 的布尔包装，供需要区分失败原因的调用方使用。
+  Future<HelperPingStatus> pingStatus(
+    String expectedToken, {
+    Duration timeout = helperDefaultTimeout,
+  }) async {
     try {
-      final response = await _request('helper.ping');
-      return response.data == expectedToken;
+      final response = await _request('helper.ping', timeout: timeout);
+      final status = classifyHelperPing(
+        expectedToken: expectedToken,
+        data: response.data,
+      );
+      if (status != HelperPingStatus.healthy) {
+        commonPrint.log(
+          status == HelperPingStatus.incompatible
+              ? '[HelperClient] ping status=incompatible: helper responded '
+                    'but token/protocol mismatch'
+              : '[HelperClient] ping status=${status.name}: expected token '
+                    'is not ready',
+        );
+      }
+      return status;
     } catch (e) {
-      commonPrint.log('[HelperClient] ping failed: $e');
-      return false;
+      final status = classifyHelperPing(expectedToken: expectedToken, error: e);
+      commonPrint.log('[HelperClient] ping status=${status.name}: $e');
+      return status;
     }
+  }
+
+  Future<bool> ping(String expectedToken) async {
+    final status = await pingStatus(expectedToken);
+    return status == HelperPingStatus.healthy;
   }
 
   Future<bool> startCore({
@@ -284,9 +357,12 @@ class NamedPipeHelperTransport implements HelperTransport {
     if (!Platform.isWindows) {
       throw UnsupportedError('Named Pipe helper transport is Windows-only');
     }
+    // timeout 原先只约束连接阶段：`_readExactly` 卡在读上时 `Isolate.run`
+    // 会永久挂住，探测方等不到结论。外层兜底让调用方按 timeout 解除阻塞
+    // （isolate 内的读要等对端关管道才醒，滞留的 isolate 由进程退出回收）。
     return Isolate.run(
       () => _sendNamedPipeRequest(pipeName, payload, timeout.inMilliseconds),
-    );
+    ).timeout(timeout);
   }
 }
 

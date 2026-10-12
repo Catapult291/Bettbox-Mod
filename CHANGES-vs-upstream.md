@@ -63,6 +63,7 @@
 | 48 | 工程 | 停止指令没被应答时按进程真停内核：不再留下「界面已停、内核仍在跑」 | 待发布 |
 | 49 | 工程 | Windows 代码签名接入 CI：SignPath 全链路（等 SignPath 申请落地） | 待发布 |
 | 50 | 稳定性 | 点开关「首次失败、第二次才成功」收尾：启动自检等重启过渡落地，健康探测补一次瞬时重试 | 待发布 |
+| 51 | 稳定性 | registerService 不再在 ping 无应答时改写跨目录现网 helper 服务：ping 分类 + binPath 守卫 + 瞬时重试 | 待发布 |
 
 ---
 
@@ -2536,7 +2537,76 @@ project-slug / token 都是上游账号的，本仓库不能复用。
 - 本轮实测暴露、与 B⑥ 无关的两件事：①应用启动时若 `_isHelperHealthy` 的 ping 失败（本次首因未
   定位：内核 SHA 已对齐官方 TOKEN 仍失败，疑管道/鉴权瞬时问题），`registerService` 会把 helper
   服务 binPath 改指向当前可执行文件所在目录并在那里重装服务——用非安装目录跑正式身份构建就会
-  改现网服务，收尾靠官方安装包重装才还原；②`wingui uia-find` 的 `--name --type --enabled-only`
-  三条件组合恒返回 0（两两组合正常），验证脚本需两条件 + 读 `enabled` 字段。
+  改现网服务，收尾靠官方安装包重装才还原**（已由第 51 节闭环：ping 分类 + binPath 守卫 +
+  瞬时重试，无 helper 应答的正向不兼容证据不再重装；首因本身仍不可回溯，由分类日志前瞻覆盖）**；
+  ②当时记为「`wingui uia-find` 的 `--name --type
+  --enabled-only` 三条件组合恒返回 0（两两组合正常）」的怪癖，同日稍后复测证伪——稳定树上
+  三条件 `count=1`，六种过滤组合结果全部一致（interactive 全程 18）。真实成因有二：验证脚本
+  判了 `uia-find` 并不输出的 `matches` 字段（该字段属于 `uia-click`，恒 None 即恒判开关不可用），
+  以及首次三条件探测落在窗口刚出现、UIA 树未长全的启动期（该次输出 `interactive:5`、数秒后
+  即 18），`count:0` 是启动期时序而非过滤组合缺陷。
+
+---
+
+## 51. registerService 不再在 ping 无应答时改写跨目录现网 helper 服务：ping 分类 + binPath 守卫 + 瞬时重试
+
+第 50 节未决① 的闭环。事故机制：helper 的 `service install`（`services/helper/src/ops/service.rs`）
+用 `current_exe()` 写服务 binPath，而应用侧 `_registerService` 把一切「ping 不健康」都折叠成重装——
+矩阵首启时内核 SHA 已对齐官方 TOKEN（53b5e088）但 ping 仍失败，用非安装目录跑的正式身份构建
+`service install` 后，现网 `BettboxHelperService` 的 binPath 被改指向构建目录（收尾靠官方安装包
+重装还原）。首因本身仍无法回溯（helper 日志只有内存环形缓冲，事故当时的帧已丢），但旧代码把
+「瞬时管道/鉴权失败」与「确定性不兼容」折叠成同一个 `false`，既无从定位也无从阻断——本次先补
+区分度，再按区分度收窄重装条件。
+
+**改动**（2 个源文件 + 1 个测试文件）：
+
+- `lib/helper/helper.dart`：
+  - 新增 `HelperPingStatus`（`healthy` / `incompatible` / `authFailed` / `unreachable`）与纯函数
+    `classifyHelperPing()`：RPC 应答且 TOKEN 一致 → `healthy`；应答但 TOKEN/协议不匹配（含
+    `UNSUPPORTED_VERSION`、其他 RPC 错误码）→ `incompatible`；`UNAUTHORIZED` / `AUTH_*` →
+    `authFailed`；传输异常、超时、帧解析失败 → `unreachable`。`pingStatus()` 是分类入口，
+    `ping()` 退化为布尔包装（既有调用方语义不变）；非 healthy 一律记分类日志——这就是首因的
+    前瞻探针，下次再犯日志直接给出四态结论。
+  - `NamedPipeHelperTransport.send()` 给 `Isolate.run` 补外层 `.timeout`：timeout 原先只约束
+    连接阶段，`_readExactly` 卡在读上会把探测方永久挂死；现在超时 → `unreachable`，走可恢复路径。
+- `lib/common/system.dart`：
+  - 决策纯函数 `planRegisterService(state, ping, binPathDiffers)`：`missing` → install；
+    `running`+healthy → 沿用现装服务（明文 key 迁移仅在 binPath 同目录时执行）；
+    `running`+incompatible → install（保留 §113「新 app 对旧 helper」升级路径）；
+    `running`+(authFailed|unreachable) → **跨目录 leaveUntouched、同目录 install（自愈）**；
+    `inactive` → 同样按目录分流。原则：**没有 helper 应答给出的正向不兼容证据，绝不把现装于
+    他处的服务改指当前 exe**。
+  - binPath 守卫 `_serviceBinPathDiffers()`：`sc qc` 解析 `BINARY_PATH_NAME`，规范化后与
+    `appPath.helperPath` 比较（剥外层引号、`/`→`\`、忽略大小写）；`sc qc` 失败或解析不出时按
+    「指向别处」处理——比较不了时保护优先。
+  - 瞬时重试 `probeHelperPingWithRetry()`：仅 `unreachable`/`authFailed` 重试（3 轮、间隔
+    350ms、单次 2s），`healthy`/`incompatible` 是确定性结论不重试。`registerService` 用带重试
+    的分类探测；`checkService` / `_isHelperHealthy` / `_waitForHelperHealthy` 保持单次探测，
+    对外语义不变。
+  - `_pingHelperStatus()` 对 `coreSHA256` 空值记日志并按 `unreachable` 处理（原先静默 false）；
+    每次 `registerService` 记录 `state/ping/binPathDiffers → action` 计划日志。
+- `test/common/helper_service_register_test.dart`：分类真值表、决策表全组合（含事故复演用例）、
+  真实 `sc qc` 输出解析、重试行为，共 22 例。
+
+**关键决定**：
+
+- `incompatible`（helper 有应答）仍允许跨目录重装：应答本身就是正向证据，这条是第 38 节、
+  stage-log §113 实测过的「新 app 对旧 helper → 重装服务」升级路径。
+- leaveUntouched 返回 false → `_startCore` 走既有 `Process.start` 进程模式回退；
+  `authorizeCore` 报「TUN 需要管理员」——跨目录构建不再为了拿授权改写现网服务。
+- 同目录（binPath 一致）的重装路径全部保留：key 文件丢失、服务半坏等自愈行为与改前一致。
+
+**验证**：
+
+- 静态：`dart format` 干净；`flutter analyze lib test` 无问题；`flutter test` **160 过 / 3 skip**
+  （基线 138 + 本节 22；3 个 skip 仍是 helper CLI e2e 的环境门槛，与本节无关）。
+- 现网改前改后各核一次，全程未触碰：`BettboxHelperService` RUNNING、AUTO_START、
+  binPath=`C:\Users\bypassnro\Documents\Bettbox\BettboxHelperService.exe`、LocalSystem；四件
+  官方指纹 `Bettbox.exe a31fa919` / `BettboxHelperService.exe 8d982391` / `BettboxCore.exe
+  53b5e088` / `data/app.so 771a257a`。
+- **未实测项**：leaveUntouched 的现网路径无法在本机故意复演（不能主动打断现网管道再跑
+  `registerService`）。该行为由决策表单测覆盖；首次真实触发时靠新增的计划日志与分类日志取证。
+
+**未决**：无新开项。第 50 节未决① 的「首因」保持不可回溯（当时无日志），由本节分类日志前瞻覆盖。
 
 ---

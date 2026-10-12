@@ -213,6 +213,127 @@ class System {
 
 final system = System();
 
+/// `sc query` 视角下的 helper 服务状态。
+enum HelperServiceState {
+  /// 服务不存在（`sc query` 非零退出，典型 1060）。
+  missing,
+
+  /// 服务存在但不是 RUNNING（STOPPED / START_PENDING / …）。
+  inactive,
+
+  /// 服务正在运行。
+  running,
+}
+
+/// `registerService` 对「服务状态 × ping 分类 × binPath 指向」要执行的动作。
+enum RegisterServiceAction {
+  /// 执行 `service install`（停 → 删 → 建，binPath 会被改为当前 exe 所在目录）。
+  install,
+
+  /// 服务已在运行且健康：沿用现装服务（调用方再处理明文 key 迁移）。
+  useExisting,
+
+  /// 证据不足以重写现网服务：保持原样，调用方回退进程模式。
+  leaveUntouched,
+}
+
+/// 由 `sc query` 的退出码与输出得出 [HelperServiceState]（纯函数，供单测）。
+///
+/// 判据与既有 `checkService` / `_isHelperHealthy` 逐字一致：exit≠0 → 不存在；
+/// 输出含 `RUNNING` → 运行中；其余（含 STOPPED、START_PENDING）→ 存在但未运行。
+HelperServiceState serviceStateFromScQuery(int exitCode, String stdout) {
+  if (exitCode != 0) return HelperServiceState.missing;
+  if (stdout.contains('RUNNING')) return HelperServiceState.running;
+  return HelperServiceState.inactive;
+}
+
+/// 解析 `sc qc` 输出里的 `BINARY_PATH_NAME`；解析不出返回 null。
+///
+/// 值可能带外层引号（路径含空格时的常见写法），只剥最外层；带额外参数的原样
+/// 保留——本服务的 binPath 只有 exe 路径，出现参数会因比较不等而按「指向别处」
+/// 处理（保护优先）。
+String? parseServiceBinPath(String scQcOutput) {
+  final match = RegExp(
+    r'BINARY_PATH_NAME\s*:\s*(.+)',
+    caseSensitive: false,
+  ).firstMatch(scQcOutput);
+  if (match == null) return null;
+  final raw = match.group(1)!.trim();
+  if (raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"')) {
+    return raw.substring(1, raw.length - 1).trim();
+  }
+  return raw;
+}
+
+/// 服务 binPath 比较用的规范化：剥外层引号、统一分隔符为 `\`、忽略大小写与首尾空白。
+String normalizeServiceBinaryPath(String value) {
+  var v = value.trim();
+  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+    v = v.substring(1, v.length - 1).trim();
+  }
+  return v.replaceAll('/', '\\').toLowerCase();
+}
+
+/// 两个服务二进制路径是否指向同一文件。
+bool sameServiceBinaryPath(String a, String b) =>
+    normalizeServiceBinaryPath(a) == normalizeServiceBinaryPath(b);
+
+/// `registerService` 的决策表（纯函数，单测钉住全真值表）。
+///
+/// 原则：**没有 helper 应答给出的正向不兼容证据，绝不把现装于他处的服务改指
+/// 当前 exe**——CHANGES 第 50 节未决① 的事故正是「ping 瞬时失败 → 一律
+/// 重装」把现网服务改到了构建目录。`incompatible`（helper 应答了但 TOKEN/
+/// 协议不匹配）保留重装，那是「新 app 对旧 helper」的升级路径（CHANGES 第 38
+/// 节、stage-log §113）；`authFailed`/`unreachable` 没有这种证据，跨目录一律
+/// 不动，同目录仍允许重装自愈（key 文件丢失、服务半坏等）。
+RegisterServiceAction planRegisterService(
+  HelperServiceState state,
+  HelperPingStatus ping,
+  bool binPathDiffers,
+) {
+  switch (state) {
+    case HelperServiceState.missing:
+      return RegisterServiceAction.install;
+    case HelperServiceState.running:
+      switch (ping) {
+        case HelperPingStatus.healthy:
+          return RegisterServiceAction.useExisting;
+        case HelperPingStatus.incompatible:
+          return RegisterServiceAction.install;
+        case HelperPingStatus.authFailed:
+        case HelperPingStatus.unreachable:
+          return binPathDiffers
+              ? RegisterServiceAction.leaveUntouched
+              : RegisterServiceAction.install;
+      }
+    case HelperServiceState.inactive:
+      return binPathDiffers
+          ? RegisterServiceAction.leaveUntouched
+          : RegisterServiceAction.install;
+  }
+}
+
+/// 带瞬时重试的 ping 探测：仅 `unreachable` / `authFailed` 重试。
+///
+/// 这两类可能是管道/鉴权的瞬时抖动（第 50 节未决① 的疑点），多给两轮机会再
+/// 做破坏性决定；`healthy` / `incompatible` 是确定性结论，重试只拖慢。
+Future<HelperPingStatus> probeHelperPingWithRetry(
+  Future<HelperPingStatus> Function() probe, {
+  int attempts = 3,
+  Duration delay = const Duration(milliseconds: 350),
+}) async {
+  var status = await probe();
+  for (var i = 1; i < attempts; i++) {
+    if (status != HelperPingStatus.unreachable &&
+        status != HelperPingStatus.authFailed) {
+      return status;
+    }
+    await Future.delayed(delay);
+    status = await probe();
+  }
+  return status;
+}
+
 class Windows {
   static Windows? _instance;
 
@@ -349,11 +470,13 @@ class Windows {
 
   Future<WindowsHelperServiceStatus> checkService() async {
     await HelperAuthManager.ensureAuthKey();
-    final result = await Process.run('sc', ['query', appHelperService]);
-    if (result.exitCode != 0) return WindowsHelperServiceStatus.none;
-
-    final output = result.stdout.toString();
-    if (!output.contains('RUNNING')) return WindowsHelperServiceStatus.presence;
+    final state = await _queryServiceState();
+    if (state == HelperServiceState.missing) {
+      return WindowsHelperServiceStatus.none;
+    }
+    if (state != HelperServiceState.running) {
+      return WindowsHelperServiceStatus.presence;
+    }
 
     return await _pingHelper()
         ? WindowsHelperServiceStatus.running
@@ -370,13 +493,53 @@ class Windows {
 
   Future<bool> _registerService() async {
     await HelperAuthManager.ensureAuthKey();
-    final healthy = await _isHelperHealthy();
-    if (healthy && !await _serviceEnvHasLegacyPlaintextKey()) return true;
 
-    if (healthy) {
+    final state = await _queryServiceState();
+    final binPathDiffers = state == HelperServiceState.missing
+        ? false
+        : await _serviceBinPathDiffers();
+
+    // 只有「正在运行」才有应答可探。探测带瞬时重试（unreachable/authFailed
+    // 各再给两轮，单次 2s；healthy/incompatible 确定性不重试），把「疑管道/
+    // 鉴权瞬时问题」的抖动窗口吸收在破坏性决定之前。
+    var ping = HelperPingStatus.unreachable;
+    if (state == HelperServiceState.running) {
+      ping = await probeHelperPingWithRetry(
+        () => _pingHelperStatus(timeout: const Duration(seconds: 2)),
+      );
+    }
+
+    var action = planRegisterService(state, ping, binPathDiffers);
+    commonPrint.log(
+      '[Helper] registerService plan: state=${state.name} ping=${ping.name} '
+      'binPathDiffers=$binPathDiffers → ${action.name}',
+    );
+
+    if (action == RegisterServiceAction.useExisting) {
+      // 服务已在运行且健康：默认沿用。仅当注册表还留着旧版明文 key 且服务本来
+      // 就指在本目录时才做迁移重装；指在他处时迁移会把 binPath 改到当前 exe，
+      // 跳过（那份明文 key 属于对方安装的配置，由对方自己管）。
+      if (!await _serviceEnvHasLegacyPlaintextKey()) return true;
+      if (binPathDiffers) {
+        commonPrint.log(
+          '[Helper] skipping plaintext key migration: service binary is '
+          'outside this build',
+        );
+        return true;
+      }
       commonPrint.log(
         '[Helper] migrating the plaintext auth key out of the service registry',
       );
+      action = RegisterServiceAction.install;
+    }
+
+    if (action == RegisterServiceAction.leaveUntouched) {
+      commonPrint.log(
+        '[Helper] leaving the existing helper service untouched: no positive '
+        'evidence for a rewrite (state=${state.name} ping=${ping.name}, '
+        'binPath points elsewhere); falling back to process mode',
+      );
+      return false;
     }
 
     if (await _configureHelperService()) {
@@ -393,22 +556,74 @@ class Windows {
     }
 
     // 提权被拒时保持现状：旧配置仍然可用，就不必把已运行的服务停掉。
-    return healthy;
+    return state == HelperServiceState.running &&
+        ping == HelperPingStatus.healthy;
+  }
+
+  Future<HelperServiceState> _queryServiceState() async {
+    final result = await Process.run('sc', ['query', appHelperService]);
+    return serviceStateFromScQuery(result.exitCode, result.stdout.toString());
+  }
+
+  /// 现装服务的 binPath 是否不指向本应用的 helper。
+  ///
+  /// `sc qc` 失败或解析不出 `BINARY_PATH_NAME` 一律按「指向别处」处理——
+  /// 比较不了时保护优先，宁可不重装也不改写现网服务。
+  Future<bool> _serviceBinPathDiffers() async {
+    try {
+      final result = await Process.run('sc', ['qc', appHelperService]);
+      if (result.exitCode != 0) {
+        commonPrint.log(
+          '[Helper] sc qc failed (exit=${result.exitCode}), treating binPath '
+          'as foreign',
+        );
+        return true;
+      }
+      final binPath = parseServiceBinPath(result.stdout.toString());
+      if (binPath == null) {
+        commonPrint.log(
+          '[Helper] BINARY_PATH_NAME missing in sc qc output, treating binPath '
+          'as foreign',
+        );
+        return true;
+      }
+      if (!sameServiceBinaryPath(binPath, appPath.helperPath)) {
+        commonPrint.log(
+          '[Helper] service binPath=$binPath differs from this build helper='
+          '${appPath.helperPath}',
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      commonPrint.log(
+        '[Helper] failed to query service binPath: $e, treating binPath as '
+        'foreign',
+      );
+      return true;
+    }
   }
 
   Future<bool> _isHelperHealthy() async {
-    final result = await Process.run('sc', ['query', appHelperService]);
-    if (result.exitCode != 0) return false;
-
-    if (!result.stdout.toString().contains('RUNNING')) return false;
-
+    if (await _queryServiceState() != HelperServiceState.running) return false;
     return _pingHelper();
   }
 
-  Future<bool> _pingHelper() async {
+  /// 分类 ping。core SHA 未就绪时记日志并按 `unreachable` 处理——不再静默
+  /// 返回 false，这样跨目录场景会走到「不动现网服务」而不是重装。
+  Future<HelperPingStatus> _pingHelperStatus({
+    Duration timeout = helperDefaultTimeout,
+  }) async {
     final coreSHA256 = globalState.coreSHA256;
-    if (coreSHA256 == null || coreSHA256.isEmpty) return false;
-    return helperClient.ping(coreSHA256);
+    if (coreSHA256 == null || coreSHA256.isEmpty) {
+      commonPrint.log('[Helper] ping skipped: core SHA256 is not ready');
+      return HelperPingStatus.unreachable;
+    }
+    return helperClient.pingStatus(coreSHA256, timeout: timeout);
+  }
+
+  Future<bool> _pingHelper() async {
+    return (await _pingHelperStatus()) == HelperPingStatus.healthy;
   }
 
   /// 服务注册表里是否还留着旧版的明文 `HELPER_AUTH_KEY`。
@@ -469,7 +684,9 @@ class Windows {
     });
 
     if (!result.ok) {
-      commonPrint.log('[Helper] failed to install the service: ${result.summary}');
+      commonPrint.log(
+        '[Helper] failed to install the service: ${result.summary}',
+      );
     }
 
     return result.ok;
@@ -516,7 +733,9 @@ class Windows {
     });
 
     if (!result.ok) {
-      commonPrint.log('[Helper] failed to register the task: ${result.summary}');
+      commonPrint.log(
+        '[Helper] failed to register the task: ${result.summary}',
+      );
     }
 
     return result.ok;
@@ -528,7 +747,9 @@ class Windows {
     });
 
     if (!result.ok) {
-      commonPrint.log('[Helper] failed to unregister the task: ${result.summary}');
+      commonPrint.log(
+        '[Helper] failed to unregister the task: ${result.summary}',
+      );
     }
 
     return result.ok;
