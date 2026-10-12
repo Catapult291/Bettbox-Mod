@@ -1547,6 +1547,10 @@ group_switch_test,json_diff}.dart`
   `adb install` 没有超时，装包一旦挂住会一直等（本机踩过两次，见 `.grok/stage-log.md` §96/§98）。
 - 管道逐字段正确性仍由 `rust.yml` 的 `cargo test`（含 golden）负责，两者不重叠；`build.yaml` 不动
   （那边只在打 tag 与手动触发时跑）。
+- **路径过滤（2026-10-13 补，`b389b4a`）**：`push` / `pull_request` 加 `paths:`——`lib/`、`android/`、
+  `rust/`、`plugins/`、`integration_test/`、`assets/`、`arb/` 整目录 + `setup.dart` / `pubspec.*` /
+  `rust-toolchain.toml` / 本 workflow 自身；纯文档提交不再触发 13 分钟模拟器 job（§105 原先故意
+  不加怕漏跑，后与 helper-e2e 同款收窄）。`core/`（Go 内核）不在清单：本 job `--out config` 跳过它。
 
 **验证**：CI run `37950516821` 全绿（job 12m38s）——APK 构建成功、`Installing … 1,114ms`、
 `🎉 4 tests passed.`（四条设备端用例逐条打印 ✅，含此前写错的那条脚本断言）；`rust.yml` 同 commit
