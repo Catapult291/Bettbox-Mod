@@ -83,6 +83,7 @@ const SETTINGS = {
   // 信息节点，判成信息节点后它就不进任何节点组。带分隔符的 TG / Telegram 仍按信息节点处理
   // ——公告节点远比「专为 TG 优化的节点」常见，宁可贵一点。若订阅里真有叫 TG-01 的节点，
   // 把这一项里的 `(?:^|[^a-z0-9])tg(?:[^a-z0-9]|$)|` 整段删掉即可。
+  // provider 型订阅经各 use 组的 exclude-filter 跑同一条正则（见 buildProxyGroups）。
   INFO_FILTER: /(?:^|[^a-z0-9])tg(?:[^a-z0-9]|$)|telegram|倒卖|到期|电报|订阅|发布|防止|返利|购买|官方|官网|工单|过期|规则|建议|客服|联系|流量|剩余|失联|网址|邮箱|续费|邀请|重置|梯子|群/i
 };
 
@@ -437,8 +438,9 @@ const buildAllAiProxyList = (activeRegions = [], otherProxyNames = []) =>
 //   * proxy-providers → `use` + `filter`/`exclude-filter` 建组，节点名运行期才知道，
 //     分类交给内核正则在组内筛。filter 只作用于 provider 带来的节点，显式名单始终保留
 //     （内核 groupbase.GetProxies 只对 provider 节点套 filterRegs）。
-// 代价：provider 型订阅在组之前拿不到节点名，INFO_FILTER 与「地区内具体有哪些节点」都
-// 只能交给内核正则，公告类节点会照规则留在地区组里。
+// 代价：provider 型订阅在组之前拿不到节点名，「地区内具体有哪些节点」只能交给内核
+// 正则在组内筛；INFO_FILTER 同理——脚本侧正则经 withProviders 下发为内核 exclude-filter，
+// 公告类 provider 节点不再进组，但也进不了 info 组（名字运行期才知道，无法枚举）。
 const buildProxyGroups = ({
   allNames,
   allAiNames,
@@ -468,8 +470,20 @@ const buildProxyGroups = ({
     });
   };
 
-  // provider 模式下给叶子组补 use（地区筛选交给 filter）
-  const withProviders = (extra = {}) => (hasProvider ? { ...extra, use: providers } : extra);
+  // provider 模式下给叶子组补 use：地区筛选交给内核 filter，INFO_FILTER（公告节点）交给
+  // 内核 exclude-filter——provider 节点名运行期才知道，脚本侧 split 不到，但正则可以下发。
+  const withProviders = (extra = {}) => {
+    if (!hasProvider) return extra;
+    const info = SETTINGS.INFO_FILTER.source;
+    const existing = extra["exclude-filter"];
+    return {
+      ...extra,
+      use: providers,
+      // 已有 exclude-filter（All-ai 的排除 HK，恒以 (?i) 开头）时直接接在后面：开头的
+      // (?i) 对整条模式（含 | 后的新段）生效；没有时补 (?i)——内核 regexp2 默认区分大小写
+      "exclude-filter": existing ? `${existing}|${info}` : `(?i)${info}`
+    };
+  };
 
   // 这里原本还有一个 hidden 的 `fcm` 组（["DIRECT"]），但没有任何规则或分组引用它，
   // 而 FCM 已由 STATIC_RULES 的 RULE-SET,googlefcm,DIRECT 直接判直连，故删除。
