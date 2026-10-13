@@ -1,10 +1,11 @@
-//! DNS 节点覆写（原 Dart 镜像的 Rust 移植；镜像已删，行为由 golden 冻结）。
+//! DNS 节点覆写（原 Dart 镜像的 Rust 移植；镜像已删，dns 段由 golden 冻结）。
 //!
 //! 生产入口是 `patch_config` 内部直接调用；无独立 FFI 导出（B⑧ 去掉对应 C ABI）。
 //! 差分测试见 `test/rust/dns_override_diff_test.dart`（已随 §93 删除）。
 //!
-//! 已知差异：Dart `List.sort` 对短列表是稳定插入排序、长列表是不稳定快排；这里用稳定排序
-//! 对齐。宿主的 `hosts` 条目数不大时两者一致；条目很多且 specificity 相同的情况下可能不同。
+//! hosts 平局次序（B⑮ 已收尾）：specificity 降序，同分按键字典序升序——显式比较器 + 单测钉住。
+//! 上游 Dart 短列表按文档序平局、长列表不稳定快排，均无稳定语义可对拍；且 serde_json 解析即丢
+//! 文档序（`Map` 为 BTreeMap），文档序平局在本侧不可复刻。
 
 use std::collections::{HashMap, HashSet};
 
@@ -163,8 +164,12 @@ pub fn apply_hosts_to_proxies(proxies: &[Value], hosts: Option<&Value>) -> Vec<V
     if host_entries.is_empty() {
         return proxies.to_vec();
     }
-    // Dart 的 List.sort 在短列表上是稳定排序；这里用稳定排序对齐。
-    host_entries.sort_by_key(|entry| std::cmp::Reverse(host_specificity(entry.0)));
+    // specificity 降序，同分按键字典序（B⑮：规则显式化，见模块注释）。
+    host_entries.sort_by(|a, b| {
+        host_specificity(b.0)
+            .cmp(&host_specificity(a.0))
+            .then_with(|| a.0.cmp(b.0))
+    });
 
     let mut cache: HashMap<String, String> = HashMap::new();
     proxies
@@ -476,6 +481,19 @@ mod tests {
         });
         let mapped = apply_hosts_to_proxies(&proxies, Some(&hosts));
         assert_eq!(mapped[0]["server"], "203.0.113.7");
+    }
+
+    #[test]
+    fn hosts_ties_break_by_key_order() {
+        // 同 specificity 且都命中时，字典序先者胜（B⑮ 契约）。字面量里把
+        // `+.sub.example.com` 写在前面：若哪天改成按输入/文档序平局，本例会红。
+        let proxies = vec![json!({"name": "a", "server": "x.sub.example.com"})];
+        let hosts = json!({
+            "+.sub.example.com": "target-sub.example.net",
+            "+.example.com": "target-broad.example.net",
+        });
+        let mapped = apply_hosts_to_proxies(&proxies, Some(&hosts));
+        assert_eq!(mapped[0]["server"], "target-broad.example.net");
     }
 
     #[test]

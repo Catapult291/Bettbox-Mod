@@ -1052,8 +1052,10 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
 
 **已知残余差异**（有界，均已写进代码注释）：
 
-- `applyHostsToProxies` 在 hosts 条目多且 specificity 相同时排序可能与 Dart 不同（Dart `List.sort`
-  短列表稳定、长列表不稳定，Rust 侧统一用稳定排序对齐）。
+- ~~`applyHostsToProxies` 在 hosts 条目多且 specificity 相同时排序可能与 Dart 不同~~（已闭环，
+  stage-log §150）：Dart 镜像已随 §93 删除，无对拍对象；平局次序改由 Rust 侧显式定义
+  （specificity 降序、同分按键字典序）并以单测钉住——serde_json 解析即丢文档序，上游的
+  「短列表文档序 / 长列表快排」两种行为在本侧均不可复现，也不再是目标。
 - `nodeExcludeFilter` 的正则只覆盖一个子集（字面量、`.`、`\d` `\w` `\s` 系列、字符类、分组、选择、
   `* + ?`、锚点）；用到 `\d{2}`、`(?i)`、反向引用等写法时，该条配置整条回退 Dart —— 行为正确，
   只是这条配置不走 Rust。
