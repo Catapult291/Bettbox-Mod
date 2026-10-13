@@ -17,6 +17,14 @@ class AppIdentity {
   static const coreExecutableName = '${compactName}Core';
   static const dataDirName = compactName;
   static const tunDeviceName = compactName;
+
+  /// 上游 exe 版本资源里用过的 `CompanyName`；Windows 上 `getApplicationSupportDirectory()`
+  /// 会把它拼进数据目录父路径。发布者显示可以改，这个值对应的身份目录要保留给卸载清理用。
+  static const companyDirName = 'com.appshub';
+
+  /// Windows 生产数据目录钉在 `companyDirName\productName`，不再随
+  /// `Runner.rc` 的 `CompanyName` 漂移（见 `data_identity.dart`）。
+  static const windowsDataDirName = '$companyDirName\\$productName';
 }
 
 class WindowsHelperIdentity {

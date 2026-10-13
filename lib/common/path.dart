@@ -20,6 +20,10 @@ class AppPath {
         dataDir.complete(
           Directory(join(value.parent.path, AppIdentity.dataDirName)),
         );
+      } else if (system.isWindows) {
+        dataDir.complete(
+          Directory(_resolvePinnedWindowsDataDir(value.path)),
+        );
       } else {
         dataDir.complete(value);
       }
@@ -195,6 +199,31 @@ class AppPath {
     final directory = await dataDir.future;
     return join(directory.path, 'ui');
   }
+}
+
+/// Windows 生产数据目录：钉在 `com.appshub\Bettbox`，启动时做一次性回迁。
+///
+/// [appSupport] 是 `getApplicationSupportDirectory()` 的返回值（现网 `CompanyName`
+/// 对应的目录）。dev 身份不走这里（见 `AppPath._internal`）；非 `%APPDATA%\Company\Product`
+/// 布局（测试桩）原样返回，不钉死、不回迁。
+String _resolvePinnedWindowsDataDir(String appSupport) {
+  if (!isWindowsAppDataLayout(appSupport)) return appSupport;
+  final pinned = windowsPinnedDataDir(appSupport);
+  final legacy = windowsLegacyDataDir(appSupport);
+  final company = windowsCompanyDataDir(appSupport);
+  try {
+    final migrated = migrateWindowsDataDirOnce(
+      pinned: pinned,
+      legacy: legacy,
+      company: company,
+    );
+    if (migrated) {
+      commonPrint.log('AppPath: migrated data dir $company -> $pinned');
+    }
+  } catch (e) {
+    commonPrint.log('AppPath: data dir migration failed: $e');
+  }
+  return pinned;
 }
 
 final appPath = AppPath();

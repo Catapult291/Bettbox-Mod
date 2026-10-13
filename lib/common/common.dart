@@ -5,6 +5,7 @@ export 'config_patch_input.dart';
 export 'constant.dart';
 export 'context.dart';
 export 'converter.dart';
+export 'data_identity.dart';
 export 'datetime.dart';
 export 'fixed.dart';
 export 'identity.dart';

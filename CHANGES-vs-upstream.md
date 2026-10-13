@@ -69,6 +69,7 @@
 | 54 | 工程 | 接入 cargo-fuzz 与 proptest（B⑨） | v1.19.17 |
 | 55 | 稳定性 | 「被强杀 → 下次启动」残留就地闭合：系统代理看门狗 + 无快照残留认领（B⑪） | v1.19.17 |
 | 56 | 工程 | 二维码原生解码的一次性 `MobileScannerController` 补 dispose（B⑳） | v1.19.18 |
+| 57 | 工程 | Windows 数据目录钉死 `com.appshub\Bettbox` + 启动一次性回迁；卸载器清理补 `Catapult291`（A④ 收尾） | 待发布 |
 
 ---
 
@@ -2886,4 +2887,42 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   该分支的资源回收由假平台用例钉住，识别链路本身在 v1.19.2 起已有多轮验证。
 
 **未决**：无新开项。B 类剩余以 §117 为准（⑮–⑱）。
+
+---
+
+## 57. Windows 数据目录钉死 `com.appshub\Bettbox` + 启动一次性回迁；卸载器清理补 `Catapult291`（A④ 收尾）
+
+**文件**：`lib/common/identity.dart`、`lib/common/data_identity.dart`（新增）、`lib/common/path.dart`、
+`lib/common/common.dart`、`windows/packaging/exe/inno_setup.iss`　**测试**：`test/common/data_identity_test.dart`
+
+**问题**：Windows 生产数据目录取自 `getApplicationSupportDirectory()`，路径里的公司段跟随 exe 版本资源的
+`CompanyName`（§53）。v1.19.7 把它从 `com.appshub` 改成 `Catapult291` 后，跨身份升级会静默换到
+`%APPDATA%\Catapult291\Bettbox`，看上去像配置丢失；卸载器 `CleanUserData` 只认 `com.appshub*` 路径，
+删不到现网这份数据（§117 A④）。
+
+**改动**：
+
+- `AppIdentity` 新增 `companyDirName` / `windowsDataDirName`，钉死生产身份为 `com.appshub\Bettbox`。
+- 新增 `lib/common/data_identity.dart`：路径解析 + `migrateWindowsDataDirOnce`（哨兵
+  `.bettbox-data-dir`）。仅当「钉死目录无用户数据、上游身份无、而 Company 目录有（config.yaml /
+  非空 shared_preferences.json / 非空 profiles）」时搬迁；其余只落哨兵。搬迁失败不写哨兵，下次启动重试。
+- `AppPath`：Windows 生产分支不再直接用 `getApplicationSupportDirectory()`，改钉死路径并做一次性回迁；
+  dev 身份仍走 `…\BettboxDev`，行为不变。仅当路径上两级等于 `%APPDATA%` 才钉死/回迁——测试桩把
+  applicationSupport 指到临时目录时原样返回，避免把 fixture 当用户数据搬走（曾导致全量
+  `patch_config_unavailable_test` 失败）。
+- `inno_setup.iss` `CleanUserData` 增加 `Catapult291\Bettbox`（并在父目录空时 `RemoveDir`）；
+  `CleanRegistry` 增加 `Software\Catapult291\Bettbox` 与 `Software\Catapult291`。
+- `Runner.rc` 的 `CompanyName` **本次不改**：显示名与数据目录已解耦，发布者字段可独立维护。
+
+**验证**：
+
+- `flutter analyze lib test` 无问题。
+- `flutter test test/common/data_identity_test.dart` **9 项全过**（APPDATA 布局判定 / 路径解析 /
+  hasUserData 边界 / 全新安装 / 搬迁 / 已有数据不覆盖 / 哨兵幂等）。
+- 全量 `flutter test` **182 过 / 3 skip**（基线 173 + 本轮 9；曾因临时目录被误回迁挂 1 例，加布局守卫后全绿）。
+- **未做**：真实安装器卸载路径上对 `CleanUserData` 的 GUI 级实测；启动迁移对现网
+  `Documents\Bettbox` 的实机验证（待下一版发布后升级覆盖）。
+
+**未决**：无新开项。A④ 代码层已闭环；发版前现网仍活在 `Catapult291\Bettbox`，升级到含本改动的版本时自动回迁。
+
 

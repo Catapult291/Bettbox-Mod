@@ -306,10 +306,13 @@ var
   RegistryKeys: TArrayOfString;
   i: Integer;
 begin
-  SetArrayLength(RegistryKeys, 2);
+  SetArrayLength(RegistryKeys, 4);
   RegistryKeys[0] := 'Software\com.appshub.bettbox';
   RegistryKeys[1] := 'Software\com.appshub\Bettbox';
-  
+  // v1.19.7–v1.19.18 期间 Runner.rc 的 CompanyName 变成 Catapult291 时可能写过的键
+  RegistryKeys[2] := 'Software\Catapult291\Bettbox';
+  RegistryKeys[3] := 'Software\Catapult291';
+
   for i := 0 to GetArrayLength(RegistryKeys)-1 do
   begin
     RegDeleteKeyIncludingSubkeys(HKCU, RegistryKeys[i]);
@@ -323,11 +326,14 @@ var
   AppDataPath: String;
 begin
   AppDataPath := ExpandConstant('{userappdata}');
-  
-  SetArrayLength(UserDataPaths, 2);
+
+  // 0：包名身份；1：钉死的 com.appshub\Bettbox（迁移目标，也是上游老身份）
+  // 2：v1.19.7+ CompanyName=Catapult291 时的数据目录（启动迁移前可能仍在这里）
+  SetArrayLength(UserDataPaths, 3);
   UserDataPaths[0] := AppDataPath + '\com.appshub.bettbox';
   UserDataPaths[1] := AppDataPath + '\com.appshub\Bettbox';
-  
+  UserDataPaths[2] := AppDataPath + '\Catapult291\Bettbox';
+
   for i := 0 to GetArrayLength(UserDataPaths)-1 do
   begin
     if DirExists(UserDataPaths[i]) then
@@ -335,10 +341,14 @@ begin
       DelTree(UserDataPaths[i], True, True, True);
     end;
   end;
-  
+
   if DirExists(AppDataPath + '\com.appshub') then
   begin
     RemoveDir(AppDataPath + '\com.appshub');
+  end;
+  if DirExists(AppDataPath + '\Catapult291') then
+  begin
+    RemoveDir(AppDataPath + '\Catapult291');
   end;
 end;
 
