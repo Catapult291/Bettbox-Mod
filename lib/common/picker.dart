@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:bett_box/common/common.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -99,14 +99,7 @@ class Picker {
   Future<String?> _decodeQrCodeImage(String path) async {
     if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
       try {
-        final capture = await MobileScannerController().analyzeImage(
-          path,
-          formats: const [BarcodeFormat.qrCode],
-        );
-        final barcodes = capture?.barcodes;
-        final result = barcodes == null || barcodes.isEmpty
-            ? null
-            : barcodes.first.rawValue;
+        final result = await decodeQrCodeViaNative(path);
         if (result != null && result.isNotEmpty) {
           return result;
         }
@@ -115,6 +108,35 @@ class Picker {
       }
     }
     return qrReader.decodeFile(path);
+  }
+
+  /// 原生 `analyzeImage` 识别（不启动相机）。
+  ///
+  /// 一次性控制器必须 dispose，否则会留下 ValueNotifier / 条码流等本地资源。
+  /// dispose 在他人（如 ScanPage）持有 platform 会话时只清本地；无人持有时会
+  /// 走平台 `dispose`（`updateScanWindow(null)` + `stop()`），对未启动的相机会话无害。
+  @visibleForTesting
+  Future<String?> decodeQrCodeViaNative(String path) async {
+    // autoStart:false：attach 前不会起相机，与 ScanPage 同一约定。
+    final controller = MobileScannerController(autoStart: false);
+    try {
+      final capture = await controller.analyzeImage(
+        path,
+        formats: const [BarcodeFormat.qrCode],
+      );
+      final barcodes = capture?.barcodes;
+      final result = barcodes == null || barcodes.isEmpty
+          ? null
+          : barcodes.first.rawValue;
+      return (result != null && result.isNotEmpty) ? result : null;
+    } finally {
+      // 识别成功也不因 dispose 失败丢结果：失败只记日志。
+      try {
+        await controller.dispose();
+      } catch (e) {
+        commonPrint.log('Native qr controller dispose failed: $e');
+      }
+    }
   }
 }
 

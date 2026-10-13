@@ -68,6 +68,7 @@
 | 53 | 工程 | 裁掉 2 个无调用方的配置 ABI 导出；其余 3 个标为测试专用（B⑧） | v1.19.17 |
 | 54 | 工程 | 接入 cargo-fuzz 与 proptest（B⑨） | v1.19.17 |
 | 55 | 稳定性 | 「被强杀 → 下次启动」残留就地闭合：系统代理看门狗 + 无快照残留认领（B⑪） | v1.19.17 |
+| 56 | 工程 | 二维码原生解码的一次性 `MobileScannerController` 补 dispose（B⑳） | 待发布 |
 
 ---
 
@@ -316,9 +317,9 @@ y=135.5，左栏「首页」图标墨迹中心 y=135.5，**差 0.0 px**；右栏
   `main` 的历史中，§15 的吸收清单不重复计入。
 
 **验证**：`flutter analyze lib test` 仅剩基线告警（`lib/clash/core.dart:197`）；`flutter test` 全部通过
-（`test/common/qr_import_test.dart` 现有 13 例：合成截图、合成二维码、非 URL 内容、超长边大图、大图里小二维码
-退回原图、无码图片、坏文件、灰度与调色板图、引擎与纯 Dart 结果一致、引擎无法解码的文件退回纯 Dart，以及 picker 入口的
-URL 校验与两条失败提示）。
+（`test/common/qr_import_test.dart` 现有 16 例：合成截图、合成二维码、非 URL 内容、超长边大图、大图里小二维码
+退回原图、无码图片、坏文件、灰度与调色板图、引擎与纯 Dart 结果一致、引擎无法解码的文件退回纯 Dart、picker 入口的
+URL 校验与两条失败提示，以及一次性原生控制器 dispose 的 3 例）。
 
 - 用户提供的失败截图（`PixPin_2026-09-19_21-54-16.png`）在本机通过 `picker.decodeProfileUrlFromQrImage()`
   解出 `https://niva.fyi/s/34e9c0655bd7305e4994d123a04b5d96`，即用户提供的那张二维码现已可导入。
@@ -2846,3 +2847,36 @@ project-slug / token 都是上游账号的，本仓库不能复用。
 
 **未决**：无新开项。有意保留的边界：别的客户端**占用**混合端口时不认领（存活探测）；看门狗被
 手动结束时退化为「下次启动还原」；macOS / Linux 不涉及（仍走 `plugins/proxy`，不发布产物）。
+
+---
+
+## 56. 二维码原生解码的一次性 `MobileScannerController` 补 dispose（B⑳ 收尾）
+
+**文件**：`lib/common/picker.dart`　**测试**：`test/common/qr_import_test.dart`
+
+**问题**：`Picker._decodeQrCodeImage` 在 Android / iOS / macOS 上为调用 `analyzeImage` 即时
+`MobileScannerController()`，用完从不 `dispose`（§9 未决③ / §117 B⑳，沿用上游写法）。控制器是
+`ValueNotifier`，构造即分配条码流等本地资源，一次选图解码会留下一个未关闭的 Dart 对象。
+
+**改动**：
+
+- 抽出 `@visibleForTesting Future<String?> decodeQrCodeViaNative(String path)`：`autoStart: false`
+  建一次性控制器 → `analyzeImage` → 取首个非空 `rawValue` → **`finally` 里 `await dispose()`**。
+  dispose 失败只记日志，不丢已解出的识别结果；原生异常仍向上抛，由 `_decodeQrCodeImage` 捕获后
+  退回 `qrReader` 纯 Dart 路径（桌面端行为不变）。
+- `autoStart: false`：attach 前不会起相机，与 `ScanPage` 同一约定。
+- dispose 语义（mobile_scanner 7.4.0）：他人（如打开中的 `ScanPage`）持有 platform 会话时只清
+  本控制器本地资源；无人持有时落到平台 `dispose`（`updateScanWindow(null)` + `stop()`），对未启动
+  的相机会话无害。扫码页相册入口与相机页并存时不会拆掉正在跑的相机会话。
+
+**验证**：
+
+- 假平台（`_FakeNativeQrPlatform`）3 例钉住 dispose：解码成功后 `platformDisposeCalls==1`；无码
+  返回 null 仍 dispose；`analyzeImage` 抛错仍 dispose 且错误上抛。
+- `flutter analyze lib test` 无问题；`flutter test` **173 过 / 3 skip**
+  （基线 170 + 本次 3）。
+- **未做**：Android 真机/模拟器上再点一次「二维码 → 选图」——Windows 本机跑不到 native 分支；
+  该分支的资源回收由假平台用例钉住，识别链路本身在 v1.19.2 起已有多轮验证。
+
+**未决**：无新开项。B 类剩余以 §117 为准（⑮–⑱）。
+

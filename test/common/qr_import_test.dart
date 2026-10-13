@@ -7,6 +7,10 @@ import 'package:bett_box/l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:mobile_scanner/mobile_scanner.dart'
+    hide BarcodeFormat;
+import 'package:mobile_scanner/mobile_scanner.dart' as ms
+    show BarcodeFormat;
 import 'package:zxing2/qrcode.dart';
 
 const sampleUrl = 'https://example.com/subscribe?token=abc123';
@@ -243,4 +247,81 @@ void main() {
       );
     });
   });
+
+  group('原生 analyzeImage（一次性控制器 dispose）', () {
+    late _FakeNativeQrPlatform fake;
+    late MobileScannerPlatform originalPlatform;
+
+    setUp(() {
+      originalPlatform = MobileScannerPlatform.instance;
+      fake = _FakeNativeQrPlatform();
+      MobileScannerPlatform.instance = fake;
+    });
+
+    tearDown(() {
+      MobileScannerPlatform.instance = originalPlatform;
+      MobileScannerController.resetPlatformSessionOwner();
+    });
+
+    test('解码成功后控制器已 dispose', () async {
+      fake.capture = const BarcodeCapture(
+        barcodes: [
+          Barcode(rawValue: sampleUrl, format: ms.BarcodeFormat.qrCode),
+        ],
+      );
+      expect(await picker.decodeQrCodeViaNative('any.png'), sampleUrl);
+      expect(fake.analyzeImageCalls, 1);
+      // 无人持有 platform 会话时，dispose 会落到平台 dispose。
+      expect(fake.platformDisposeCalls, 1);
+    });
+
+    test('无码返回 null 且仍 dispose', () async {
+      fake.capture = const BarcodeCapture();
+      expect(await picker.decodeQrCodeViaNative('any.png'), isNull);
+      expect(fake.analyzeImageCalls, 1);
+      expect(fake.platformDisposeCalls, 1);
+    });
+
+    test('analyzeImage 抛错仍 dispose 并向上抛', () async {
+      fake.analyzeError = Exception('boom');
+      await expectLater(
+        picker.decodeQrCodeViaNative('any.png'),
+        throwsA(isA<Exception>()),
+      );
+      expect(fake.platformDisposeCalls, 1);
+    });
+  });
+}
+
+/// 只覆盖 `analyzeImage` / `dispose` 的假平台，用于钉住「一次性控制器必须 dispose」。
+class _FakeNativeQrPlatform extends MobileScannerPlatform {
+  BarcodeCapture? capture;
+  Object? analyzeError;
+  int analyzeImageCalls = 0;
+  int platformDisposeCalls = 0;
+
+  @override
+  Stream<BarcodeCapture?> get barcodesStream => const Stream<BarcodeCapture?>.empty();
+
+  @override
+  Stream<TorchState> get torchStateStream => const Stream<TorchState>.empty();
+
+  @override
+  Stream<double> get zoomScaleStateStream => const Stream<double>.empty();
+
+  @override
+  Future<BarcodeCapture?> analyzeImage(
+    String path, {
+    List<ms.BarcodeFormat> formats = const <ms.BarcodeFormat>[],
+  }) async {
+    analyzeImageCalls++;
+    final error = analyzeError;
+    if (error != null) throw error;
+    return capture;
+  }
+
+  @override
+  Future<void> dispose() async {
+    platformDisposeCalls++;
+  }
 }
