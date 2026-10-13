@@ -204,6 +204,8 @@ pub unsafe extern "C" fn bb_process_profile(
 ///
 /// 测试专用 ABI：生产管道在 [`crate::patch_config`] 内部直接调 `RegexMatcher`；
 /// 本导出供 `test/rust/regex_matcher_diff_test.dart` 与 Dart `RegExp` 对拍。
+/// 每次调用现编现用（自建 runtime/context，~百 µs 级，§151 实测）；生产热路径若要用
+/// 本入口，必须先改成持 [`crate::regex_matcher::RegexMatcher`] 句柄复用。
 ///
 /// # Safety
 ///

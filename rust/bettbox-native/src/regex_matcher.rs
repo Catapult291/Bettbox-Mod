@@ -12,6 +12,13 @@
 //!
 //! 每个 [`RegexMatcher`] 自持一个 JSRuntime/JSContext——libregexp 的 `lre_realloc` /
 //! `lre_check_stack_overflow` 钩子在本仓库绑定到 JSContext，详见 `c/quickjs_shim.c`。
+//!
+//! 每次编译自建 runtime/context 是有意为之（句柄不共享 ⇒ 跨线程安全）：生产在
+//! `patch_config` 每条改写只编译一次（§151 实测编译 ~130µs、复用句柄匹配 ~0.7µs/次），
+//! 每调用即编译的 [`crate::ffi::bb_node_filter_match`] 是测试专用 ABI，不进生产热路径
+//! ——将来若要进热路径，先改成持句柄复用（例如按线程缓存）。
+//! 契约不含 `u`（unicode）模式：Dart 参照实现 `RegExp(p)` 从不启用，两端由
+//! `test/rust/regex_matcher_diff_test.dart` 按非 unicode 语义对拍。
 
 use std::ffi::c_void;
 use std::os::raw::c_char;
