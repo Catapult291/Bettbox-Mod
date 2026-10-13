@@ -200,6 +200,18 @@ jobs:
           }
           echo "ANDROID_NDK=${ndk_dir}" >> "$GITHUB_ENV"
 
+      # setup.dart 是 Dart 脚本；没有 Flutter SDK 就没有 dart 在 PATH（首跑 127：dart: command not found）。
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+          cache-key: flutter-android-device-arm64-v8a-${{ hashFiles('**/pubspec.lock') }}
+          flutter-version-file: pubspec.yaml
+
+      - name: Install Dependencies
+        run: flutter pub get
+
       - name: Build Rust native lib (Android arm64-v8a)
         run: dart setup.dart android --arch arm64 --out config
 
