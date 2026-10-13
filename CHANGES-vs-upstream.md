@@ -1539,16 +1539,19 @@ group_switch_test,json_diff}.dart`
 **改动**：新 workflow 在 push `main` / `pull_request` / `workflow_dispatch` 上起模拟器
 （`reactivecircus/android-emulator-runner`，API 36 / `google_apis`）跑这条用例。
 
-- **架构矩阵（2026-10-13 补，B⑬ 后半）**：x86_64 / ubuntu-24.04 + arm64-v8a / macos-15 双腿
-  （`fail-fast: false`）。Linux 官方 SDK 模拟器没有 arm64 宿主二进制，arm64-v8a 镜像只能在
-  Apple Silicon 上原生跑；`emulator-runner` 的 `arch` 取值是 `arm64-v8a`（不是 `arm64`）。
-  各腿只交叉编译自己那份 ABI；KVM 仅 Linux 腿启用；macOS 腿装 coreutils，超时脚本先找
-  `timeout` 再退 `gtimeout`。
-- 只出本腿 ABI（`dart setup.dart android --arch amd64|arm64 --out config`），跳过 Go 内核——
+- **架构矩阵（2026-10-13 补，B⑬ 后半）**：双 job——
+  - `emulator-x86_64` / ubuntu-24.04：完整设备端集成测试（与 §105 相同）。
+  - `build-arm64-v8a` / ubuntu-24.04：只交叉编译 arm64 `.so` 并用 `file` + `llvm-nm`
+    核对架构（aarch64）与关键导出（`bb_process_profile` / `bb_patch_config` /
+    `bb_eval_script` / `bb_string_free`）。
+  **不在托管 runner 上跑 arm64-v8a 模拟器**：macOS 嵌套虚拟化被关（`HVF error:
+  HV_UNSUPPORTED`），Linux arm64 宿主无官方 emulator 二进制——见
+  ReactiveCircus/android-emulator-runner#453。设备端集成测试在 arm64 上仍只有真机冒烟。
+- x86_64 腿只出这一份 ABI（`dart setup.dart android --arch amd64 --out config`），跳过 Go 内核——
   该用例不启动内核，而 `android/core` 的 CMake 在缺 `libclash.so` 时会正常降级（打印 `Not found` 后照常链接）。
-- 起模拟器前先断言 `libclash/android/{x86_64|arm64-v8a}/libbettbox_native.so` 存在并用 `file` 核对架构：
+- 起模拟器前先断言 `libclash/android/x86_64/libbettbox_native.so` 存在并用 `file` 核对架构：
   缺库时这里的信息比用例的 `isAvailable` 断言直白，而模拟器启动是本任务里最贵的一步。
-- 两道超时闸：测试步骤 `timeout/gtimeout --kill-after=60s 20m`、job `timeout-minutes: 45`。`flutter test` 内部的
+- 两道超时闸：测试步骤 `timeout --kill-after=60s 20m`、job `timeout-minutes: 45`。`flutter test` 内部的
   `adb install` 没有超时，装包一旦挂住会一直等（本机踩过两次，见 `.grok/stage-log.md` §96/§98）。
 - 管道逐字段正确性仍由 `rust.yml` 的 `cargo test`（含 golden）负责，两者不重叠；`build.yaml` 不动
   （那边只在打 tag 与手动触发时跑）。
