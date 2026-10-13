@@ -1056,9 +1056,14 @@ android universal / windows amd64 / release）全绿，Release 附件三件：`B
   stage-log §150）：Dart 镜像已随 §93 删除，无对拍对象；平局次序改由 Rust 侧显式定义
   （specificity 降序、同分按键字典序）并以单测钉住——serde_json 解析即丢文档序，上游的
   「短列表文档序 / 长列表快排」两种行为在本侧均不可复现，也不再是目标。
-- `nodeExcludeFilter` 的正则只覆盖一个子集（字面量、`.`、`\d` `\w` `\s` 系列、字符类、分组、选择、
+- ~~`nodeExcludeFilter` 的正则只覆盖一个子集（字面量、`.`、`\d` `\w` `\s` 系列、字符类、分组、选择、
   `* + ?`、锚点）；用到 `\d{2}`、`(?i)`、反向引用等写法时，该条配置整条回退 Dart —— 行为正确，
-  只是这条配置不走 Rust。
+  只是这条配置不走 Rust~~（已闭环，stage-log §152 / §83）：手写 `mini_regex` 已整体删除，正则改由
+  vendored QuickJS 的 `libregexp` 实现（全 ECMAScript 语法——`{n,m}`、反向引用、`\b`、前瞻/后行、
+  命名组等旧「子集外」写法直接可用，`patch_config` 单测与 50 模式 × 53 文本差分钉住）；语法错误
+  与 Dart `RegExp` 一样跳过节点过滤（两端都拒绝，未发现有效性分歧），且 §93 删两段式后整条
+  「回退 Dart」路径已不存在——现失败策略是报错并保留上一份可用配置。`(?i)` 两端均不支持（ES 本就
+  没有该写法），不再是单边回退。
 - provider 对畸形输入的容错比 Dart 宽松（缺必需字段的 provider 跳过而非抛错）。
 
 **覆写脚本引擎也已 Rust 化（同属本节范围，仅 Windows；随 v1.19.10 发布）**：新增 crate `rust/bettbox-script`，用仓库里那份
