@@ -378,6 +378,25 @@ class ScriptState extends _$ScriptState with AutoDisposeNotifierMixin {
   }
 }
 
+/// 桌面按进程分流（§22 轻量档）：模式 + exe 路径名单。
+@riverpod
+class ProcessAccessState extends _$ProcessAccessState
+    with AutoDisposeNotifierMixin {
+  @override
+  ProcessAccessProps build() {
+    return globalState.config.processAccess;
+  }
+
+  @override
+  onUpdate(value) {
+    globalState.config = globalState.config.copyWith(processAccess: value);
+  }
+
+  void updateState(ProcessAccessProps Function(ProcessAccessProps state) builder) {
+    state = builder(state);
+  }
+}
+
 @riverpod
 class PatchClashConfig extends _$PatchClashConfig
     with AutoDisposeNotifierMixin {

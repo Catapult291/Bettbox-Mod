@@ -46,14 +46,16 @@ class MessageLookup extends MessageLookupByLibrary {
   static String m10(label) =>
       "${label} must be between 1024 and 49151, 0 to disable";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "${count} selected";
+
+  static String m12(statusCode) =>
       "Failed to import profile. Please check your network status or try resetting the subscription link ( HTTP error code: ${statusCode} )";
 
-  static String m12(count) => "${count} items selected";
+  static String m13(count) => "${count} items selected";
 
-  static String m13(label) => "${label} must be a URL";
+  static String m14(label) => "${label} must be a URL";
 
-  static String m14(count) =>
+  static String m15(count) =>
       "${Intl.plural(count, one: 'year', other: 'years')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
@@ -891,6 +893,36 @@ class MessageLookup extends MessageLookupByLibrary {
     "privateIp": MessageLookupByLibrary.simpleMessage(
       "Private / LAN IP Address",
     ),
+    "processAccess": MessageLookupByLibrary.simpleMessage("Process Access"),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("Blacklist"),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "Route selected process paths to DIRECT or only allow selected ones",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
+      "No selectable processes",
+    ),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "Requires \"Find Process\" to stay enabled; it will be turned on automatically when saving.",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
+      "Hide system processes",
+    ),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "Failed to load process list. Is the helper service running?",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage(
+      "Loading processes…",
+    ),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("Mode"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage(
+      "Path unavailable",
+    ),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("Off"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "Select Processes",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("Whitelist"),
     "profile": MessageLookupByLibrary.simpleMessage("Profile"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("Please enter a valid interval"),
@@ -899,7 +931,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "Profile modified. Disable auto-update?",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "Please enter a profile name",
     ),
@@ -1052,7 +1084,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "selectAll": MessageLookupByLibrary.simpleMessage("Select All"),
     "selected": MessageLookupByLibrary.simpleMessage("Selected"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("Service Ready"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("Service Running"),
     "settings": MessageLookupByLibrary.simpleMessage("Settings"),
@@ -1239,7 +1271,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "upload": MessageLookupByLibrary.simpleMessage("Upload"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),
     "urlDesc": MessageLookupByLibrary.simpleMessage("Get profile via URL"),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage(
       "Use Global Script Override",
     ),
@@ -1278,6 +1310,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage(
       "Requires administrator privileges",
     ),
-    "years": m14,
+    "years": m15,
   };
 }

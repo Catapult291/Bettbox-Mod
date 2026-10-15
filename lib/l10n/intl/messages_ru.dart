@@ -47,14 +47,16 @@ class MessageLookup extends MessageLookupByLibrary {
   static String m10(label) =>
       "${label} должен быть от 1024 до 49151, 0 для отключения";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "Выбрано: ${count}";
+
+  static String m12(statusCode) =>
       "Не удалось импортировать профиль. Проверьте состояние сети или попробуйте сбросить ссылку подписки ( код ошибки HTTP: ${statusCode} )";
 
-  static String m12(count) => "Выбрано: ${count}";
+  static String m13(count) => "Выбрано: ${count}";
 
-  static String m13(label) => "${label} должен быть URL";
+  static String m14(label) => "${label} должен быть URL";
 
-  static String m14(count) =>
+  static String m15(count) =>
       "${Intl.plural(count, one: 'год', few: 'года', many: 'лет', other: 'лет')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
@@ -922,6 +924,42 @@ class MessageLookup extends MessageLookupByLibrary {
     "privateIp": MessageLookupByLibrary.simpleMessage(
       "Частный / локальный IP-адрес",
     ),
+    "processAccess": MessageLookupByLibrary.simpleMessage(
+      "Маршрутизация по процессам",
+    ),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage(
+      "Чёрный список",
+    ),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "Направлять выбранные процессы напрямую или разрешать только выбранные",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
+      "Нет доступных процессов",
+    ),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "Требуется «Поиск процессов»; при сохранении он будет включён автоматически.",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
+      "Скрыть системные процессы",
+    ),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "Не удалось загрузить список процессов. Служба helper запущена?",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage(
+      "Загрузка процессов…",
+    ),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("Режим"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage(
+      "Путь недоступен",
+    ),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("Выкл"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "Выбрать процессы",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage(
+      "Белый список",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("Профиль"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage(
@@ -932,7 +970,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "Конфигурация изменена. Отключить автообновление?",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "Введите имя профиля",
     ),
@@ -1087,7 +1125,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "selectAll": MessageLookupByLibrary.simpleMessage("Выбрать все"),
     "selected": MessageLookupByLibrary.simpleMessage("Выбрано"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("Служба готова"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("Служба запущена"),
     "settings": MessageLookupByLibrary.simpleMessage("Настройки"),
@@ -1294,7 +1332,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "upload": MessageLookupByLibrary.simpleMessage("Отправка"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),
     "urlDesc": MessageLookupByLibrary.simpleMessage("Получить профиль по URL"),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage(
       "Глобальное переопределение",
     ),
@@ -1337,6 +1375,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage(
       "Требуются права администратора",
     ),
-    "years": m14,
+    "years": m15,
   };
 }

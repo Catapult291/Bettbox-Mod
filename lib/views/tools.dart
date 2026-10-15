@@ -21,6 +21,7 @@ import 'package:bett_box/views/config/tunnel.dart';
 import 'package:bett_box/views/connection/connections.dart';
 import 'package:bett_box/views/hotkey.dart';
 import 'package:bett_box/views/other_setting.dart';
+import 'package:bett_box/views/process_access.dart';
 import 'package:bett_box/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -280,6 +281,18 @@ class _ToolViewState extends ConsumerState<ToolsView> {
             context,
             appLocalizations.appAccessControl,
             const AccessView(),
+          ),
+        ),
+      if (system.isWindows)
+        _SearchItem(
+          title: appLocalizations.processAccess,
+          subtitle: appLocalizations.processAccessDesc,
+          category: settingsCategory,
+          leading: const Icon(Icons.rule),
+          onTap: (context, _) => _pushPage(
+            context,
+            appLocalizations.processAccess,
+            const ProcessAccessView(),
           ),
         ),
       _SearchItem(
@@ -1386,6 +1399,7 @@ class _ToolViewState extends ConsumerState<ToolsView> {
           _BackupItem(),
           if (system.isDesktop) _HotkeyItem(),
           if (system.isWindows) _LoopbackItem(),
+          if (system.isWindows) _ProcessAccessItem(),
           if (system.isAndroid) _AccessItem(),
           _ConfigItem(),
           _OtherSettingItem(),
@@ -1565,6 +1579,23 @@ class _AccessItem extends StatelessWidget {
       delegate: NextDelegate(
         title: appLocalizations.appAccessControl,
         builder: (_) => const AccessView(),
+      ),
+    );
+  }
+}
+
+class _ProcessAccessItem extends StatelessWidget {
+  const _ProcessAccessItem();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListItem.next(
+      leading: const Icon(Icons.rule),
+      title: Text(appLocalizations.processAccess),
+      subtitle: Text(appLocalizations.processAccessDesc),
+      delegate: NextDelegate(
+        title: appLocalizations.processAccess,
+        builder: (_) => const ProcessAccessView(),
       ),
     );
   }

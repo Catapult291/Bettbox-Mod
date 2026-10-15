@@ -59,6 +59,8 @@ void main() {
     hasCurrentScript: false,
     disableQuic: true,
     excludeChina: true,
+    processAccessMode: 'off',
+    processAccessPaths: const [],
     locale: 'ru-RU',
   );
 
@@ -86,6 +88,8 @@ void main() {
       hasCurrentScript: false,
       disableQuic: false,
       excludeChina: false,
+      processAccessMode: 'off',
+      processAccessPaths: const [],
       locale: null,
     );
     expect(identical(built['rawConfig'], raw), isTrue);
@@ -158,6 +162,8 @@ void main() {
       'hasCurrentScript': false,
       'disableQuic': true,
       'excludeChina': true,
+      'processAccessMode': 'off',
+      'processAccessPaths': <String>[],
       'locale': 'ru-RU',
     });
   });

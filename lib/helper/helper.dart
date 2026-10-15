@@ -118,6 +118,54 @@ class HelperRpcException implements Exception {
   String toString() => '$code: $message';
 }
 
+/// `process.list` 的一行：运行中进程。`path` 为空表示读路径失败，不可入选。
+class HelperProcessEntry {
+  const HelperProcessEntry({
+    required this.pid,
+    required this.name,
+    required this.path,
+    required this.description,
+  });
+
+  factory HelperProcessEntry.fromJson(Map<String, Object?> json) {
+    return HelperProcessEntry(
+      pid: (json['pid'] as num?)?.toInt() ?? 0,
+      name: json['name'] as String? ?? '',
+      path: json['path'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+    );
+  }
+
+  final int pid;
+  final String name;
+  final String path;
+  final String description;
+}
+
+/// `process.icon` 的应答：32 位 RGBA 像素（自上而下）。
+class HelperProcessIcon {
+  const HelperProcessIcon({
+    required this.width,
+    required this.height,
+    required this.rgba,
+  });
+
+  factory HelperProcessIcon.fromJson(Map<String, Object?> json) {
+    final width = (json['width'] as num?)?.toInt() ?? 0;
+    final height = (json['height'] as num?)?.toInt() ?? 0;
+    final b64 = json['rgba'] as String? ?? '';
+    return HelperProcessIcon(
+      width: width,
+      height: height,
+      rgba: base64Decode(b64),
+    );
+  }
+
+  final int width;
+  final int height;
+  final Uint8List rgba;
+}
+
 /// `helper.ping` 探测的分类结果。
 ///
 /// 折叠成布尔值会丢掉「为什么不健康」：`registerService` 拿不到区分度就只能
@@ -259,6 +307,37 @@ class HelperClient {
     } catch (e) {
       commonPrint.log('[HelperClient] setProcessPriority failed: $e');
       return false;
+    }
+  }
+
+  /// 枚举运行中进程（pid / exe 名 / 完整路径 / 版本资源描述）。
+  Future<List<HelperProcessEntry>> listProcesses() async {
+    final response = await _request(
+      'process.list',
+      timeout: const Duration(seconds: 10),
+    );
+    final data = response.data;
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((e) => HelperProcessEntry.fromJson(Map<String, Object?>.from(e)))
+        .toList();
+  }
+
+  /// 按 exe 路径取 32 位 RGBA 图标；失败返回 null。
+  Future<HelperProcessIcon?> getProcessIcon(String path) async {
+    try {
+      final response = await _request(
+        'process.icon',
+        body: {'path': path},
+        timeout: const Duration(seconds: 5),
+      );
+      final data = response.data;
+      if (data is! Map) return null;
+      return HelperProcessIcon.fromJson(Map<String, Object?>.from(data));
+    } catch (e) {
+      commonPrint.log('[HelperClient] getProcessIcon failed: $e');
+      return null;
     }
   }
 

@@ -42,14 +42,16 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m10(label) => "${label} 必須在 1024 到 49151 之間，0 為關閉";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "已選 ${count} 項";
+
+  static String m12(statusCode) =>
       "配置導入失敗，請檢查網路狀況或嘗試重置訂閱連結( HTTP錯誤代碼: ${statusCode} )";
 
-  static String m12(count) => "已選擇 ${count} 項";
+  static String m13(count) => "已選擇 ${count} 項";
 
-  static String m13(label) => "${label}必須為 URL";
+  static String m14(label) => "${label}必須為 URL";
 
-  static String m14(count) => "${Intl.plural(count, other: '年')}";
+  static String m15(count) => "${Intl.plural(count, other: '年')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -640,6 +642,28 @@ class MessageLookup extends MessageLookupByLibrary {
     "pressKeyboard": MessageLookupByLibrary.simpleMessage("請按下按鍵"),
     "preview": MessageLookupByLibrary.simpleMessage("預覽"),
     "privateIp": MessageLookupByLibrary.simpleMessage("私有 / 區域網路 IP 位址"),
+    "processAccess": MessageLookupByLibrary.simpleMessage("進程分流"),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("黑名單"),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "將選中的進程路徑分流到直連，或僅放行選中的進程",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage("沒有可選進程"),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "依賴「查找進程」開關；儲存時會自動打開。",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage("隱藏系統進程"),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "進程列表載入失敗，請確認 helper 服務在運行。",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage("正在載入進程…"),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("模式"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage("無法讀取路徑"),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("關閉"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "選擇進程",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("白名單"),
     "profile": MessageLookupByLibrary.simpleMessage("配置"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("請輸入有效間隔時間格式"),
@@ -648,7 +672,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "設定檔已經修改，是否關閉自動更新？",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "請輸入配置名稱",
     ),
@@ -751,7 +775,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "secretCopied": MessageLookupByLibrary.simpleMessage("密碼已複製到剪貼簿"),
     "selectAll": MessageLookupByLibrary.simpleMessage("全選"),
     "selected": MessageLookupByLibrary.simpleMessage("已選擇"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("服務已就緒"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("服務正在執行中"),
     "settings": MessageLookupByLibrary.simpleMessage("設定"),
@@ -894,7 +918,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "upload": MessageLookupByLibrary.simpleMessage("上傳"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),
     "urlDesc": MessageLookupByLibrary.simpleMessage("透過 URL 獲取設定檔"),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage(
       "使用全域指令碼覆寫",
     ),
@@ -925,6 +949,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("白名單模式"),
     "writeToSystem": MessageLookupByLibrary.simpleMessage("寫入系統"),
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage("需要管理員權限"),
-    "years": m14,
+    "years": m15,
   };
 }

@@ -5723,6 +5723,136 @@ class AppLocalizations {
       args: [],
     );
   }
+
+  /// `Process Access`
+  String get processAccess {
+    return Intl.message(
+      'Process Access',
+      name: 'processAccess',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Route selected process paths to DIRECT or only allow selected ones`
+  String get processAccessDesc {
+    return Intl.message(
+      'Route selected process paths to DIRECT or only allow selected ones',
+      name: 'processAccessDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Mode`
+  String get processAccessMode {
+    return Intl.message('Mode', name: 'processAccessMode', desc: '', args: []);
+  }
+
+  /// `Blacklist`
+  String get processAccessBlacklist {
+    return Intl.message(
+      'Blacklist',
+      name: 'processAccessBlacklist',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Whitelist`
+  String get processAccessWhitelist {
+    return Intl.message(
+      'Whitelist',
+      name: 'processAccessWhitelist',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Select Processes`
+  String get processAccessSelectProcesses {
+    return Intl.message(
+      'Select Processes',
+      name: 'processAccessSelectProcesses',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `{count} selected`
+  String processAccessSelectedCount(Object count) {
+    return Intl.message(
+      '$count selected',
+      name: 'processAccessSelectedCount',
+      desc: '',
+      args: [count],
+    );
+  }
+
+  /// `Loading processes…`
+  String get processAccessLoading {
+    return Intl.message(
+      'Loading processes…',
+      name: 'processAccessLoading',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Failed to load process list. Is the helper service running?`
+  String get processAccessLoadFailed {
+    return Intl.message(
+      'Failed to load process list. Is the helper service running?',
+      name: 'processAccessLoadFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `No selectable processes`
+  String get processAccessEmpty {
+    return Intl.message(
+      'No selectable processes',
+      name: 'processAccessEmpty',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Hide system processes`
+  String get processAccessHideSystem {
+    return Intl.message(
+      'Hide system processes',
+      name: 'processAccessHideSystem',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Path unavailable`
+  String get processAccessNoPath {
+    return Intl.message(
+      'Path unavailable',
+      name: 'processAccessNoPath',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Requires "Find Process" to stay enabled; it will be turned on automatically when saving.`
+  String get processAccessFindProcessHint {
+    return Intl.message(
+      'Requires "Find Process" to stay enabled; it will be turned on automatically when saving.',
+      name: 'processAccessFindProcessHint',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Off`
+  String get processAccessOff {
+    return Intl.message('Off', name: 'processAccessOff', desc: '', args: []);
+  }
 }
 
 class AppLocalizationDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -82,8 +82,7 @@ class TrackerInfoItem extends ConsumerWidget {
   Widget build(BuildContext context, ref) {
     final value = ref.watch(
       patchClashConfigProvider.select(
-        (state) =>
-            state.findProcessMode == FindProcessMode.always && system.isAndroid,
+        (state) => state.findProcessMode == FindProcessMode.always,
       ),
     );
     final title = Column(
@@ -216,7 +215,13 @@ Future<Uint8List?> _getPackageIcon(String process) async {
   if (cachedIcon != null) {
     return cachedIcon;
   }
-  final icon = await app.getPackageIcon(process);
+  // 桌面无 method channel 图标接口；失败/不适用一律回落默认图标。
+  Uint8List? icon;
+  try {
+    icon = await app.getPackageIcon(process);
+  } catch (_) {
+    icon = null;
+  }
   if (icon != null) {
     _addToIconCache(process, icon);
     return icon;
@@ -235,6 +240,9 @@ Future<Uint8List?> _getDefaultPackageIcon() {
     }
     _defaultIconFuture = null;
     return icon;
+  }).catchError((_) {
+    _defaultIconFuture = null;
+    return null;
   });
 }
 

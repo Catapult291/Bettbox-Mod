@@ -27,6 +27,28 @@ const MSFT_NCSI_HOSTS: [&str; 2] = ["131.107.255.255", "fd3e:4f5a:5b81::1"];
 const QUIC_RULE: &str = "AND,((NETWORK,UDP),(DST-PORT,443)),REJECT";
 const QUIC_RULE_EXCLUDE_CHINA: &str = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((OR,((GEOSITE,geolocation-cn),(GEOIP,CN,no-resolve)))))),REJECT";
 
+/// 把 Windows 路径转成可安全放进 `PROCESS-PATH-REGEX` 的模式（`^…$` 锚定）。
+///
+/// 逻辑规则（`NOT`/`OR`/`AND`）的解析器按裸 `(` `)` 切分子规则，而
+/// `Program Files (x86)` 一类路径必含括号——所以括号一律写成 `\x28`/`\x29`，
+/// 不留任何裸括号给 `logic.format`。其余正则元字符照常转义。
+fn process_path_regex(path: &str) -> String {
+    let mut escaped = String::with_capacity(path.len() * 2);
+    for c in path.chars() {
+        match c {
+            '(' => escaped.push_str("\\x28"),
+            ')' => escaped.push_str("\\x29"),
+            '\\' => escaped.push_str("\\\\"),
+            '.' | '+' | '*' | '?' | '^' | '$' | '[' | ']' | '|' | '{' | '}' => {
+                escaped.push('\\');
+                escaped.push(c);
+            }
+            _ => escaped.push(c),
+        }
+    }
+    format!("^{}$", escaped)
+}
+
 /// 跑完整条改写管道，返回改写后的配置。
 pub fn patch_config(input: &Value) -> Result<Value, String> {
     let raw_config = object_of(input, "rawConfig")?;
@@ -344,6 +366,58 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
             QUIC_RULE
         };
         rules.insert(0, Value::String(quic_rule.to_string()));
+    }
+
+    // 桌面进程分流（§22 轻量档）。规则插在最前：黑名单先于 QUIC/其余规则命中；
+    // 白名单的「名单外→DIRECT」也必须最先命中，名单内才继续走原规则链。
+    // 路径含逗号时 PROCESS-PATH 的顶层解析会截断 payload，一律改用
+    // PROCESS-PATH-REGEX（逗号在 REGEX 类型里会 join 回去）。
+    {
+        let access_mode = env_str(env, "processAccessMode");
+        let access_paths: Vec<String> = env
+            .get("processAccessPaths")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(Value::as_str)
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !access_paths.is_empty() {
+            let mut access_rules: Vec<Value> = Vec::new();
+            match access_mode.as_str() {
+                "blacklist" => {
+                    for path in &access_paths {
+                        let rule = if path.contains(',') {
+                            format!(
+                                "PROCESS-PATH-REGEX,{},DIRECT",
+                                process_path_regex(path)
+                            )
+                        } else {
+                            format!("PROCESS-PATH,{},DIRECT", path)
+                        };
+                        access_rules.push(Value::String(rule));
+                    }
+                }
+                "whitelist" => {
+                    let alts: Vec<String> =
+                        access_paths.iter().map(|p| process_path_regex(p)).collect();
+                    // 各段自带 ^…$ 锚定，用 | 拼成单条 REGEX；不套 (?:…)
+                    // 分组——逻辑规则解析器会把裸括号当结构切开。
+                    let joined = alts.join("|");
+                    access_rules
+                        .push(Value::String(format!("NOT,((PROCESS-PATH-REGEX,{})),DIRECT", joined)));
+                }
+                _ => {}
+            }
+            for (i, rule) in access_rules.into_iter().enumerate() {
+                rules.insert(i, rule);
+            }
+            // 进程规则生效的前提是内核能解析进程路径；桌面默认 off，这里强制打开。
+            config.insert("find-process-mode".to_string(), json!("always"));
+        }
     }
 
     if config.get("proxy-groups").is_none_or(Value::is_null) {
@@ -733,6 +807,8 @@ mod tests {
                 "hasCurrentScript": false,
                 "disableQuic": false,
                 "excludeChina": false,
+                "processAccessMode": "off",
+                "processAccessPaths": [],
             },
         })
     }
@@ -836,6 +912,70 @@ mod tests {
     fn md5_hex_matches_dart_crypto() {
         assert_eq!(md5_hex(""), "d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(md5_hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
+    }
+
+    #[test]
+    fn process_access_blacklist_prepends_top_level_rules() {
+        let mut input = minimal_input();
+        input["env"]["processAccessMode"] = json!("blacklist");
+        input["env"]["processAccessPaths"] =
+            json!(["C:\\App\\a.exe", "C:\\Program Files (x86)\\B\\b.exe"]);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\App\\a.exe,DIRECT");
+        // 含括号的路径走顶层 PROCESS-PATH 即可（不进逻辑规则，解析器不切括号）。
+        assert_eq!(
+            rules[1],
+            "PROCESS-PATH,C:\\Program Files (x86)\\B\\b.exe,DIRECT"
+        );
+        // 生效时强制 find-process-mode，否则进程匹配静默无效。
+        assert_eq!(output["find-process-mode"], "always");
+    }
+
+    #[test]
+    fn process_access_blacklist_uses_regex_when_path_has_comma() {
+        let mut input = minimal_input();
+        input["env"]["processAccessMode"] = json!("blacklist");
+        input["env"]["processAccessPaths"] = json!(["C:\\App, Inc\\a.exe"]);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        let rule = rules[0].as_str().unwrap();
+        assert!(rule.starts_with("PROCESS-PATH-REGEX,^C:\\\\App, Inc\\\\a\\.exe$"), "{rule}");
+        assert!(rule.ends_with(",DIRECT"));
+    }
+
+    #[test]
+    fn process_access_whitelist_escapes_parens_for_logic_parser() {
+        let mut input = minimal_input();
+        input["env"]["processAccessMode"] = json!("whitelist");
+        input["env"]["processAccessPaths"] =
+            json!(["C:\\Program Files (x86)\\B\\b.exe", "C:\\App\\a.exe"]);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        // 白名单 = 单条 NOT+REGEX：名单外直连；括号写成 \x28\x29 避开逻辑规则切分。
+        assert_eq!(
+            rules[0],
+            "NOT,((PROCESS-PATH-REGEX,^C:\\\\Program Files \\x28x86\\x29\\\\B\\\\b\\.exe$|^C:\\\\App\\\\a\\.exe$)),DIRECT"
+        );
+        assert_eq!(output["find-process-mode"], "always");
+    }
+
+    #[test]
+    fn process_access_off_injects_nothing() {
+        let output = patch_config(&minimal_input()).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert!(rules.iter().all(|r| {
+            let s = r.as_str().unwrap();
+            !s.contains("PROCESS-PATH") && !s.starts_with("NOT,")
+        }));
+        assert_ne!(output["find-process-mode"], "always");
+    }
+
+    #[test]
+    fn process_access_regex_escape_covers_meta_chars() {
+        assert_eq!(process_path_regex("a(b)c"), "^a\\x28b\\x29c$");
+        assert_eq!(process_path_regex("a+b"), "^a\\+b$");
+        assert_eq!(process_path_regex("a\\b"), "^a\\\\b$");
     }
 
     fn process_profile_via_ffi(input: &Value, script: &str) -> Value {

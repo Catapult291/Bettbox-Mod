@@ -137,6 +137,9 @@ enum InvokeMessageType { protect, process }
 
 enum FindProcessMode { always, off }
 
+/// 桌面进程分流模式。与安卓 `vpnProps.accessControl` 无关（§22：勿复用）。
+enum ProcessAccessMode { off, blacklist, whitelist }
+
 enum RecoveryOption { all, onlyProfiles }
 
 enum ChipType { action, delete }

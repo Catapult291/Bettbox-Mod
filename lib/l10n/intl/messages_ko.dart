@@ -42,14 +42,16 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m10(label) => "${label} 항목은 1024~49151 사이여야 합니다 (0은 비활성화)";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "${count}개 선택됨";
+
+  static String m12(statusCode) =>
       "프로필 가져오기에 실패했습니다. 네트워크 상태를 확인하거나 구독 링크를 재설정해 보세요 ( HTTP 오류 코드: ${statusCode} )";
 
-  static String m12(count) => "${count}개 선택됨";
+  static String m13(count) => "${count}개 선택됨";
 
-  static String m13(label) => "${label} 항목은 올바른 URL이어야 합니다";
+  static String m14(label) => "${label} 항목은 올바른 URL이어야 합니다";
 
-  static String m14(count) => "${Intl.plural(count, other: '#년')}";
+  static String m15(count) => "${Intl.plural(count, other: '#년')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -724,6 +726,34 @@ class MessageLookup extends MessageLookupByLibrary {
     "pressKeyboard": MessageLookupByLibrary.simpleMessage("키를 누르세요"),
     "preview": MessageLookupByLibrary.simpleMessage("미리보기"),
     "privateIp": MessageLookupByLibrary.simpleMessage("사설 / LAN IP 주소"),
+    "processAccess": MessageLookupByLibrary.simpleMessage("프로세스 분기"),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("블랙리스트"),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "선택한 프로세스 경로를 DIRECT로 분기하거나 선택만 허용",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
+      "선택 가능한 프로세스가 없습니다",
+    ),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "\'프로세스 찾기\'가 필요합니다. 저장 시 자동으로 켜집니다.",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
+      "시스템 프로세스 숨기기",
+    ),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "프로세스 목록을 불러오지 못했습니다. helper 서비스가 실행 중인지 확인하세요.",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage(
+      "프로세스 불러오는 중…",
+    ),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("모드"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage("경로를 읽을 수 없음"),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("꺼짐"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "프로세스 선택",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("화이트리스트"),
     "profile": MessageLookupByLibrary.simpleMessage("프로필"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("올바른 시간 형식을 입력하세요"),
@@ -732,7 +762,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "프로필이 수정되었습니다. 자동 업데이트를 끄시겠습니까?",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "프로필 이름을 입력하세요",
     ),
@@ -845,7 +875,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "secretCopied": MessageLookupByLibrary.simpleMessage("비밀번호가 클립보드에 복사되었습니다"),
     "selectAll": MessageLookupByLibrary.simpleMessage("전체 선택"),
     "selected": MessageLookupByLibrary.simpleMessage("선택됨"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("서비스 준비 완료"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("서비스 실행 중"),
     "settings": MessageLookupByLibrary.simpleMessage("설정"),
@@ -1004,7 +1034,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "upload": MessageLookupByLibrary.simpleMessage("업로드"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),
     "urlDesc": MessageLookupByLibrary.simpleMessage("URL 주소로 프로필 가져오기"),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage(
       "글로벌 스크립트 오버라이드 사용",
     ),
@@ -1035,6 +1065,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("화이트리스트 모드"),
     "writeToSystem": MessageLookupByLibrary.simpleMessage("시스템 적용"),
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage("관리자 권한이 필요합니다"),
-    "years": m14,
+    "years": m15,
   };
 }

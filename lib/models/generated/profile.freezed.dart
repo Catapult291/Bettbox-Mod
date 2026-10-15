@@ -462,7 +462,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate,  bool followUpdate,  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate, @JsonKey(name: 'follow-update')  bool followUpdate, @JsonKey(name: 'proxy-update')  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _Profile() when $default != null:
 return $default(_that.id,_that.label,_that.currentGroupName,_that.url,_that.lastUpdateDate,_that.autoUpdateDuration,_that.subscriptionInfo,_that.autoUpdate,_that.followUpdate,_that.proxyUpdate,_that.selectedMap,_that.unfoldSet,_that.overrideData,_that.isUpdating,_that.useScriptOverride,_that.ageSecretKey,_that.groupSwitches);case _:
@@ -483,7 +483,7 @@ return $default(_that.id,_that.label,_that.currentGroupName,_that.url,_that.last
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate,  bool followUpdate,  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate, @JsonKey(name: 'follow-update')  bool followUpdate, @JsonKey(name: 'proxy-update')  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)  $default,) {final _that = this;
 switch (_that) {
 case _Profile():
 return $default(_that.id,_that.label,_that.currentGroupName,_that.url,_that.lastUpdateDate,_that.autoUpdateDuration,_that.subscriptionInfo,_that.autoUpdate,_that.followUpdate,_that.proxyUpdate,_that.selectedMap,_that.unfoldSet,_that.overrideData,_that.isUpdating,_that.useScriptOverride,_that.ageSecretKey,_that.groupSwitches);case _:
@@ -503,7 +503,7 @@ return $default(_that.id,_that.label,_that.currentGroupName,_that.url,_that.last
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate,  bool followUpdate,  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( String id,  String? label,  String? currentGroupName,  String url,  DateTime? lastUpdateDate,  Duration autoUpdateDuration,  SubscriptionInfo? subscriptionInfo,  bool autoUpdate, @JsonKey(name: 'follow-update')  bool followUpdate, @JsonKey(name: 'proxy-update')  bool proxyUpdate,  SelectedMap selectedMap,  Set<String> unfoldSet,  OverrideData overrideData, @JsonKey(includeToJson: false, includeFromJson: false)  bool isUpdating,  bool useScriptOverride,  String? ageSecretKey, @JsonKey(name: 'group-switches')  Map<String, bool> groupSwitches)?  $default,) {final _that = this;
 switch (_that) {
 case _Profile() when $default != null:
 return $default(_that.id,_that.label,_that.currentGroupName,_that.url,_that.lastUpdateDate,_that.autoUpdateDuration,_that.subscriptionInfo,_that.autoUpdate,_that.followUpdate,_that.proxyUpdate,_that.selectedMap,_that.unfoldSet,_that.overrideData,_that.isUpdating,_that.useScriptOverride,_that.ageSecretKey,_that.groupSwitches);case _:

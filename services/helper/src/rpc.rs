@@ -147,6 +147,8 @@ async fn handle_request(request: HelperRequest) -> HelperResponse {
         }
         "core.stop" => result_to_response(&request.id, ops::core::stop_core(), "CORE_STOP_FAILED"),
         "process.set_priority" => handle_set_priority(&request).await,
+        "process.list" => handle_process_list(&request).await,
+        "process.icon" => handle_process_icon(&request).await,
         _ => HelperResponse::error(
             &request.id,
             HelperError::new(
@@ -191,6 +193,53 @@ async fn handle_set_priority(request: &HelperRequest) -> HelperResponse {
     .await
     .unwrap_or_else(|e| e.to_string());
     result_to_response(&request.id, result, "PROCESS_PRIORITY_FAILED")
+}
+
+async fn handle_process_list(_request: &HelperRequest) -> HelperResponse {
+    let entries = tokio::task::spawn_blocking(ops::process::list_processes)
+        .await
+        .unwrap_or_default();
+    HelperResponse::success(&_request.id, serde_json::json!(entries))
+}
+
+#[derive(serde::Deserialize)]
+struct ProcessIconParams {
+    path: String,
+}
+
+async fn handle_process_icon(request: &HelperRequest) -> HelperResponse {
+    let params = match serde_json::from_str::<ProcessIconParams>(&request.body) {
+        Ok(params) => params,
+        Err(e) => {
+            return HelperResponse::error(
+                &request.id,
+                HelperError::new("INVALID_BODY", e.to_string()),
+            )
+        }
+    };
+
+    let icon = tokio::task::spawn_blocking(move || ops::process::icon_rgba(&params.path))
+        .await
+        .unwrap_or(None);
+
+    match icon {
+        Some((width, height, rgba)) => {
+            use base64::Engine as _;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(rgba);
+            HelperResponse::success(
+                &request.id,
+                serde_json::json!({
+                    "width": width,
+                    "height": height,
+                    "rgba": b64,
+                }),
+            )
+        }
+        None => HelperResponse::error(
+            &request.id,
+            HelperError::new("ICON_NOT_FOUND", "Failed to extract icon"),
+        ),
+    }
 }
 
 fn result_to_response(id: &str, result: String, code: &str) -> HelperResponse {

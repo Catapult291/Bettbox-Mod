@@ -234,8 +234,8 @@
   "externalResources": "Внешние ресурсы",
   "checking": "Проверка...",
   "country": "Регион",
-  "checkError": "Ошибка проверки",  "scriptRuleTip": "Переопределяет глобальные правила",
-
+  "checkError": "Ошибка проверки",
+  "scriptRuleTip": "Переопределяет глобальные правила",
   "search": "Поиск",
   "replace": "Заменить",
   "replaceAll": "Заменить все",
@@ -704,5 +704,19 @@
   "updateTime": "Время обновления",
   "lightIcon": "Светлая иконка",
   "lightIconDesc": "Вручную переключить на светлую иконку приложения",
-  "autoGetNameTip": "Оставьте пустым — имя определится автоматически"
+  "autoGetNameTip": "Оставьте пустым — имя определится автоматически",
+  "processAccess": "Маршрутизация по процессам",
+  "processAccessDesc": "Направлять выбранные процессы напрямую или разрешать только выбранные",
+  "processAccessMode": "Режим",
+  "processAccessBlacklist": "Чёрный список",
+  "processAccessWhitelist": "Белый список",
+  "processAccessSelectProcesses": "Выбрать процессы",
+  "processAccessSelectedCount": "Выбрано: {count}",
+  "processAccessLoading": "Загрузка процессов…",
+  "processAccessLoadFailed": "Не удалось загрузить список процессов. Служба helper запущена?",
+  "processAccessEmpty": "Нет доступных процессов",
+  "processAccessHideSystem": "Скрыть системные процессы",
+  "processAccessNoPath": "Путь недоступен",
+  "processAccessFindProcessHint": "Требуется «Поиск процессов»; при сохранении он будет включён автоматически.",
+  "processAccessOff": "Выкл"
 }

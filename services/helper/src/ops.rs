@@ -400,4 +400,358 @@ pub mod process {
             }
         }
     }
+
+    /// 运行中进程的一行信息。`path` 为空表示打开失败（权限/系统进程）。
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ProcessEntry {
+        pub pid: u32,
+        pub name: String,
+        pub path: String,
+        pub description: String,
+    }
+
+    /// 枚举当前运行中的进程（Toolhelp32 快照 + QueryFullProcessImageNameW 取路径）。
+    ///
+    /// 以 helper 服务（SYSTEM）身份运行时几乎都能读到路径；读不到的条目 `path`
+    /// 为空串，调用方可据此禁用「加入名单」而不是静默生成一条空规则。
+    pub fn list_processes() -> Vec<ProcessEntry> {
+        use windows::Win32::Foundation::CloseHandle;
+        use windows::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+            TH32CS_SNAPPROCESS,
+        };
+        use windows::Win32::System::Threading::{
+            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
+            PROCESS_QUERY_LIMITED_INFORMATION,
+        };
+        use windows::core::PWSTR;
+
+        let mut entries: Vec<ProcessEntry> = Vec::new();
+
+        unsafe {
+            let snapshot = match CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) {
+                Ok(s) => s,
+                Err(_) => return entries,
+            };
+
+            let mut proc_entry = PROCESSENTRY32W {
+                dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+                ..Default::default()
+            };
+
+            if Process32FirstW(snapshot, &mut proc_entry).is_ok() {
+                loop {
+                    let name = String::from_utf16_lossy(&proc_entry.szExeFile);
+                    let name = name.trim_end_matches('\0').to_string();
+                    let pid = proc_entry.th32ProcessID;
+
+                    // Idle(0) / System(4) 没有可分流的用户态路径。
+                    if pid != 0 && pid != 4 {
+                        let mut path = String::new();
+                        if let Ok(handle) =
+                            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+                        {
+                            let mut size = 32768u32;
+                            let mut buf = vec![0u16; size as usize];
+                            let ok = QueryFullProcessImageNameW(
+                                handle,
+                                PROCESS_NAME_FORMAT(0),
+                                PWSTR(buf.as_mut_ptr()),
+                                &mut size,
+                            );
+                            if ok.is_ok() {
+                                path = String::from_utf16_lossy(&buf[..size as usize]);
+                            }
+                            let _ = CloseHandle(handle);
+                        }
+
+                        let description = if path.is_empty() {
+                            String::new()
+                        } else {
+                            file_description(&path)
+                        };
+
+                        entries.push(ProcessEntry {
+                            pid,
+                            name,
+                            path,
+                            description,
+                        });
+                    }
+
+                    if Process32NextW(snapshot, &mut proc_entry).is_err() {
+                        break;
+                    }
+                }
+            }
+
+            let _ = CloseHandle(snapshot);
+        }
+
+        entries
+    }
+
+    /// 单个 exe 的 FileDescription（版本资源）；读不到返回空串。
+    ///
+    /// 走 version.dll 的裸 FFI，避免为 windows-rs 再开一组 features：这段只需要
+    /// 三个导出，且 StringFileInfo 的语言/代码页组合必须自己扫。
+    fn file_description(path: &str) -> String {
+        use std::ffi::c_void;
+        use windows::core::PCWSTR;
+
+        #[link(name = "version")]
+        extern "system" {
+            fn GetFileVersionInfoSizeW(lptstrfilename: PCWSTR, lpdwhandle: *mut u32) -> u32;
+            fn GetFileVersionInfoW(
+                lptstrfilename: PCWSTR,
+                dwhandle: u32,
+                dwlen: u32,
+                lpdata: *mut c_void,
+            ) -> i32;
+            fn VerQueryValueW(
+                pblock: *const c_void,
+                lpsubblock: PCWSTR,
+                lplpbuffer: *mut *const c_void,
+                pulen: *mut u32,
+            ) -> i32;
+        }
+
+        unsafe {
+            let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut handle = 0u32;
+            let size = GetFileVersionInfoSizeW(PCWSTR(wide.as_ptr()), &mut handle);
+            if size == 0 {
+                return String::new();
+            }
+            let mut buf = vec![0u8; size as usize];
+            if GetFileVersionInfoW(PCWSTR(wide.as_ptr()), handle, size, buf.as_mut_ptr() as _) == 0
+            {
+                return String::new();
+            }
+
+            let mut len = 0u32;
+            // 语言/代码页从 VarFileInfo\Translation 读；读不到退回 en-US 常见组合。
+            let mut lang = 0x0409u16;
+            let mut codepage = 0x04b0u16;
+            let trans_sub: Vec<u16> = "\\VarFileInfo\\Translation"
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+            let mut trans_ptr: *const c_void = std::ptr::null();
+            if VerQueryValueW(
+                buf.as_ptr() as _,
+                PCWSTR(trans_sub.as_ptr()),
+                &mut trans_ptr,
+                &mut len,
+            ) != 0
+                && !trans_ptr.is_null()
+                && len >= 4
+            {
+                let pair = *(trans_ptr as *const u32);
+                lang = (pair & 0xffff) as u16;
+                codepage = ((pair >> 16) & 0xffff) as u16;
+            }
+
+            for key in ["FileDescription", "ProductName"] {
+                let sub: Vec<u16> = format!(
+                    "\\StringFileInfo\\{:04x}{:04x}\\{}",
+                    lang, codepage, key
+                )
+                .encode_utf16()
+                .chain(std::iter::once(0))
+                .collect();
+                let mut text_ptr: *const c_void = std::ptr::null();
+                if VerQueryValueW(
+                    buf.as_ptr() as _,
+                    PCWSTR(sub.as_ptr()),
+                    &mut text_ptr,
+                    &mut len,
+                ) != 0
+                    && !text_ptr.is_null()
+                {
+                    // StringFileInfo 的 `pulen` 实测是**含 NUL 的 WCHAR 个数**，
+                    // 不是文档含糊的字节数（真机三例：`Bettbox`→8、
+                    // `Bettbox Dev`→12、`PixPin`→7）。旧代码按字节语义再 `/2`，
+                    // 把字符串砍成前一半——UI 里表现为程序名显示不全
+                    // （`Bett` / `Bettbo` / `Pix`，2026-10-15 反馈）。
+                    // 按字符数取；`avail`（text_ptr 到版本缓冲区末端）做硬上界，
+                    // 个别按字节返回的实现由随后的首个 NUL 截住，不会越界。
+                    let base = text_ptr as *const u16;
+                    let buf_end = buf.as_ptr() as usize + buf.len();
+                    let avail = buf_end.saturating_sub(base as usize) / 2;
+                    let take = version_value_word_len(len, avail);
+                    let text = utf16_c_str(std::slice::from_raw_parts(base, take));
+                    if !text.is_empty() {
+                        return text;
+                    }
+                }
+            }
+        }
+        String::new()
+    }
+
+    /// 版本字符串值可安全取用的 u16 个数：`VerQueryValueW` 报告长度与缓冲区
+    /// 余量取小。
+    fn version_value_word_len(reported_len: u32, avail_words: usize) -> usize {
+        (reported_len as usize).min(avail_words)
+    }
+
+    /// UTF-16 序列扫到首个 NUL 得到文本（去首尾空白）；无 NUL 则整段取用。
+    fn utf16_c_str(words: &[u16]) -> String {
+        let end = words.iter().position(|&c| c == 0).unwrap_or(words.len());
+        String::from_utf16_lossy(&words[..end]).trim().to_string()
+    }
+
+    #[cfg(test)]
+    mod file_description_tests {
+        use super::{utf16_c_str, version_value_word_len};
+
+        #[test]
+        fn reported_len_is_wchar_count_not_bytes() {
+            // 实测 pulen 含 NUL 的 WCHAR 数；不再除 2（旧行为会得到 4）。
+            assert_eq!(version_value_word_len(8, 1024), 8);
+            // 缓冲区末端兜底。
+            assert_eq!(version_value_word_len(8, 5), 5);
+        }
+
+        #[test]
+        fn decodes_full_names_that_used_to_be_halved() {
+            for (raw, expect) in [
+                ("Bettbox\0", "Bettbox"),
+                ("Bettbox Dev\0", "Bettbox Dev"),
+                ("PixPin\0", "PixPin"),
+            ] {
+                let words: Vec<u16> = raw.encode_utf16().collect();
+                assert_eq!(utf16_c_str(&words), expect);
+            }
+        }
+
+        #[test]
+        fn trims_and_tolerates_missing_nul() {
+            let padded: Vec<u16> = "  Bett  \0ignored".encode_utf16().collect();
+            assert_eq!(utf16_c_str(&padded), "Bett");
+            let no_nul: Vec<u16> = "PixPin".encode_utf16().collect();
+            assert_eq!(utf16_c_str(&no_nul), "PixPin");
+        }
+    }
+
+    /// 从 exe 路径提取 32 位图标，返回 RGBA 像素与尺寸（自上而下）。
+    ///
+    /// 调用方（应用侧）按 path 缓存；失败返回 None，UI 回落默认图标。
+    pub fn icon_rgba(path: &str) -> Option<(u32, u32, Vec<u8>)> {
+        use windows::Win32::Graphics::Gdi::{
+            CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits, GetObjectW, SelectObject,
+            BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HDC, HGDIOBJ,
+        };
+        use windows::Win32::UI::Shell::ExtractIconExW;
+        use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, GetIconInfo, HICON, ICONINFO};
+
+        unsafe {
+            let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut hicon = HICON::default();
+            let count = ExtractIconExW(
+                windows::core::PCWSTR(wide.as_ptr()),
+                0,
+                Some(&mut hicon),
+                None,
+                1,
+            );
+            if count == 0 || hicon.is_invalid() {
+                return None;
+            }
+
+            let mut icon_info = ICONINFO::default();
+            if GetIconInfo(hicon, &mut icon_info).is_err() {
+                let _ = DestroyIcon(hicon);
+                return None;
+            }
+            let _ = DestroyIcon(hicon);
+
+            // 优先彩色位图；单色图标（极少）回退用 mask，这里直接放弃。
+            if icon_info.hbmColor.is_invalid() {
+                if !icon_info.hbmMask.is_invalid() {
+                    let _ = DeleteObject(icon_info.hbmMask);
+                }
+                return None;
+            }
+
+            let mut bmp = BITMAP::default();
+            let got = GetObjectW(
+                icon_info.hbmColor,
+                std::mem::size_of::<BITMAP>() as i32,
+                Some(&mut bmp as *mut BITMAP as *mut std::ffi::c_void),
+            );
+            if got == 0 || bmp.bmWidth <= 0 || bmp.bmHeight <= 0 {
+                let _ = DeleteObject(icon_info.hbmColor);
+                if !icon_info.hbmMask.is_invalid() {
+                    let _ = DeleteObject(icon_info.hbmMask);
+                }
+                return None;
+            }
+
+            let width = bmp.bmWidth as u32;
+            let height = bmp.bmHeight as u32;
+            let mut bits = vec![0u32; (width * height) as usize];
+
+            let mut bmi = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: bmp.bmWidth,
+                    // 负高度 = 自上而下，省一次翻转。
+                    biHeight: -bmp.bmHeight,
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    biCompression: BI_RGB.0 as u32,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+
+            let hdc: HDC = CreateCompatibleDC(HDC::default());
+            if hdc.is_invalid() {
+                let _ = DeleteObject(icon_info.hbmColor);
+                if !icon_info.hbmMask.is_invalid() {
+                    let _ = DeleteObject(icon_info.hbmMask);
+                }
+                return None;
+            }
+            let prev = SelectObject(hdc, HGDIOBJ(icon_info.hbmColor.0));
+            let lines = GetDIBits(
+                hdc,
+                icon_info.hbmColor,
+                0,
+                height,
+                Some(bits.as_mut_ptr() as _),
+                &mut bmi,
+                DIB_RGB_COLORS,
+            );
+            let _ = SelectObject(hdc, prev);
+            let _ = DeleteDC(hdc);
+            let _ = DeleteObject(icon_info.hbmColor);
+            if !icon_info.hbmMask.is_invalid() {
+                let _ = DeleteObject(icon_info.hbmMask);
+            }
+
+            if lines == 0 {
+                return None;
+            }
+
+            // DIB 是 BGRA；转成 Flutter 需要的 RGBA。图标的 alpha 常是预乘的，
+            // 0 的 alpha 像素直接清零，非 0 的按经验足够 UI 展示。
+            let mut rgba = Vec::with_capacity(bits.len() * 4);
+            for px in bits.iter() {
+                let b = (px & 0xff) as u8;
+                let g = ((px >> 8) & 0xff) as u8;
+                let r = ((px >> 16) & 0xff) as u8;
+                let a = ((px >> 24) & 0xff) as u8;
+                if a == 0 {
+                    rgba.extend_from_slice(&[0, 0, 0, 0]);
+                } else {
+                    rgba.extend_from_slice(&[r, g, b, a]);
+                }
+            }
+
+            Some((width, height, rgba))
+        }
+    }
 }

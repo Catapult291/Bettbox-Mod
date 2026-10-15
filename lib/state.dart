@@ -771,6 +771,8 @@ class GlobalState {
         hasCurrentScript: config.scriptProps.currentScript != null,
         disableQuic: config.vpnProps.disableQuic,
         excludeChina: config.vpnProps.excludeChina,
+        processAccessMode: system.isDesktop ? config.processAccess.mode.name : 'off',
+        processAccessPaths: system.isDesktop ? config.processAccess.paths : const [],
         locale: config.appSetting.locale,
       );
     }

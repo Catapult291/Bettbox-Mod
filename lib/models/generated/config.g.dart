@@ -434,7 +434,7 @@ _ScriptProps _$ScriptPropsFromJson(Map<String, dynamic> json) => _ScriptProps(
       const [],
   addedRules:
       (json['added-rules'] as List<dynamic>?)
-          ?.cast<String>()
+          ?.map((e) => e as String)
           .toList() ??
       const [],
 );
@@ -445,6 +445,28 @@ Map<String, dynamic> _$ScriptPropsToJson(_ScriptProps instance) =>
       'scripts': instance.scripts,
       'added-rules': instance.addedRules,
     };
+
+_ProcessAccessProps _$ProcessAccessPropsFromJson(Map<String, dynamic> json) =>
+    _ProcessAccessProps(
+      mode:
+          $enumDecodeNullable(_$ProcessAccessModeEnumMap, json['mode']) ??
+          ProcessAccessMode.off,
+      paths:
+          (json['paths'] as List<dynamic>?)?.map((e) => e as String).toList() ??
+          const [],
+    );
+
+Map<String, dynamic> _$ProcessAccessPropsToJson(_ProcessAccessProps instance) =>
+    <String, dynamic>{
+      'mode': _$ProcessAccessModeEnumMap[instance.mode]!,
+      'paths': instance.paths,
+    };
+
+const _$ProcessAccessModeEnumMap = {
+  ProcessAccessMode.off: 'off',
+  ProcessAccessMode.blacklist: 'blacklist',
+  ProcessAccessMode.whitelist: 'whitelist',
+};
 
 _Config _$ConfigFromJson(Map<String, dynamic> json) => _Config(
   appSetting: json['appSetting'] == null
@@ -495,6 +517,11 @@ _Config _$ConfigFromJson(Map<String, dynamic> json) => _Config(
   scriptProps: json['scriptProps'] == null
       ? const ScriptProps()
       : ScriptProps.fromJson(json['scriptProps'] as Map<String, dynamic>),
+  processAccess: json['processAccess'] == null
+      ? const ProcessAccessProps()
+      : ProcessAccessProps.fromJson(
+          json['processAccess'] as Map<String, dynamic>,
+        ),
   nodeExcludeFilter: json['nodeExcludeFilter'] as String? ?? '',
   healthCheckTimeout: (json['healthCheckTimeout'] as num?)?.toInt() ?? 5000,
 );
@@ -518,6 +545,7 @@ Map<String, dynamic> _$ConfigToJson(_Config instance) => <String, dynamic>{
   'windowProps': instance.windowProps,
   'patchClashConfig': instance.patchClashConfig,
   'scriptProps': instance.scriptProps,
+  'processAccess': instance.processAccess,
   'nodeExcludeFilter': instance.nodeExcludeFilter,
   'healthCheckTimeout': instance.healthCheckTimeout,
 };

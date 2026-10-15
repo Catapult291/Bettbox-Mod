@@ -58,6 +58,8 @@ Map<String, dynamic> buildConfigPatchInput({
   required bool hasCurrentScript,
   required bool disableQuic,
   required bool excludeChina,
+  required String processAccessMode,
+  required List<String> processAccessPaths,
   required String? locale,
 }) {
   return <String, dynamic>{
@@ -127,6 +129,8 @@ Map<String, dynamic> buildConfigPatchInput({
       'hasCurrentScript': hasCurrentScript,
       'disableQuic': disableQuic,
       'excludeChina': excludeChina,
+      'processAccessMode': processAccessMode,
+      'processAccessPaths': processAccessPaths,
       'locale': locale,
     },
   };

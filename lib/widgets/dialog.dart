@@ -16,6 +16,9 @@ class CommonDialog extends ConsumerWidget {
   final bool overrideScroll;
   final Color? backgroundColor;
 
+  /// 内容区最大宽度（逻辑 px）；默认 300，宽内容（如路径列表）按需放大。
+  final double? maxWidth;
+
   const CommonDialog({
     super.key,
     required this.title,
@@ -24,6 +27,7 @@ class CommonDialog extends ConsumerWidget {
     this.padding,
     this.overrideScroll = false,
     this.backgroundColor,
+    this.maxWidth,
   });
 
   @override
@@ -48,7 +52,7 @@ class CommonDialog extends ConsumerWidget {
         content: Container(
           constraints: BoxConstraints(
             maxHeight: min(size.height - 40, 500),
-            maxWidth: 300,
+            maxWidth: maxWidth ?? 300,
           ),
           width: size.width - 40,
           child: !overrideScroll ? SingleChildScrollView(child: child) : child,

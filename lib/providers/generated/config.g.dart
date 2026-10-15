@@ -264,7 +264,7 @@ final proxiesStyleSettingProvider =
     );
 
 typedef _$ProxiesStyleSetting = AutoDisposeNotifier<ProxiesStyle>;
-String _$scriptStateHash() => r'53fa1eefd68cc1ce0349a7270b37ecdf8ecc78e8';
+String _$scriptStateHash() => r'e63f415a82475840c9ac15efbab778de77525f8e';
 
 /// See also [ScriptState].
 @ProviderFor(ScriptState)
@@ -280,6 +280,28 @@ final scriptStateProvider =
     );
 
 typedef _$ScriptState = AutoDisposeNotifier<ScriptProps>;
+String _$processAccessStateHash() =>
+    r'87557f0d9fc39e31b7dfc646b6c7949efba786c9';
+
+/// 桌面按进程分流（§22 轻量档）：模式 + exe 路径名单。
+///
+/// Copied from [ProcessAccessState].
+@ProviderFor(ProcessAccessState)
+final processAccessStateProvider =
+    AutoDisposeNotifierProvider<
+      ProcessAccessState,
+      ProcessAccessProps
+    >.internal(
+      ProcessAccessState.new,
+      name: r'processAccessStateProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$processAccessStateHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+typedef _$ProcessAccessState = AutoDisposeNotifier<ProcessAccessProps>;
 String _$patchClashConfigHash() => r'd9acdd0ace673fc1c1460b63d7a27c5787713c14';
 
 /// See also [PatchClashConfig].

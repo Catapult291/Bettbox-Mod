@@ -43,14 +43,16 @@ class MessageLookup extends MessageLookupByLibrary {
   static String m10(label) =>
       "${label} باید بین ۱۰۲۴ تا ۴۹۱۵۱ باشد (۰ برای غیرفعال)";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "${count} مورد انتخاب شد";
+
+  static String m12(statusCode) =>
       "خطا در دریافت پروفایل. لطفاً شبکه خود را بررسی کرده یا لینک را ریست کنید ( کد خطا: ${statusCode} )";
 
-  static String m12(count) => "${count} مورد انتخاب شده";
+  static String m13(count) => "${count} مورد انتخاب شده";
 
-  static String m13(label) => "${label} باید یک URL معتبر باشد";
+  static String m14(label) => "${label} باید یک URL معتبر باشد";
 
-  static String m14(count) => "${Intl.plural(count, other: '# سال')}";
+  static String m15(count) => "${Intl.plural(count, other: '# سال')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -903,6 +905,38 @@ class MessageLookup extends MessageLookupByLibrary {
     "privateIp": MessageLookupByLibrary.simpleMessage(
       "آدرس IP خصوصی / شبکه محلی",
     ),
+    "processAccess": MessageLookupByLibrary.simpleMessage(
+      "دسترسی بر اساس فرآیند",
+    ),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("لیست سیاه"),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "هدایت مسیر فرآیندهای انتخاب‌شده به DIRECT یا فقط مجاز کردن آن‌ها",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
+      "فرآیند قابل انتخابی وجود ندارد",
+    ),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "به «یافتن فرآیند» نیاز دارد؛ هنگام ذخیره به‌صورت خودکار فعال می‌شود.",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
+      "پنهان کردن فرآیندهای سیستمی",
+    ),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "بارگذاری فهرست فرآیندها ناموفق بود. آیا سرویس helper در حال اجراست؟",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage(
+      "در حال بارگذاری فرآیندها…",
+    ),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("حالت"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage(
+      "مسیر در دسترس نیست",
+    ),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("خاموش"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "انتخاب فرآیندها",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("لیست سفید"),
     "profile": MessageLookupByLibrary.simpleMessage("پروفایل"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage(
@@ -913,7 +947,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "پروفایل تغییر یافته است. آیا بروزرسانی خودکار غیرفعال شود؟",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "لطفاً نام پروفایل را وارد کنید",
     ),
@@ -1080,7 +1114,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "selectAll": MessageLookupByLibrary.simpleMessage("انتخاب همه"),
     "selected": MessageLookupByLibrary.simpleMessage("انتخاب شده"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("سرویس آماده است"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage(
       "سرویس در حال اجرا است",
@@ -1275,7 +1309,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "urlDesc": MessageLookupByLibrary.simpleMessage(
       "دریافت پروفایل از طریق آدرس URL",
     ),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage(
       "استفاده از اسکریپت اورراید سراسری",
     ),
@@ -1316,6 +1350,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage(
       "نیازمند دسترسی مدیریت (Admin)",
     ),
-    "years": m14,
+    "years": m15,
   };
 }

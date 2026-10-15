@@ -344,6 +344,19 @@ abstract class ScriptProps with _$ScriptProps {
       _$ScriptPropsFromJson(json);
 }
 
+/// 桌面「按进程分流」配置（§22 轻量档）。只存 exe 路径；规则在
+/// `patch_config` 注入，不复用安卓 `vpnProps.accessControl`。
+@freezed
+abstract class ProcessAccessProps with _$ProcessAccessProps {
+  const factory ProcessAccessProps({
+    @Default(ProcessAccessMode.off) ProcessAccessMode mode,
+    @Default([]) List<String> paths,
+  }) = _ProcessAccessProps;
+
+  factory ProcessAccessProps.fromJson(Map<String, Object?> json) =>
+      _$ProcessAccessPropsFromJson(json);
+}
+
 extension ScriptPropsExt on ScriptProps {
   bool get hasAddedRules => addedRules.isNotEmpty;
 
@@ -391,6 +404,7 @@ abstract class Config with _$Config {
     @Default(defaultClashConfig)
     ClashConfig patchClashConfig,
     @Default(ScriptProps()) ScriptProps scriptProps,
+    @Default(ProcessAccessProps()) ProcessAccessProps processAccess,
     @Default('') String nodeExcludeFilter,
     @Default(5000) int healthCheckTimeout,
   }) = _Config;

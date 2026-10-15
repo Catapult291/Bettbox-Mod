@@ -42,14 +42,16 @@ class MessageLookup extends MessageLookupByLibrary {
 
   static String m10(label) => "${label} 必须在 1024 到 49151 之间，0 为关闭";
 
-  static String m11(statusCode) =>
+  static String m11(count) => "已选 ${count} 项";
+
+  static String m12(statusCode) =>
       "配置导入失败，请检查网络状况或尝试重置订阅链接( HTTP错误代码: ${statusCode} )";
 
-  static String m12(count) => "已选择 ${count} 项";
+  static String m13(count) => "已选择 ${count} 项";
 
-  static String m13(label) => "${label}必须为URL";
+  static String m14(label) => "${label}必须为URL";
 
-  static String m14(count) => "${Intl.plural(count, other: '年')}";
+  static String m15(count) => "${Intl.plural(count, other: '年')}";
 
   final messages = _notInlinedMessages(_notInlinedMessages);
   static Map<String, Function> _notInlinedMessages(_) => <String, Function>{
@@ -630,6 +632,28 @@ class MessageLookup extends MessageLookupByLibrary {
     "pressKeyboard": MessageLookupByLibrary.simpleMessage("请按下按键"),
     "preview": MessageLookupByLibrary.simpleMessage("预览"),
     "privateIp": MessageLookupByLibrary.simpleMessage("私有 / 局域网 IP 地址"),
+    "processAccess": MessageLookupByLibrary.simpleMessage("进程分流"),
+    "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("黑名单"),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
+      "将选中的进程路径分流到直连，或仅放行选中的进程",
+    ),
+    "processAccessEmpty": MessageLookupByLibrary.simpleMessage("没有可选进程"),
+    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
+      "依赖「查找进程」开关；保存时会自动打开。",
+    ),
+    "processAccessHideSystem": MessageLookupByLibrary.simpleMessage("隐藏系统进程"),
+    "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
+      "进程列表加载失败，请确认 helper 服务在运行。",
+    ),
+    "processAccessLoading": MessageLookupByLibrary.simpleMessage("正在加载进程…"),
+    "processAccessMode": MessageLookupByLibrary.simpleMessage("模式"),
+    "processAccessNoPath": MessageLookupByLibrary.simpleMessage("无法读取路径"),
+    "processAccessOff": MessageLookupByLibrary.simpleMessage("关闭"),
+    "processAccessSelectProcesses": MessageLookupByLibrary.simpleMessage(
+      "选择进程",
+    ),
+    "processAccessSelectedCount": m11,
+    "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("白名单"),
     "profile": MessageLookupByLibrary.simpleMessage("配置"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("请输入有效间隔时间格式"),
@@ -638,7 +662,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "profileHasUpdate": MessageLookupByLibrary.simpleMessage(
       "配置文件已经修改，是否关闭自动更新？",
     ),
-    "profileImportFailed": m11,
+    "profileImportFailed": m12,
     "profileNameNullValidationDesc": MessageLookupByLibrary.simpleMessage(
       "请输入配置名称",
     ),
@@ -739,7 +763,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "secretCopied": MessageLookupByLibrary.simpleMessage("密码已复制到剪贴板"),
     "selectAll": MessageLookupByLibrary.simpleMessage("全选"),
     "selected": MessageLookupByLibrary.simpleMessage("已选择"),
-    "selectedCountTitle": m12,
+    "selectedCountTitle": m13,
     "serviceReady": MessageLookupByLibrary.simpleMessage("服务已就绪"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("服务正在运行中"),
     "settings": MessageLookupByLibrary.simpleMessage("设置"),
@@ -882,7 +906,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "upload": MessageLookupByLibrary.simpleMessage("上传"),
     "url": MessageLookupByLibrary.simpleMessage("URL"),
     "urlDesc": MessageLookupByLibrary.simpleMessage("通过 URL 获取配置文件"),
-    "urlTip": m13,
+    "urlTip": m14,
     "useGlobalScriptOverride": MessageLookupByLibrary.simpleMessage("使用全局脚本覆写"),
     "useHosts": MessageLookupByLibrary.simpleMessage("使用Hosts"),
     "useSystemHosts": MessageLookupByLibrary.simpleMessage("使用系统 Hosts"),
@@ -911,6 +935,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "whitelistMode": MessageLookupByLibrary.simpleMessage("白名单模式"),
     "writeToSystem": MessageLookupByLibrary.simpleMessage("写入系统"),
     "writeToSystemDesc": MessageLookupByLibrary.simpleMessage("需要管理员权限"),
-    "years": m14,
+    "years": m15,
   };
 }
