@@ -70,6 +70,7 @@
 | 55 | 稳定性 | 「被强杀 → 下次启动」残留就地闭合：系统代理看门狗 + 无快照残留认领（B⑪） | v1.19.17 |
 | 56 | 工程 | 二维码原生解码的一次性 `MobileScannerController` 补 dispose（B⑳） | v1.19.18 |
 | 57 | 工程 | Windows 数据目录钉死 `com.appshub\Bettbox` + 启动一次性回迁；卸载器清理补 `Catapult291`（A④ 收尾） | 待发布 |
+| 58 | 界面/分流 | 按进程分流（关闭/黑名单/白名单）与选择进程 UI（A⑤） | 待发布 |
 
 ---
 
@@ -2924,5 +2925,54 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   `Documents\Bettbox` 的实机验证（待下一版发布后升级覆盖）。
 
 **未决**：无新开项。A④ 代码层已闭环；发版前现网仍活在 `Catapult291\Bettbox`，升级到含本改动的版本时自动回迁。
+
+---
+
+## 58. 按进程分流（关闭/黑名单/白名单）与选择进程 UI（A⑤）
+
+**文件**：`lib/views/process_access.dart`（新增）、`lib/views/tools.dart`、`lib/models/config.dart`、
+`lib/providers/config.dart`、`lib/providers/state.dart`、`lib/state.dart`、`lib/helper/helper.dart`、
+`lib/widgets/dialog.dart`、`lib/views/connection/item.dart`、`rust/bettbox-native/src/patch_config.rs`、
+`services/helper/src/*`、`arb/intl_*.arb`（7 语言）
+**测试**：`test/views/process_access_view_test.dart`
+
+**问题**：上游只能按域名/规则分流，无法「某进程固定直连」或「仅名单内进程走规则、名单外直连」
+（§117 A⑤）。进程列表与图标原先没有应用侧数据源；helper 返回的版本描述还会被截成半截
+（`Bettbox`→`Bett`、`PixPin`→`Pix`）。
+
+**改动**：
+
+- **数据与注入**：`Config.processAccess{mode,paths}`（关闭 / 黑名单 / 白名单）。经
+  patch_config env 注入——黑名单多条顶层 `PROCESS-PATH,{path},DIRECT`（路径含逗号时回退
+  `PROCESS-PATH-REGEX`）；白名单单条 `NOT,((PROCESS-PATH-REGEX,^p1$|^p2$|…)),DIRECT`，
+  路径点号转义、括号写成 `\x28\x29`。名单非空时强制 `find-process-mode: always`（Rust 注入与
+  UI 保存同步）。
+- **落盘**：`configState()` 纳入 `processAccessStateProvider` watch 与构造参数，模式/名单变更
+  触发 `savePreferencesDebounce`（原先只直写 `globalState.config`，prefs 停在旧值）。
+- **helper**：新增 `process.list`（Toolhelp32 枚举）与 `process.icon`（版本资源 + ExtractIconEx
+  转 RGBA）；修 `file_description` 长度语义——`VerQueryValueW` 字符串值 `pulen` 是含 NUL 的
+  WCHAR 个数，按字节再 `/2` 会截半，现返回全名（`Bettbox` / `Bettbox Dev` / `PixPin` /
+  `Crashpad Handler`）。
+- **UI**：「更多 → 设置」新增**进程分流**入口（仅 Windows）。页面无描边、分区与搜索框只用阴影、
+  纯色无渐变，亮/暗双主题；模式三行 + 已选列表（保留 `.exe` 与完整路径）+ 空态/计数。
+  选择进程对话框宽 600、标题去 `.exe`，搜索/勾选/确认回写、移除单项、恢复原选择。
+  连接页进程图标去掉安卓门占位。`CommonDialog` 增可选 `maxWidth`（默认 300 不变）。
+- **l10n**：13 键 × 7 语言；黑/白名单标签为纯文案（不带括号说明），无「直连表示…」提示行。
+
+**验证**：
+
+- `flutter analyze lib test` 无问题；`flutter test` **187 过 / 3 skip**（基线 182 + 进程分流页
+  widget 测试 5 项：三模式渲染/空态、计数与路径显示、切白名单强制 always、空名单回落 off、
+  移除回写）；helper `cargo test` **18 过**。
+- 真机（dev，APP_DEV）：黑名单 5 条 `PROCESS-PATH` 注入正确；白名单 `NOT+REGEX` 注入正确，
+  含 `Program Files (x86)` 时 `\x28x86\x29` 转义正确；切模式后 2 秒内 prefs 落盘，
+  `config.yaml` 与 UI 一致。
+- 白名单流量级：**名单外进程 → DIRECT 成立**（连接页链路芯片 + 进程归因留证）；
+  **名单内进程 → 走代理组**在现有证据面（连接页无规则标签、请求详情「规则」为空、
+  默认 error 级日志无 `match` 行）下未取得判定证据，记为证据不足。
+- 窄窗口 715px / 554px：进程分流页与选择对话框无水平溢出，窄宽自动切移动端底栏布局。
+
+**未决**：白名单「名单内 → 走代理」流量级判定待有规则标签的证据面或手工复测；
+防火墙入站询问已定夺为**不新增规则**（出站默认放行，无代码改动）。
 
 
