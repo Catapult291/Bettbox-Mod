@@ -21,6 +21,7 @@ import 'clash/lib.dart';
 import 'common/common.dart';
 import 'common/external_control.dart';
 import 'common/network_matcher.dart';
+import 'common/pinned_prefs.dart';
 import 'models/models.dart';
 
 ReceivePort? _serviceReceiverPort;
@@ -29,6 +30,7 @@ ReceivePort? _messageReceiverPort;
 Future<void> main(List<String> args) async {
   globalState.isService = false;
   WidgetsFlutterBinding.ensureInitialized();
+  await installPinnedPreferencesStore();
 
   if (system.isDesktop &&
       (args.contains('--exit') || args.contains('--restart'))) {
@@ -107,6 +109,7 @@ Future<void> _runApp() async {
 Future<void> _service(List<String> flags) async {
   globalState.isService = true;
   WidgetsFlutterBinding.ensureInitialized();
+  await installPinnedPreferencesStore();
   await globalState.init();
 
   {

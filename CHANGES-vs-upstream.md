@@ -72,6 +72,7 @@
 | 57 | 工程 | Windows 数据目录钉死 `com.appshub\Bettbox` + 启动一次性回迁；卸载器清理补 `Catapult291`（A④ 收尾） | v1.19.19 |
 | 58 | 界面/分流 | 按进程分流（关闭/黑名单/白名单）与选择进程 UI（A⑤） | v1.19.19 |
 | 59 | 界面/内存 | 首页内存卡片：「应用」改专用工作集口径（与任务管理器「内存」列一致）；内核停止/IPC 挂死不再冻结读数（A⑥ 收尾） | v1.19.19 |
+| 60 | 工程 | Windows 偏好设置文件钉死数据目录：读写改走 `AppPath`，旧身份目录按 mtime 一次性回拷（A④ prefs 接线） | 待发布 |
 
 ---
 
@@ -3019,3 +3020,40 @@ project-slug / token 都是上游账号的，本仓库不能复用。
   持续刷新、「内核」冻结在 19.9 MB（修复前同一场景应用 317.1 MB 跨 10 秒纹丝不动）。
 
 **未决**：无新开项。A⑥ 关闭；非 Windows 平台仍为 `currentRss`（无任务管理器对齐诉求）。
+
+---
+
+## 60. Windows 偏好设置文件钉死数据目录：读写改走 AppPath + 旧侧按 mtime 回拷（A④ prefs 接线）
+
+**文件**：`lib/common/pinned_prefs.dart`（新增）、`lib/main.dart`、`pubspec.yaml`、`test/common/pinned_prefs_test.dart`（新增）
+
+**问题**（v1.19.19 发版后 A④ 现网观察，stage-log §164）：§57 把数据目录钉在
+`%APPDATA%\com.appshub\Bettbox`，但 `shared_preferences.json` 的读写仍走插件
+`SharedPreferences.getInstance()` → `getApplicationSupportDirectory()`，路径随 exe 版本资源
+`CompanyName` 落在 `%APPDATA%\Catapult291\Bettbox`——prefs 没接到钉死目录，「不随版本资源
+漂移」的目标对 prefs 不成立。`AppPath.sharedPreferencesPath`（已钉死）全仓唯一调用点是
+`controller.dart` 缓存损坏清理删文件，删的还不是实际读写那份。现网实况：config/profiles 在
+钉死目录、prefs 在旧目录且持续更新（分裂态）。
+
+**改动**：
+
+- 新增 `PinnedPreferencesStore`（`SharedPreferencesStorePlatform` 子类）：JSON 文件后端，
+  格式与插件 Windows 实现一致（`flutter.` 前缀键、`shared_preferences.json`），路径取
+  `AppPath` 数据目录；经典 `SharedPreferences` 的 `getAll` / `setValue` / `remove` / `clear`
+  四入口全覆盖。
+- 新增 `migrateLegacyPreferencesFile`：钉死侧缺失或旧侧 mtime 更新时把旧侧文件**复制**过来
+  （不删旧文件，留给降级路径）；无哨兵——钉死侧被持续写后 mtime 恒新，自然不再被覆盖，
+  且降级改设置再升级时较新的旧侧仍能被采纳。
+- `installPinnedPreferencesStore`：仅 Windows 生效；`main` 与 `_service` 在
+  `WidgetsFlutterBinding.ensureInitialized()` 之后、任何 `preferences` 访问之前各调一次。
+- `pubspec.yaml` 增加直接依赖 `shared_preferences_platform_interface: ^2.4.2`。
+
+**验证**：
+
+- `flutter analyze lib test` 无问题；全量 `flutter test` 见提交时基线（新增 10 项：
+  store 往返/删键/清前缀/坏 JSON/新实例续读 5 项 + 迁移同目录/缺失/复制/旧新双向 mtime/
+  自洽不重搬/空文件 6 项中的对应项）。
+- 现网分裂态（旧侧 45KB 活状态、钉死侧 6.7KB 陈旧）预期在升级到本版后首次启动被回拷。
+
+**未决**：升级到含本改动的版本后需在现网核对 prefs 落在 `com.appshub\Bettbox` 且旧侧不再更新；
+卸载清理 GUI 路径仍未验（与本节无关，承 §155）。
