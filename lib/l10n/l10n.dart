@@ -4319,10 +4319,10 @@ class AppLocalizations {
     return Intl.message('Memory', name: 'memoryInfo', desc: '', args: []);
   }
 
-  /// `App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.`
+  /// `App is the memory used by this application itself: private working set on Windows (same basis as Task Manager's Memory column, excluding shared library pages), RSS on other platforms (including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.`
   String get memoryInfoDesc {
     return Intl.message(
-      'App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.',
+      'App is the memory used by this application itself: private working set on Windows (same basis as Task Manager\'s Memory column, excluding shared library pages), RSS on other platforms (including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.',
       name: 'memoryInfoDesc',
       desc: '',
       args: [],

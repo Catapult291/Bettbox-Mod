@@ -526,7 +526,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("最大化"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("メモリ情報"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "「アプリ」はこのアプリ自身のメモリ使用量（RSS、Flutter エンジン・UI・メモリ上のデータキャッシュを含む）、「カーネル」はプロキシカーネルプロセスの実行時のヒープ使用量です。どちらも完全なメモリ統計ではなく、参考値です。",
+      "「アプリ」はこのアプリ自身のメモリ使用量です。Windows では専用作業セット（タスクマネージャの「メモリ」列と同じ基準。共有ライブラリページを含みません）、その他のプラットフォームでは RSS（Flutter エンジン・UI・メモリ上のデータキャッシュを含みます）で測ります。「カーネル」はプロキシカーネルプロセスの実行時のヒープ使用量です。どちらも完全なメモリ統計ではなく、参考値です。",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("メッセージテスト"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage("テストメッセージです。"),

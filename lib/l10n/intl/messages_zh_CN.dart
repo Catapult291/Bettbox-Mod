@@ -468,7 +468,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("最大化"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("内存信息"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "「应用」显示本应用自身占用的内存（RSS，含 Flutter 引擎、界面与内存中的数据缓存）；「内核」显示代理内核进程运行时的堆内存。两者均非完整的内存统计，仅供参考。",
+      "「应用」显示本应用自身占用的内存：Windows 上按专用工作集统计（与任务管理器「内存」列同口径，不含共享库页），其他平台按 RSS（含 Flutter 引擎、界面与内存中的数据缓存）；「内核」显示代理内核进程运行时的堆内存。两者均非完整的内存统计，仅供参考。",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("消息测试"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage("这是一条消息。"),

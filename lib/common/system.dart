@@ -406,6 +406,79 @@ class Windows {
     }
   }
 
+  /// 本进程**专用工作集**（Private Working Set，字节）——任务管理器「进程」页
+  /// 默认「内存」列的口径：工作集中未与任何进程共享的页 × 页大小。
+  ///
+  /// 实现走 `NtQueryVirtualMemory(MemoryWorkingSetInformation)` 拿整张工作集
+  /// 页块表，按 NT `MEMORY_WORKING_SET_BLOCK` 位布局（Protection:5 在低位、
+  /// ShareCount 在 bit5..7）数 `ShareCount == 0` 的页；实测与 perf 计数器
+  /// `WorkingSetPrivate` 同量级（0.2% 内）。**不能**用
+  /// `PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`——那是私有**提交**
+  /// （commit charge，含已换出页），比专用工作集大一截。
+  ///
+  /// 查询失败（状态非 0 / 异常）返回 `null`，由调用方回落
+  /// `ProcessInfo.currentRss`（完整工作集）。伪句柄 `GetCurrentProcess`
+  /// 只指向本进程，不需要 `CloseHandle`。
+  int? currentPrivateWorkingSet() {
+    try {
+      const pageSize = 4096;
+      // 缓冲按「当前 RSS 折页 + 32 MiB 余量」给：查询间隙工作集增长被余量吃掉；
+      // 不够时 NtQueryVirtualMemory 返回失败 → 走 null 回落，下个刷新周期再试。
+      var capacityEntries = ProcessInfo.currentRss ~/ pageSize + 8192;
+      const maxEntries = 1 << 21; // 8 GiB 工作集上限，防御性封顶
+      if (capacityEntries > maxEntries) capacityEntries = maxEntries;
+
+      final ntdll = DynamicLibrary.open('ntdll.dll');
+      final ntQueryVirtualMemory = ntdll.lookupFunction<
+        Int32 Function(
+          IntPtr,
+          IntPtr,
+          Int32,
+          Pointer<Void>,
+          IntPtr,
+          Pointer<IntPtr>,
+        ),
+        int Function(int, int, int, Pointer<Void>, int, Pointer<IntPtr>)
+      >('NtQueryVirtualMemory');
+      final kernel32 = DynamicLibrary.open('kernel32.dll');
+      final getCurrentProcess = kernel32
+          .lookupFunction<IntPtr Function(), int Function()>('GetCurrentProcess');
+
+      // MEMORY_WORKING_SET_INFORMATION：ULONG_PTR NumberOfEntries + 页块数组。
+      final bufBytes = 8 + capacityEntries * 8;
+      final buf = calloc<Uint8>(bufBytes);
+      final retLen = calloc<IntPtr>();
+      try {
+        final status = ntQueryVirtualMemory(
+          getCurrentProcess(),
+          0,
+          1, // MemoryWorkingSetInformation
+          buf.cast<Void>(),
+          bufBytes,
+          retLen,
+        );
+        if (status < 0) return null;
+
+        final count = buf.cast<Uint64>().value;
+        final blocks = (buf.cast<Uint64>() + 1); // 跳过头部 NumberOfEntries
+        var privatePages = 0;
+        for (var i = 0; i < count; i++) {
+          // NT 位布局：Protection:5（bit0..4）、ShareCount:3（bit5..7）。
+          // ShareCount == 0 = 独占页 = 专用工作集计数。
+          if (((blocks[i] >> 5) & 0x7) == 0) privatePages++;
+        }
+        final privateBytes = privatePages * pageSize;
+        return privateBytes > 0 ? privateBytes : null;
+      } finally {
+        calloc.free(buf);
+        calloc.free(retLen);
+      }
+    } catch (e) {
+      commonPrint.log('currentPrivateWorkingSet failed: $e');
+      return null;
+    }
+  }
+
   /// 以管理员身份执行命令（UAC 提权）。
   ///
   /// `ShellExecuteW(..., "runas", ...)` 会一直阻塞到用户在 UAC 对话框上做出选择，

@@ -9,7 +9,21 @@ import 'package:bett_box/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
 class MemoryInfo extends StatefulWidget {
-  const MemoryInfo({super.key});
+  const MemoryInfo({
+    super.key,
+    this.kernelMemoryBytes,
+    this.appMemoryBytes,
+  });
+
+  /// 测试接缝：内核堆读数；缺省走 `clashCore.getMemory()`。
+  final Future<int> Function()? kernelMemoryBytes;
+
+  /// 测试接缝：本进程内存读数；缺省按平台取专用工作集 / `ProcessInfo.currentRss`。
+  final int Function()? appMemoryBytes;
+
+  /// 清掉静态读数缓存（卡片用静态字段避免重建时闪 0），供测试隔离用例。
+  @visibleForTesting
+  static void debugResetCache() => _MemoryInfoState.debugResetCache();
 
   @override
   State<MemoryInfo> createState() => _MemoryInfoState();
@@ -21,12 +35,35 @@ class _MemoryInfoState extends State<MemoryInfo> {
   static TrafficValue _lastMemoryValue = TrafficValue(value: 0);
   TrafficValue _memoryValue = _lastMemoryValue;
 
-  /// 本应用自身的内存（RSS）。内核内存由 [clashCore.getMemory] 单列，
-  /// 两者含义不同故分开显示。
+  /// 本应用自身的内存。Windows 上取专用工作集（任务管理器「内存」列同口径），
+  /// 其余平台取 `ProcessInfo.currentRss`；内核内存由 [clashCore.getMemory]
+  /// 单列，两者含义不同故分开显示。
   static TrafficValue _lastAppMemoryValue = TrafficValue(value: 0);
   TrafficValue _appMemoryValue = _lastAppMemoryValue;
   Timer? _initTimer;
   bool _isUpdating = false;
+
+  static void debugResetCache() {
+    _lastMemoryValue = TrafficValue(value: 0);
+    _lastAppMemoryValue = TrafficValue(value: 0);
+  }
+
+  /// 内核读数的限时等待：`getMemory` 的 invoke 没有超时，内核进程死亡而
+  /// socket 半死时回包永远不会到——不限时会让 `_isUpdating` 卡死，
+  /// 整张卡片（含应用读数）一起冻结（§25 实测）。取值需小于 2s 刷新周期，
+  /// 保证病态下应用读数仍按 tick 前进。
+  static const _kernelReadTimeout = Duration(milliseconds: 1500);
+
+  Future<int> _readKernelMemory() =>
+      widget.kernelMemoryBytes?.call() ?? clashCore.getMemory();
+
+  int _readAppMemory() {
+    final override = widget.appMemoryBytes;
+    if (override != null) return override();
+    final privateWorkingSet = windows?.currentPrivateWorkingSet();
+    if (privateWorkingSet != null) return privateWorkingSet;
+    return ProcessInfo.currentRss;
+  }
 
   @override
   void initState() {
@@ -65,24 +102,32 @@ class _MemoryInfoState extends State<MemoryInfo> {
     _isUpdating = true;
 
     try {
-      final memoryValue = await clashCore.getMemory();
-      final appMemoryValue = ProcessInfo.currentRss;
-      // Update only if valid (non-zero)
-      if (memoryValue > 0) {
-        final adjustedValue = memoryValue;
-
-        if (mounted) {
-          setState(() {
-            _memoryValue = TrafficValue(value: adjustedValue);
-            _lastMemoryValue = _memoryValue; // Cache latest valid value
-            if (appMemoryValue > 0) {
-              _appMemoryValue = TrafficValue(value: appMemoryValue);
-              _lastAppMemoryValue = _appMemoryValue;
-            }
-          });
-        }
+      // 应用读数与内核无关，先读先上屏：内核 IPC 挂死也不拖住它（§25/A⑥）。
+      final appMemoryValue = _readAppMemory();
+      if (appMemoryValue > 0 && mounted) {
+        setState(() {
+          _appMemoryValue = TrafficValue(value: appMemoryValue);
+          _lastAppMemoryValue = _appMemoryValue;
+        });
       }
-      // If 0, keep last valid value
+
+      // 内核读数限时等待：超时/不可达按 0 →「内核」保持上次有效值不闪 0。
+      int kernelMemoryValue = 0;
+      try {
+        kernelMemoryValue = await _readKernelMemory().timeout(
+          _kernelReadTimeout,
+        );
+      } catch (_) {
+        // 超时或抛错都按不应答处理
+      }
+      if (!mounted) return;
+
+      if (kernelMemoryValue > 0) {
+        setState(() {
+          _memoryValue = TrafficValue(value: kernelMemoryValue);
+          _lastMemoryValue = _memoryValue;
+        });
+      }
     } catch (e) {
       // Ignore error, keep current value
     } finally {

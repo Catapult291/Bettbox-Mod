@@ -669,7 +669,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("Maximize"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("Memory"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.",
+      "App is the memory used by this application itself: private working set on Windows (same basis as Task Manager\'s Memory column, excluding shared library pages), RSS on other platforms (including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("Message Test"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage(

@@ -476,7 +476,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "maximize": MessageLookupByLibrary.simpleMessage("最大化"),
     "memoryInfo": MessageLookupByLibrary.simpleMessage("記憶體資訊"),
     "memoryInfoDesc": MessageLookupByLibrary.simpleMessage(
-      "「應用」顯示本應用程式自身佔用的記憶體（RSS，含 Flutter 引擎、介面與記憶體中的資料快取）；「內核」顯示代理核心程序運作時的堆疊記憶體。兩者均非完整的記憶體統計，僅供參考。",
+      "「應用」顯示本應用程式自身佔用的記憶體：Windows 上按專用工作集統計（與工作管理員「記憶體」欄同口徑，不含共享程式庫頁面），其他平台按 RSS（含 Flutter 引擎、介面與記憶體中的資料快取）；「內核」顯示代理核心程序運作時的堆疊記憶體。兩者均非完整的記憶體統計，僅供參考。",
     ),
     "messageTest": MessageLookupByLibrary.simpleMessage("訊息測試"),
     "messageTestTip": MessageLookupByLibrary.simpleMessage("這是一條訊息。"),

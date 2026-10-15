@@ -523,7 +523,7 @@
   "pleaseInputAdminPassword": "Please enter the admin password",
   "copyEnvVar": "Copy Environment Variable",
   "memoryInfo": "Memory",
-  "memoryInfoDesc": "App is the memory used by this application itself (RSS, including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.",
+  "memoryInfoDesc": "App is the memory used by this application itself: private working set on Windows (same basis as Task Manager's Memory column, excluding shared library pages), RSS on other platforms (including the Flutter engine, the UI and data cached in memory). Core is the runtime heap usage of the proxy core process. Neither is a complete memory statistic; both are for reference only.",
   "cancel": "Cancel",
   "fileIsUpdate": "File modified. Save changes?",
   "profileHasUpdate": "Profile modified. Disable auto-update?",

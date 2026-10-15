@@ -71,6 +71,7 @@
 | 56 | 工程 | 二维码原生解码的一次性 `MobileScannerController` 补 dispose（B⑳） | v1.19.18 |
 | 57 | 工程 | Windows 数据目录钉死 `com.appshub\Bettbox` + 启动一次性回迁；卸载器清理补 `Catapult291`（A④ 收尾） | 待发布 |
 | 58 | 界面/分流 | 按进程分流（关闭/黑名单/白名单）与选择进程 UI（A⑤） | 待发布 |
+| 59 | 界面/内存 | 首页内存卡片：「应用」改专用工作集口径（与任务管理器「内存」列一致）；内核停止/IPC 挂死不再冻结读数（A⑥ 收尾） | 待发布 |
 
 ---
 
@@ -2976,3 +2977,45 @@ project-slug / token 都是上游账号的，本仓库不能复用。
 防火墙入站询问已定夺为**不新增规则**（出站默认放行，无代码改动）。
 
 
+
+---
+
+## 59. 首页内存卡片：「应用」改专用工作集口径 + 内核停止/挂死不再冻结读数（A⑥ 收尾）
+
+**文件**：`lib/views/dashboard/widgets/memory_info.dart`、`lib/common/system.dart`、
+`arb/intl_*.arb`（7 语言）+ `lib/l10n/*`
+**测试**：`test/common/windows_memory_test.dart`、`test/widgets/memory_info_test.dart`
+
+**问题**（§25 / §117 A⑥）：卡片「应用」读 `ProcessInfo.currentRss`（完整工作集，含共享库页），
+与任务管理器「进程」页默认「内存」列（专用工作集）对不上；读数更新被包在
+`内核 getMemory() > 0` 的条件里，内核停止后「应用」数字冻结在最后值。真机复现还发现更深一层：
+`getMemory()` 的 `invoke` 没有超时，内核进程死亡而 socket 半死时回包永远不到，`_isUpdating`
+卡死，**整张卡片（含应用读数）一起冻结**——只把应用读数移出 if 仍不够。
+
+**改动**：
+
+- **口径（Windows）**：「应用」改取本进程**专用工作集**（Private Working Set）——
+  `NtQueryVirtualMemory(MemoryWorkingSetInformation)` 拿整张工作集页块表，按 NT
+  `MEMORY_WORKING_SET_BLOCK` 位布局（Protection:5 在低位、ShareCount 在 bit5..7）数
+  `ShareCount == 0` 的页 × 页大小；失败回落 `ProcessInfo.currentRss`。实测与 perf 计数器
+  `WorkingSetPrivate`（= 任务管理器「内存」列）同刻严格相等。**不能**用
+  `PROCESS_MEMORY_COUNTERS_EX.PrivateUsage`——那是私有**提交**（commit charge，含换出页），
+  比专用工作集大一截（第一版实现踩过，探针数据钉死）。
+- **刷新契约**：应用读数**先读先上屏**（与内核无关）；内核读数 `.timeout(1.5s)`——超时/
+  抛错按 0，「内核」保持上次有效值不闪 0。1.5s < 2s 刷新周期，病态下应用仍按 tick 前进。
+- **说明文案**：`memoryInfoDesc` 7 语言改写，写明 Windows 按专用工作集（与任务管理器
+  「内存」列同口径，不含共享库页）、其他平台按 RSS。
+- **测试接缝**：`MemoryInfo` 构造参数 `kernelMemoryBytes` / `appMemoryBytes` +
+  `debugResetCache()`，测试不碰 clashCore 与 Win32。
+
+**验证**：
+
+- `flutter analyze lib test` 无问题；全量 `flutter test` **192 过 / 3 skip**（基线 187 + 本轮 5：
+  FFI 口径 2 项含与 perf `WorkingSetPrivate` 同进程对拍；widget 3 项含「内核读数挂死 → 应用
+  不受拖累、1.5s 限时后照常刷新」）。
+- 真机（dev 实例）：①卡片显示专用工作集——挂起进程后跨进程走表与 perf 逐轮严格相等
+  （258.7/258.6/259.3 MB vs 258.8/258.6/259.3）；②信息弹窗新文案 OCR 全文命中；
+  ③杀 `BettboxDevCore.exe` 后卡片**不再整卡冻结**：「应用」289.5 → 298.0 → 300.6 → 294.6 MB
+  持续刷新、「内核」冻结在 19.9 MB（修复前同一场景应用 317.1 MB 跨 10 秒纹丝不动）。
+
+**未决**：无新开项。A⑥ 关闭；非 Windows 平台仍为 `currentRss`（无任务管理器对齐诉求）。
