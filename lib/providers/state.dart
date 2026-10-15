@@ -49,6 +49,10 @@ Config configState(Ref ref) {
   final hotKeyActions = ref.watch(hotKeyActionsProvider);
   final dav = ref.watch(appDAVSettingProvider);
   final windowProps = ref.watch(windowSettingProvider);
+  // processAccess 必须进 watch 集：ProcessAccessState.onUpdate 只直写
+  // globalState.config，configState 不重算就不会触发 app_manager 里的
+  // savePreferencesDebounce 监听，进程分流的选择改完不落盘（§159）。
+  final processAccess = ref.watch(processAccessStateProvider);
   return Config(
     dav: dav,
     windowProps: windowProps,
@@ -68,6 +72,7 @@ Config configState(Ref ref) {
     appSetting: appSetting,
     themeProps: themeProps,
     patchClashConfig: patchClashConfig,
+    processAccess: processAccess,
   );
 }
 
