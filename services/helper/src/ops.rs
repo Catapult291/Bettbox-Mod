@@ -415,6 +415,7 @@ pub mod process {
     /// 以 helper 服务（SYSTEM）身份运行时几乎都能读到路径；读不到的条目 `path`
     /// 为空串，调用方可据此禁用「加入名单」而不是静默生成一条空规则。
     pub fn list_processes() -> Vec<ProcessEntry> {
+        use windows::core::PWSTR;
         use windows::Win32::Foundation::CloseHandle;
         use windows::Win32::System::Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
@@ -424,7 +425,6 @@ pub mod process {
             OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_FORMAT,
             PROCESS_QUERY_LIMITED_INFORMATION,
         };
-        use windows::core::PWSTR;
 
         let mut entries: Vec<ProcessEntry> = Vec::new();
 
@@ -553,13 +553,11 @@ pub mod process {
             }
 
             for key in ["FileDescription", "ProductName"] {
-                let sub: Vec<u16> = format!(
-                    "\\StringFileInfo\\{:04x}{:04x}\\{}",
-                    lang, codepage, key
-                )
-                .encode_utf16()
-                .chain(std::iter::once(0))
-                .collect();
+                let sub: Vec<u16> =
+                    format!("\\StringFileInfo\\{:04x}{:04x}\\{}", lang, codepage, key)
+                        .encode_utf16()
+                        .chain(std::iter::once(0))
+                        .collect();
                 let mut text_ptr: *const c_void = std::ptr::null();
                 if VerQueryValueW(
                     buf.as_ptr() as _,
@@ -600,39 +598,6 @@ pub mod process {
     fn utf16_c_str(words: &[u16]) -> String {
         let end = words.iter().position(|&c| c == 0).unwrap_or(words.len());
         String::from_utf16_lossy(&words[..end]).trim().to_string()
-    }
-
-    #[cfg(test)]
-    mod file_description_tests {
-        use super::{utf16_c_str, version_value_word_len};
-
-        #[test]
-        fn reported_len_is_wchar_count_not_bytes() {
-            // 实测 pulen 含 NUL 的 WCHAR 数；不再除 2（旧行为会得到 4）。
-            assert_eq!(version_value_word_len(8, 1024), 8);
-            // 缓冲区末端兜底。
-            assert_eq!(version_value_word_len(8, 5), 5);
-        }
-
-        #[test]
-        fn decodes_full_names_that_used_to_be_halved() {
-            for (raw, expect) in [
-                ("Bettbox\0", "Bettbox"),
-                ("Bettbox Dev\0", "Bettbox Dev"),
-                ("PixPin\0", "PixPin"),
-            ] {
-                let words: Vec<u16> = raw.encode_utf16().collect();
-                assert_eq!(utf16_c_str(&words), expect);
-            }
-        }
-
-        #[test]
-        fn trims_and_tolerates_missing_nul() {
-            let padded: Vec<u16> = "  Bett  \0ignored".encode_utf16().collect();
-            assert_eq!(utf16_c_str(&padded), "Bett");
-            let no_nul: Vec<u16> = "PixPin".encode_utf16().collect();
-            assert_eq!(utf16_c_str(&no_nul), "PixPin");
-        }
     }
 
     /// 从 exe 路径提取 32 位图标，返回 RGBA 像素与尺寸（自上而下）。
@@ -701,7 +666,7 @@ pub mod process {
                     biHeight: -bmp.bmHeight,
                     biPlanes: 1,
                     biBitCount: 32,
-                    biCompression: BI_RGB.0 as u32,
+                    biCompression: BI_RGB.0,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -752,6 +717,40 @@ pub mod process {
             }
 
             Some((width, height, rgba))
+        }
+    }
+
+    // 测试模块放文件末尾：clippy items-after-test-module 要求其后不再有非测试项。
+    #[cfg(test)]
+    mod file_description_tests {
+        use super::{utf16_c_str, version_value_word_len};
+
+        #[test]
+        fn reported_len_is_wchar_count_not_bytes() {
+            // 实测 pulen 含 NUL 的 WCHAR 数；不再除 2（旧行为会得到 4）。
+            assert_eq!(version_value_word_len(8, 1024), 8);
+            // 缓冲区末端兜底。
+            assert_eq!(version_value_word_len(8, 5), 5);
+        }
+
+        #[test]
+        fn decodes_full_names_that_used_to_be_halved() {
+            for (raw, expect) in [
+                ("Bettbox\0", "Bettbox"),
+                ("Bettbox Dev\0", "Bettbox Dev"),
+                ("PixPin\0", "PixPin"),
+            ] {
+                let words: Vec<u16> = raw.encode_utf16().collect();
+                assert_eq!(utf16_c_str(&words), expect);
+            }
+        }
+
+        #[test]
+        fn trims_and_tolerates_missing_nul() {
+            let padded: Vec<u16> = "  Bett  \0ignored".encode_utf16().collect();
+            assert_eq!(utf16_c_str(&padded), "Bett");
+            let no_nul: Vec<u16> = "PixPin".encode_utf16().collect();
+            assert_eq!(utf16_c_str(&no_nul), "PixPin");
         }
     }
 }

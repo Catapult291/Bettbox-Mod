@@ -391,10 +391,7 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
                 "blacklist" => {
                     for path in &access_paths {
                         let rule = if path.contains(',') {
-                            format!(
-                                "PROCESS-PATH-REGEX,{},DIRECT",
-                                process_path_regex(path)
-                            )
+                            format!("PROCESS-PATH-REGEX,{},DIRECT", process_path_regex(path))
                         } else {
                             format!("PROCESS-PATH,{},DIRECT", path)
                         };
@@ -407,8 +404,10 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
                     // 各段自带 ^…$ 锚定，用 | 拼成单条 REGEX；不套 (?:…)
                     // 分组——逻辑规则解析器会把裸括号当结构切开。
                     let joined = alts.join("|");
-                    access_rules
-                        .push(Value::String(format!("NOT,((PROCESS-PATH-REGEX,{})),DIRECT", joined)));
+                    access_rules.push(Value::String(format!(
+                        "NOT,((PROCESS-PATH-REGEX,{})),DIRECT",
+                        joined
+                    )));
                 }
                 _ => {}
             }
@@ -940,7 +939,10 @@ mod tests {
         let output = patch_config(&input).unwrap();
         let rules = output["rules"].as_array().unwrap();
         let rule = rules[0].as_str().unwrap();
-        assert!(rule.starts_with("PROCESS-PATH-REGEX,^C:\\\\App, Inc\\\\a\\.exe$"), "{rule}");
+        assert!(
+            rule.starts_with("PROCESS-PATH-REGEX,^C:\\\\App, Inc\\\\a\\.exe$"),
+            "{rule}"
+        );
         assert!(rule.ends_with(",DIRECT"));
     }
 
