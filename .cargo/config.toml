@@ -1,0 +1,19 @@
+# Windows MSVC：静态 CRT（路线稿 §4.3）
+#
+# 默认（`/MD`）下出货二进制的导入表含 VCRUNTIME140.dll 与一串 api-ms-win-crt-*。
+# VCRUNTIME140 随 VC++ 可再发行组件分发，目标机没装就起不来；UCRT 在 Win10+ 属
+# 系统组件，但装机 / 精简镜像仍偶见缺失。`+crt-static` 把 CRT 静态链进各产物，
+# 导入表只留 Windows 系统 DLL。
+#
+# 作用域：仅 x86_64-pc-windows-msvc（本仓唯一出货的 Windows Rust 三元组）。
+# Android 交叉目标不受影响。cc（vendored QuickJS）经 CARGO_CFG_TARGET_FEATURE
+# 自动改传 /MT，无需在 build.rs 里再写一遍。
+#
+# FFI 安全前提：本库分配的字符串一律由同库的 bb_string_free 释放（见 ffi.rs），
+# 不与宿主 Dart / helper 跨堆，静态 CRT 各模块自持堆无跨边界问题。
+#
+# 调试期若要临时回到动态 CRT，在环境里覆盖即可，不必改本文件：
+#   RUSTFLAGS="" cargo build
+# 或对单次调用追加 -C target-feature=-crt-static。
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
