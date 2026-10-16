@@ -76,3 +76,30 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
         env:
           TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
+
+  # 供应链审计（路线稿 §4.3）：许可证（GPL-3.0 兼容性）+ RustSec 安全公告，
+  # 附带 bans / sources。配置为仓库根 deny.toml，覆盖两个出货工作区；
+  # rust/fuzz 独立工作区不进发行版，不纳入（见 deny.toml 头注）。
+  # cargo-deny 版本钉死 0.20.2，与本地验证一致。
+  deny:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.20.2
+
+      # cwd 在仓库根，cargo-deny 默认读 ./deny.toml。
+      # -A license-not-encountered：一份共享 allow 清单覆盖两个依赖图，
+      # 「某图未遇到该许可证」只是子集提示，不构成问题。
+      - name: cargo-deny (rust)
+        run: cargo deny --manifest-path rust/Cargo.toml check -A license-not-encountered
+
+      - name: cargo-deny (helper)
+        run: cargo deny --manifest-path services/helper/Cargo.toml check -A license-not-encountered

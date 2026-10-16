@@ -1,0 +1,54 @@
+# cargo-deny 配置 — 路线稿 §4.3「依赖审计」：许可证（GPL-3.0 兼容性）与
+# RustSec 安全公告两道闸，另收紧 bans / sources。
+#
+# 覆盖两个出货工作区：rust/（bettbox-native）与 services/helper。
+# rust/fuzz 是独立工作区、产物只在本地做长时探索、不进发行版，不纳入审计。
+# 本地与 CI 用同一组命令（cwd 固定在仓库根，默认读本文件）：
+#   cargo deny --manifest-path rust/Cargo.toml check
+#   cargo deny --manifest-path services/helper/Cargo.toml check
+# CI 入口见 .github/workflows/rust.yml 的 deny job（cargo-deny 0.20.2，与本地验证同版）。
+
+[graph]
+# 不限定 target：审计对象是 Cargo.lock 里的全部依赖（含 dev 依赖与
+# 各平台条件依赖），比只看出货目标更保守。
+# all-features：helper 的出货构建带 windows-service feature，
+# 不开的话该 feature 的依赖（windows-service 等）会漏出审计范围。
+all-features = true
+
+[advisories]
+# 新公告落地时先评估：上游已修就升级；确认误报或暂无可修版本时
+# 再往 ignore 加条目并写明理由，不留空占位。
+ignore = []
+
+[licenses]
+# 允许清单 = 本仓自身许可证 + 全部已观测到的依赖许可证，逐项均与
+# GPL-3.0-only 兼容（含 BSL-1.0 / Unicode-3.0 / Unlicense / MPL 系均经
+# FSF 兼容性认定或为公有领域奉献）。出现清单外的 SPDX id 即失败，
+# 先核对兼容性再决定加入或要求上游换依赖。
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "GPL-3.0-only",   # 本仓：bettbox-native / helper
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+# 同名多版本先警告不阻断：清理重复版本是独立整改，不与本项绑定。
+multiple-versions = "warn"
+# 禁止 "*" 版本要求（可复现性；形如 "1" 的 ^1 语义不算通配符）。
+wildcards = "deny"
+
+[sources]
+# 只允许 crates.io；出现 git 依赖或未知 registry 直接失败（当前两份
+# Cargo.lock 均为 0 git 来源，守住现状）。
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
