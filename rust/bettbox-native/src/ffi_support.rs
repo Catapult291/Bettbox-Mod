@@ -20,7 +20,7 @@ pub(crate) const MAX_JSON_INPUT_BYTES: usize = 64 * 1024 * 1024;
 ///
 /// Windows 上首次进入时顺带安装崩溃收集（路线稿 §4.5）：panic / 未处理异常会往
 /// `%TEMP%\BettboxCrash`（`BETTBOX_CRASH_DIR` 可覆盖）写 minidump 与文本日志。
-/// 单测里故意 panic 的用例不装（`cfg!(test)` 门控），避免测试往真实 temp 落盘。
+/// 单测里故意 panic 的用例不装（`#[cfg(not(test))]` 门控），避免测试往真实 temp 落盘。
 pub(crate) fn catch_panic<T>(fallback: T, body: impl FnOnce() -> T) -> T {
     #[cfg(all(windows, not(test)))]
     ensure_crash_dump_installed();
