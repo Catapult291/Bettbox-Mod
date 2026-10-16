@@ -31,6 +31,12 @@ fn main() {
         std::process::exit(2);
     };
 
+    // 崩溃收集（路线稿 §4.5）：panic / 未处理异常往 %TEMP%\BettboxCrash 写 minidump。
+    crash_dump::install(crash_dump::InstallConfig {
+        dir: crash_dump::default_dir(),
+        tag: "guard",
+    });
+
     let code = run(pid, Path::new(&snapshot), Path::new(&log), restore_json);
     std::process::exit(code);
 }

@@ -21,6 +21,8 @@ fs2 = "0.4"
 hmac = "0.12"
 hex = "0.4"
 base64 = "0.22"
+# 崩溃收集（路线稿 §4.5）：panic hook + Windows minidump，与 rust/ 工作区共用实现。
+crash-dump = { path = "../../rust/crash-dump", version = "0.1.0" }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = [

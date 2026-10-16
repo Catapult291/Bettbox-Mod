@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["bettbox-native"]
+members = ["bettbox-native", "crash-dump"]
 
 [workspace.package]
 version = "0.1.0"

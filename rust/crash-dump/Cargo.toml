@@ -1,0 +1,20 @@
+[package]
+name = "crash-dump"
+description = "崩溃收集：panic hook + Windows minidump（路线稿 §4.5）"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# 只有 Windows 实现需要系统 API；非 Windows 平台本 crate 编译为空壳（仅文本日志路径也不启用，
+# bettbox-native 侧只在 cfg(windows) 下接入）。
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Foundation",
+    # MiniDumpWriteDump / SetUnhandledExceptionFilter / EXCEPTION_POINTERS 的符号门控需要这四项齐全
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_Kernel",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+] }

@@ -13,6 +13,7 @@ name = "bettbox-native"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "crash-dump",
  "md5",
  "proptest",
  "serde",
@@ -121,6 +122,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "crash-dump"
+version = "0.1.0"
+dependencies = [
+ "windows",
 ]
 
 [[package]]
