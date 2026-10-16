@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.20`（tag `v1.19.20` 已发布 Release）
+- 本仓库当前版本：`1.19.21`（tag `v1.19.21` 已发布 Release）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -73,6 +73,10 @@
 | 58 | 界面/分流 | 按进程分流（关闭/黑名单/白名单）与选择进程 UI（A⑤） | v1.19.19 |
 | 59 | 界面/内存 | 首页内存卡片：「应用」改专用工作集口径（与任务管理器「内存」列一致）；内核停止/IPC 挂死不再冻结读数（A⑥ 收尾） | v1.19.19 |
 | 60 | 工程 | Windows 偏好设置文件钉死数据目录：读写改走 `AppPath`，旧身份目录按 mtime 一次性回拷（A④ prefs 接线） | v1.19.20 |
+| 61 | 稳定性 | 崩溃收集：panic hook + Windows minidump 进三个出货目标（路线稿 §4.5） | v1.19.21 |
+| 62 | 工程 | Windows MSVC 出货二进制改静态 CRT，不再依赖 VCRUNTIME140（路线稿 §4.3） | v1.19.21 |
+| 63 | 工程 | Windows ARM64 构建腿与安装包（路线稿 §4.3） | v1.19.21 |
+| 64 | 安全/工程 | cargo-deny 进 CI：许可证与安全公告双审计；helper 修 3 条 RustSec 公告 | v1.19.21 |
 
 ---
 
@@ -3057,3 +3061,112 @@ project-slug / token 都是上游账号的，本仓库不能复用。
 
 **未决**：升级到含本改动的版本后需在现网核对 prefs 落在 `com.appshub\Bettbox` 且旧侧不再更新；
 卸载清理 GUI 路径仍未验（与本节无关，承 §155）。
+
+---
+
+## 61. 崩溃收集：panic hook + Windows minidump 进三个出货目标（路线稿 §4.5）
+
+**文件**：`rust/crash-dump/`（新增：`Cargo.toml`、`src/lib.rs`、`src/windows_impl.rs`）、
+`rust/Cargo.toml`、`rust/bettbox-native/{Cargo.toml,src/ffi_support.rs,src/bin/bettbox_proxy_guard.rs}`、
+`services/helper/{Cargo.toml,src/main.rs}`
+**测试**：`crash-dump` 单测 3 项；workspace debug+release 全绿；`flutter test test/rust` 19 项
+
+**问题**（路线稿 §4.5，stage-log §171）：FFI 边界 `catch_panic` 此前 panic 只打 stderr（GUI 下不可见）；
+QuickJS 等 C 代码的访问违规根本不走 Rust panic，异常退出无任何可取证现场。
+
+**改动**：
+
+- 新增 `rust/crash-dump` 共享 crate（`rust/` workspace 成员，helper 经 path 依赖复用）：
+  panic hook 全平台安装；Windows 上另装 `SetUnhandledExceptionFilter`，双路径写 minidump
+  （`MiniDumpNormal | MiniDumpWithThreadInfo`）与一行文本日志到 `%TEMP%\BettboxCrash`
+  （`BETTBOX_CRASH_DIR` 可覆盖），过滤器链回原有 handler。
+- panic dump 按进程限频 10 秒 1 个；每 tag 保留最近 3 份；`<tag>-crash.log` 超 256 KiB 轮转。
+  未处理异常 dump 不限频，并从 `EXCEPTION_RECORD.ExceptionCode` 记异常码（如 `0xC0000005`）。
+- 接入三个出货目标：`bettbox_native.dll` 首次 FFI 调用经 `catch_panic` 惰性安装
+  （`Once` + `cfg(not(test))`）；`BettboxProxyGuard.exe` 与 `helper.exe` 在 main 开头安装。
+- dump 仅落本机，与隐私声明「无崩溃上报」一致。
+
+**验证**：e2e 双路径实测（panic 101 / AV 0xC0000005）dump 均为 `MDMP` 魔数且日志记全；
+workspace debug+release 测试、clippy、cargo deny、`flutter test test/rust` 全绿；guard 正常
+路径只建目录不落文件。
+
+**未决**：dump 目录对用户不可见（无「打开崩溃目录」入口）；helper 以 SYSTEM 落 dump 时
+`%TEMP%` 为 `C:\Windows\Temp`；ARM64 未单独验证 dump（代码无架构分支）；内核（Go）与
+Flutter/Dart 自身崩溃不在本项范围。
+
+---
+
+## 62. Windows MSVC 出货二进制改静态 CRT，不再依赖 VCRUNTIME140（路线稿 §4.3）
+
+**文件**：`.cargo/config.toml`（新增）
+**测试**：重编后 `objdump -p` 三份出货二进制 0 条 VCRUNTIME / ucrt 命中；workspace 与 helper 测试全绿
+
+**问题**（路线稿 §4.3，stage-log §169）：默认 `/MD` 下 `bettbox_native.dll` /
+`BettboxProxyGuard.exe` / `helper.exe` 导入表均含 `VCRUNTIME140.dll` 与一串
+`api-ms-win-crt-*`；目标机未装 VC++ 可再发行组件就起不来。
+
+**改动**：
+
+- 仓库根新增 `.cargo/config.toml`，对 `x86_64-pc-windows-msvc` 打开
+  `-C target-feature=+crt-static`；`rust/` 与 `services/helper` 两个出货工作区经父目录
+  回溯自动生效，CI 与 `setup.dart` 零改动；Android 交叉目标不受影响。
+- vendored QuickJS（cc）经 `CARGO_CFG_TARGET_FEATURE` 自动改传 `/MT`，与 Rust 侧一致。
+- 重编后三个出货二进制导入表只留 Windows 系统 DLL；代价是产物约 +数百 KB（CRT 静态进各模块）。
+- FFI 安全前提：本库分配的字符串一律由同库 `bb_string_free` 释放，不与宿主跨堆。
+
+**验证**：`objdump -p` 无 `VCRUNTIME140` / `api-ms-win-crt-*`；rust 工作区 debug+release
+两遍 `cargo test` 全绿；helper `cargo test --features windows-service` 20 过。
+
+**未决**：全量 Windows 安装包 + 现网加载在本笔未验（属发版打包链路；本地 FFI 测试已在
+静态 CRT 下跑过）。
+
+---
+
+## 63. Windows ARM64 构建腿与安装包（路线稿 §4.3）
+
+**文件**：`.cargo/config.toml`、`rust-toolchain.toml`、`.github/workflows/build.yaml`、
+`.github/workflows/rust.yml`、`README.md`
+**测试**：workflow_dispatch 四腿全绿；产物 `Bettbox-*-windows-arm64-setup.exe` 约 37 MB
+
+**问题**（路线稿 §4.3，stage-log §170）：仅出 Windows x64 安装包；ARM64 机器无原生安装包。
+
+**改动**：
+
+- build 矩阵新增 `windows-11-arm / arch: arm64` 原生腿（Flutter 无 x64→arm64 交叉）。
+- flutter-action 装 x64 SDK 后把 `bin/cache/dart-sdk` 换成同 engine 的
+  `dart-sdk-windows-arm64.zip`，断言 `dart --version` 报 `windows_arm64`。
+- `.cargo/config.toml` 对 `aarch64-pc-windows-msvc` 同样 `+crt-static`；`rust-toolchain.toml`
+  补两个 Windows target；`rust.yml` 加 `build-arm64` 交叉 job，断言 PE `Machine=0xAA64`
+  且无 `VCRUNTIME140`。
+- `setup.dart` / `package_windows.dart` 原本已按架构参数化，零改动。
+- README 下载表补 Windows ARM64 行。
+
+**验证**：workflow_dispatch 四腿全 success；arm64 腿产出
+`Bettbox-1.19.20-windows-arm64-setup.exe` 37,221,204 B。
+
+**未决**：ARM64 真机端到端未跑；`WindowsLoopbackManager.exe` 仍为仓库内 x64 预编译（仿真加载）；
+arm64 签名待首个 `v*` tag 发版验证。
+
+---
+
+## 64. cargo-deny 进 CI：许可证与安全公告双审计；helper 修 3 条 RustSec 公告
+
+**文件**：`deny.toml`（新增）、`.github/workflows/rust.yml`、
+`services/helper/{Cargo.toml,Cargo.lock}`
+**测试**：两工作区 `cargo deny check` 均 `advisories ok, bans ok, licenses ok, sources ok`
+
+**问题**（路线稿 §4.3 依赖审计）：许可证兼容性与安全公告此前无自动闸。
+
+**改动**：
+
+- 新增根目录 `deny.toml`：覆盖 `rust/` 与 `services/helper` 两个出货工作区（`rust/fuzz`
+  独立、不进发行版，不纳入）；allow 清单 10 项均与 GPL-3.0-only 兼容；bans 通配符 deny、
+  同名多版本 warn；sources 只认 crates.io。
+- `rust.yml` 新增 deny job：cargo-deny 0.20.2，两工作区各查一遍。
+- helper `Cargo.toml` 补 `license = GPL-3.0-only`；锁文件升级修复 3 条 RustSec 真实公告：
+  anyhow 1.0.104 / bytes 1.12.1 / tokio 1.53.3。
+
+**验证**：deny job 与本地 `cargo deny check` 全绿；连同 `7027333a` 的 fmt/clippy 遗留修复，
+`rust.yml` 自 v1.19.19 起连红复绿。
+
+**未决**：无新开项。
