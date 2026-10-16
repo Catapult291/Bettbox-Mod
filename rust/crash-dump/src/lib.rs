@@ -24,7 +24,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(windows)]
 mod windows_impl;
 
-/// 每个 tag 保留的 minidump 上限。
+/// 每个 tag 保留的 minidump 上限。（非 Windows 目标无 dump 路径，仅供测试与文档引用。）
+#[cfg_attr(not(windows), allow(dead_code))]
 const MAX_DUMPS: usize = 3;
 /// 两次 panic minidump 之间的最短间隔（毫秒）；文本日志不受此限制。
 const PANIC_DUMP_MIN_INTERVAL_MS: u64 = 10_000;
@@ -41,6 +42,7 @@ pub struct InstallConfig {
 }
 
 static INSTALLED: AtomicBool = AtomicBool::new(false);
+#[cfg_attr(not(windows), allow(dead_code))]
 static WRITING_DUMP: AtomicBool = AtomicBool::new(false);
 static LAST_PANIC_DUMP_MS: AtomicU64 = AtomicU64::new(0);
 static DUMP_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -80,11 +82,13 @@ pub fn install(config: InstallConfig) -> bool {
 }
 
 /// 当前 dump 目录（未安装时为 None）。崩溃处理器内部用。
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn dump_dir() -> Option<&'static Path> {
     DUMP_DIR.get().map(PathBuf::as_path)
 }
 
 /// 当前 tag（未安装时为 None）。
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn tag() -> &'static str {
     TAG.get().copied().unwrap_or("crash")
 }
@@ -201,6 +205,7 @@ fn write_dump(
 }
 
 /// 只保留每个 tag 最近 [MAX_DUMPS] 个 `.dmp`（按文件名里的零填充时间戳排序）。
+#[cfg_attr(not(windows), allow(dead_code))]
 fn prune_old_dumps(dir: &Path, tag: &str) {
     let Ok(entries) = fs::read_dir(dir) else {
         return;
