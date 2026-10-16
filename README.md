@@ -58,7 +58,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | 平台 | 产物 |
 | --- | --- |
 | Android | `Bettbox-<版本>-android-arm64-v8a.apk`（主流机型）、`Bettbox-<版本>-android-universal.apk`（通用） |
-| Windows | `Bettbox-<版本>-windows-amd64-setup.exe` |
+| Windows | `Bettbox-<版本>-windows-amd64-setup.exe`（x64）、`Bettbox-<版本>-windows-arm64-setup.exe`（ARM64，下个版本起） |
 
 Windows 安装包与随包主程序的代码签名由 CI 在发版时自动提交至 [SignPath](https://signpath.io)
 云签名服务（当前为自签测试证书 `CN=Bettbox-Mod Test`，非 CA 签发；SmartScreen 仍可能提示未知发布者），
