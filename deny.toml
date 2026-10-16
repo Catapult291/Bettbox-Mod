@@ -1,7 +1,8 @@
 # cargo-deny 配置 — 路线稿 §4.3「依赖审计」：许可证（GPL-3.0 兼容性）与
 # RustSec 安全公告两道闸，另收紧 bans / sources。
 #
-# 覆盖两个出货工作区：rust/（bettbox-native）与 services/helper。
+# 覆盖两个出货工作区：rust/（bettbox-native + crash-dump）与 services/helper
+# （helper 经 path 依赖复用 rust/crash-dump）。
 # rust/fuzz 是独立工作区、产物只在本地做长时探索、不进发行版，不纳入审计。
 # 本地与 CI 用同一组命令（cwd 固定在仓库根，默认读本文件）：
 #   cargo deny --manifest-path rust/Cargo.toml check
