@@ -5,9 +5,9 @@
 # 系统组件，但装机 / 精简镜像仍偶见缺失。`+crt-static` 把 CRT 静态链进各产物，
 # 导入表只留 Windows 系统 DLL。
 #
-# 作用域：仅 x86_64-pc-windows-msvc（本仓唯一出货的 Windows Rust 三元组）。
-# Android 交叉目标不受影响。cc（vendored QuickJS）经 CARGO_CFG_TARGET_FEATURE
-# 自动改传 /MT，无需在 build.rs 里再写一遍。
+# 作用域：两个 Windows MSVC 出货三元组（x86_64 主线 + aarch64，路线稿 §4.3
+# 「Windows ARM64」）。Android 交叉目标不受影响。cc（vendored QuickJS）经
+# CARGO_CFG_TARGET_FEATURE 自动改传 /MT，无需在 build.rs 里再写一遍。
 #
 # FFI 安全前提：本库分配的字符串一律由同库的 bb_string_free 释放（见 ffi.rs），
 # 不与宿主 Dart / helper 跨堆，静态 CRT 各模块自持堆无跨边界问题。
@@ -16,4 +16,7 @@
 #   RUSTFLAGS="" cargo build
 # 或对单次调用追加 -C target-feature=-crt-static。
 [target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]

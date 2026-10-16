@@ -77,6 +77,57 @@ jobs:
         env:
           TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
 
+  # Windows ARM64 交叉校验（路线稿 §4.3）：x64 runner 上把两个出货 crate 交叉编到
+  # aarch64-pc-windows-msvc，链接层面把关（编译/链接是 arm64 与 x64 唯一会分叉的部分，
+  # cfg(windows) 代码两边同构）。测试不在本 job 跑：x64 host 执行不了 ARM64 二进制，
+  # 完整打包与运行链路由 build 工作流的 windows-11-arm 腿覆盖；真机/ARM 设备的运行
+  # 冒烟见 stage-log §170 未决项。
+  build-arm64:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-pc-windows-msvc
+
+      - name: Build rust workspace (release, aarch64-pc-windows-msvc)
+        working-directory: rust
+        run: cargo build --workspace --release --target aarch64-pc-windows-msvc
+
+      - name: Build helper (release, aarch64-pc-windows-msvc)
+        working-directory: services/helper
+        env:
+          # build.rs 把 TOKEN 编译期写进 helper；取值与 helper job 的 clippy 用例同理
+          # （本 job 不比对内核哈希）。
+          TOKEN: 0000000000000000000000000000000000000000000000000000000000000000
+        run: cargo build --release --features windows-service --target aarch64-pc-windows-msvc
+
+      # 断言 ARM64 机器类型（PE 头 Machine = 0xAA64）与静态 CRT（全文不含
+      # VCRUNTIME140 —— 导入表引用必然以 ASCII 出现，全文没有即导入表没有）。
+      - name: Assert ARM64 machine + static CRT
+        shell: pwsh
+        run: |
+          $files = @(
+            'rust/target/aarch64-pc-windows-msvc/release/bettbox_native.dll',
+            'rust/target/aarch64-pc-windows-msvc/release/BettboxProxyGuard.exe',
+            'services/helper/target/aarch64-pc-windows-msvc/release/helper.exe'
+          )
+          $bad = 0
+          foreach ($f in $files) {
+            if (-not (Test-Path $f)) { Write-Error "missing $f"; $bad++; continue }
+            $b = [System.IO.File]::ReadAllBytes($f)
+            $pe = [BitConverter]::ToInt32($b, 0x3C)
+            $machine = [BitConverter]::ToUInt16($b, $pe + 4)
+            if ($machine -ne 0xAA64) { Write-Error ("{0}: machine 0x{1:X4}, want 0xAA64 (ARM64)" -f $f, $machine); $bad++; continue }
+            $ascii = [System.Text.Encoding]::ASCII.GetString($b)
+            if ($ascii.Contains('VCRUNTIME140')) { Write-Error "$f contains VCRUNTIME140 - dynamic CRT?"; $bad++ }
+            else { Write-Host "$f OK (ARM64, no VCRUNTIME140)" }
+          }
+          if ($bad -gt 0) { exit 1 }
+
   # 供应链审计（路线稿 §4.3）：许可证（GPL-3.0 兼容性）+ RustSec 安全公告，
   # 附带 bans / sources。配置为仓库根 deny.toml，覆盖两个出货工作区；
   # rust/fuzz 独立工作区不进发行版，不纳入（见 deny.toml 头注）。

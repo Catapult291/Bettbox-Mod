@@ -3,7 +3,8 @@
 #
 # components / targets 一并列全：rustup 依据本文件自动安装工具链时会连它们一起装好，
 # CI 与本地因此无需再单独 `rustup component add` / `rustup target add`（Android 交叉目标
-# 供 `.github/workflows/build.yaml` 的 `cargo build --target ...` 使用）。
+# 供 `.github/workflows/build.yaml` 的 `cargo build --target ...` 使用；Windows 三元组里
+# aarch64 供 §4.3 Windows ARM64 的交叉校验与 arm64 runner 原生构建）。
 [toolchain]
 channel = "1.98.0"
 components = ["rustfmt", "clippy"]
@@ -12,4 +13,6 @@ targets = [
     "armv7-linux-androideabi",
     "x86_64-linux-android",
     "i686-linux-android",
+    "x86_64-pc-windows-msvc",
+    "aarch64-pc-windows-msvc",
 ]

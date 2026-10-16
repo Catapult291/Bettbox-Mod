@@ -34,6 +34,13 @@ jobs:
           - platform: windows
             os: windows-2022
             arch: amd64
+          # Windows ARM64（路线稿 §4.3）：公开仓库可用 windows-11-arm 免费 runner。
+          # Flutter 没有 x64→arm64 的 Windows 交叉构建（`flutter build windows` 的目标
+          # 架构取自 Dart VM 的 Abi），所以必须在 arm64 原生 runner 上构建；与 x64 腿
+          # 走完全相同的步骤，产物为 Bettbox-<版本>-windows-arm64-setup.exe。
+          - platform: windows
+            os: windows-11-arm
+            arch: arm64
 
     steps:
       - name: Checkout
@@ -46,7 +53,7 @@ jobs:
         if: matrix.platform == 'windows'
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
 
       - name: Setup Rust (Android)
         if: matrix.platform == 'android'
@@ -104,6 +111,57 @@ jobs:
           cache-key: flutter-${{ matrix.platform }}-${{ matrix.arch }}-${{ hashFiles('**/pubspec.lock') }}
           # 版本单一来源：pubspec.yaml 的 environment.flutter
           flutter-version-file: pubspec.yaml
+          # flutter-action 默认按 runner.arch 找发布包，而 Flutter 的 Windows 发布
+          # 清单只有 x64（dart_sdk_arch 恒为 x64），在 windows-11-arm 上按 ARM64 找
+          # 会 not found。统一装 x64 SDK；arm64 腿随后立刻把 Dart SDK 换成同 engine
+          # 的 arm64 版（见下一步）。
+          architecture: X64
+
+      # Flutter 发布包只带 x64 Dart SDK，而 `flutter build windows` 的目标架构取自
+      # 当前 Dart VM 的 Abi（x64 Dart 只会编出 x64 包）。engine 产物桶里有
+      # dart-sdk-windows-arm64.zip 与全套 windows-arm64 引擎产物，把 bin/cache/dart-sdk
+      # 换成同 engine 版本的 arm64 版后，flutter 才会以 -A ARM64 生成 CMake 工程、
+      # 下载 windows-arm64 产物，输出落到 build/windows/arm64/。
+      # 必须赶在任何 flutter / dart 调用（Install Dependencies）之前执行。
+      - name: Use native ARM64 Dart SDK (Windows arm64)
+        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
+        shell: pwsh
+        run: |
+          $root = $env:FLUTTER_ROOT
+          if (-not $root) { $root = Split-Path (Split-Path (Get-Command flutter).Source) }
+          $dest = Join-Path $root 'bin\cache\dart-sdk'
+          $dart = Join-Path $dest 'bin\dart.exe'
+          # 已经是 arm64（缓存命中且上次换过）就跳过下载。
+          $ver = & $dart --version 2>&1 | Out-String
+          if ($ver -match 'windows_arm64') {
+            Write-Host "Dart SDK already arm64: $ver"
+            exit 0
+          }
+          $eng = (Get-Content (Join-Path $root 'bin\internal\engine.version') -Raw).Trim()
+          $url = "https://storage.googleapis.com/flutter_infra_release/flutter/$eng/dart-sdk-windows-arm64.zip"
+          $zip = Join-Path $env:RUNNER_TEMP 'dart-sdk-windows-arm64.zip'
+          Write-Host "Downloading $url"
+          curl.exe -fsSL --retry 5 -o $zip $url
+          if ($LASTEXITCODE -ne 0) { Write-Error "download failed"; exit 1 }
+          $tmp = Join-Path $env:RUNNER_TEMP 'dart-sdk-arm64-extract'
+          if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force }
+          Expand-Archive $zip -DestinationPath $tmp
+          # 兼容两种压缩包布局：顶层 dart-sdk/ 目录，或直接是 bin/lib。
+          $src = $tmp
+          $nested = Join-Path $tmp 'dart-sdk'
+          if (Test-Path (Join-Path $nested 'bin\dart.exe')) { $src = $nested }
+          if (-not (Test-Path (Join-Path $src 'bin\dart.exe'))) {
+            Write-Error "extracted archive has no bin\dart.exe"
+            exit 1
+          }
+          Remove-Item $dest -Recurse -Force
+          Move-Item $src $dest
+          $ver = & $dart --version 2>&1 | Out-String
+          Write-Host $ver
+          if ($ver -notmatch 'windows_arm64') {
+            Write-Error "Dart SDK is not arm64 after swap: $ver"
+            exit 1
+          }
 
       - name: Clean Gradle (Android)
         if: matrix.platform == 'android'
@@ -306,7 +364,8 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $bundleDir = "build/windows/x64/runner/Release"
+          $dir = if ('${{ matrix.arch }}' -eq 'arm64') { 'arm64' } else { 'x64' }
+          $bundleDir = "build/windows/$dir/runner/Release"
           $bundled = "$bundleDir/bettbox_native.dll"
           if (-not (Test-Path $bundled)) {
             Write-Error "bundle is missing $bundled - the Rust pipeline and script engine will not be active"
