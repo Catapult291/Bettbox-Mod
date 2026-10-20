@@ -53,7 +53,7 @@ class EditProfileViewState extends State<EditProfileView> {
     super.initState();
     labelController = TextEditingController(text: widget.profile.label);
     urlController = TextEditingController(text: widget.profile.url);
-    autoUpdate = widget.isNew ? false : widget.profile.autoUpdate;
+    autoUpdate = widget.profile.autoUpdate;
     followUpdate = widget.isNew ? true : widget.profile.followUpdate;
     proxyUpdate = widget.isNew ? true : widget.profile.proxyUpdate;
     autoUpdateDurationController = TextEditingController(
