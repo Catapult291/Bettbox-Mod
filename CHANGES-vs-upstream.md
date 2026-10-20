@@ -3170,3 +3170,57 @@ arm64 签名待首个 `v*` tag 发版验证。
 `rust.yml` 自 v1.19.19 起连红复绿。
 
 **未决**：无新开项。
+
+---
+
+## 65. 修「关闭代理更新后，更新配置仍需先关启动开关」
+
+**文件**：`android/app/src/main/kotlin/com/appshub/bettbox/services/BettboxVpnService.kt`、
+`lib/views/profiles/edit_profile.dart`、`lib/state.dart`　**测试**：
+`test/views/profiles/edit_profile_proxy_switch_test.dart`
+
+**问题**：用户在配置编辑页关掉「代理更新」（`proxyUpdate=false`，期望订阅更新走直连），
+但内核在跑时更新经常失败——实测两种报错：
+
+- `[MissedUpdate] Failed to update … ( HTTP error code: 403 )`：订阅域名被规则判成走代理，
+  代理出口 IP 被订阅商封禁（本机复现 `https://Microsoft1234.567882.xyz/…` 走内核 mixed-port
+  返 403、直连返 200）。
+- `DioException [connection timeout] … 0:00:15`：经 mixed-port 出站时上游链路不通，
+  `_clashDio` 的 `connectTimeout` 到点中断。
+
+关掉启动开关（内核停跑）后更新恢复正常。根因是「关掉代理更新」在两处没真正生效：
+
+- **安卓**：`VpnService` 默认捕获本应用自己的流量。开关关掉后 `Profile.update()` 走
+  `_directDio` 强制 `DIRECT`，但这股直连仍被自己的 VPN 按路由规则送进内核出站，等于没关。
+  访问控制（`accessControl.enable`）默认是关的，此前只有在它开启时才会把自身从 VPN 里摘出去。
+- **桌面**：开关只改编辑页表单内存态，要按 FAB 保存才写回配置；后台补更（`[MissedUpdate]`，
+  启动/前台恢复触发）与自动更新（`[AutoUpdate]`，24h 定时）读的是配置里的 `proxyUpdate`，
+  于是存在一段「开关已关、更新仍经内核出站」的窗口期。
+
+**改动**：
+
+- `BettboxVpnService.start()`：无论访问控制怎么配，统一 `addDisallowedApplication(packageName)`
+  把自身排除在自己的 VPN 之外。白名单模式（`acceptSelected`）的名单不再并入自身（避免与
+  排除重复）。经 mixed-port 的本机请求走 loopback，不受此排除影响，故「代理更新」开着的行为
+  不变。
+- 编辑页「代理更新」开关改为点按即写回配置：`_setProxyUpdate` 立刻
+  `appController.setProfile(profile.copyWith(proxyUpdate: value))`，不再等 FAB 保存。
+  新建配置尚未入库，跳过写回。
+- `globalState` 新增 `appControllerOrNull` 供判空（单测等未初始化场景）；业务代码仍用
+  `appController`。
+
+**验证**：
+
+- `test/views/profiles/edit_profile_proxy_switch_test.dart` 新增「点开关即写回配置的
+  `proxyUpdate`，不等 FAB 保存」：挂真实 `AppController` 点开关，断言 provider 里该配置
+  `proxyUpdate` 已变 false。该文件 3 项全过。
+- `flutter analyze lib/state.dart lib/views/profiles/edit_profile.dart` 无问题。
+- 本机 curl 实测订阅地址：走内核 mixed-port（`-x http://127.0.0.1:7890`）返 403、
+  `--noproxy '*'` 直连返 200，与用户日志里的两种报错对应。
+- **未验证**：安卓改动未编 APK 实机跑（`BettboxVpnService` 的 VPN 建立路径无单测桩，
+  需真机/模拟器）；桌面写回链路未在运行中的实例上点验（当前实例为已装 1.19.21，
+  改动需重装才生效）。
+
+**未决**：①真机装含本改动的 APK，确认关掉「代理更新」后内核在跑也能更新 Neverlose
+②桌面重装后同验一次 ③`_directDio` 的 `connectTimeout` 15s 对慢直连可能仍偏紧，若后续
+有「直连也超时」的反馈再调。

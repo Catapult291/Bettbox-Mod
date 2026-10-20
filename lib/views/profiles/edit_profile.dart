@@ -198,6 +198,14 @@ class EditProfileViewState extends State<EditProfileView> {
     setState(() {
       proxyUpdate = value;
     });
+    // 点按即写回配置：后台补更/自动更新读的是配置里的 `proxyUpdate`，若只改表单
+    // 内存态、要等 FAB 保存才生效，就会出现「开关已关、更新仍经内核出站」的窗口
+    // 期。内核在跑时这条经 mixed-port 的更新一旦失败（订阅域名被判走代理、代理链
+    // 路不通），表现就是关掉启动开关才能更新配置。新建配置尚未入库，跳过。
+    if (widget.isNew) return;
+    globalState.appControllerOrNull?.setProfile(
+      profile.copyWith(proxyUpdate: value),
+    );
   }
 
   Future<FileInfo?> _getFileInfo(String path) async {

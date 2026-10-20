@@ -128,7 +128,9 @@ class BettboxVpnService : VpnService(), BaseServiceInterface {
         if (accessControl.enable) {
             when (accessControl.mode) {
                 AccessControlMode.acceptSelected -> {
-                    (accessControl.acceptList + packageName).filter { it.isNotBlank() }.distinct().forEach { appPkg ->
+                    // 名单里不再加入自身：自身走下面统一的 addDisallowedApplication，
+                    // 保证应用自身流量不被自己的 VPN 按规则二次劫持。
+                    accessControl.acceptList.filter { it.isNotBlank() }.distinct().forEach { appPkg ->
                         runCatching { addAllowedApplication(appPkg) }
                             .onFailure { Log.e(TAG, "Failed to allow package $appPkg: ${it.message}", it) }
                     }
@@ -139,6 +141,12 @@ class BettboxVpnService : VpnService(), BaseServiceInterface {
                 }
             }
         }
+        // 无论访问控制怎么配，都把自身排除在自己的 VPN 之外：VPN 默认会捕获本应用
+        // 自己的流量，配置里的「代理更新」关掉后订阅更新走直连，也会被自己的 VPN
+        // 按路由规则送进内核出站（表现为「关掉启动开关才能更新配置」）。经
+        // mixed-port 的本机请求走 loopback，不受此排除影响。
+        runCatching { addDisallowedApplication(packageName) }
+            .onFailure { Log.e(TAG, "Failed to exclude self from VPN: ${it.message}", it) }
 
         setSession("Bettbox")
         setBlocking(false)

@@ -70,6 +70,9 @@ class GlobalState {
 
   bool get isStart => startTime != null && startTime!.isBeforeNow;
 
+  /// 未初始化（单测等）时为 null；业务代码仍用 [appController]。
+  AppController? get appControllerOrNull => _appController;
+
   AppController get appController => _appController!;
 
   set appController(AppController appController) {
