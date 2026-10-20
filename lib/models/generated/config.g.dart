@@ -116,7 +116,7 @@ _AccessControl _$AccessControlFromJson(Map<String, dynamic> json) =>
       enable: json['enable'] as bool? ?? false,
       mode:
           $enumDecodeNullable(_$AccessControlModeEnumMap, json['mode']) ??
-          AccessControlMode.rejectSelected,
+          AccessControlMode.acceptSelected,
       acceptList:
           (json['acceptList'] as List<dynamic>?)
               ?.map((e) => e as String)
@@ -138,7 +138,7 @@ _AccessControl _$AccessControlFromJson(Map<String, dynamic> json) =>
             json['sort'],
             unknownValue: AccessSortType.none,
           ) ??
-          AccessSortType.none,
+          AccessSortType.updateTime,
       isFilterSystemApp: json['isFilterSystemApp'] as bool? ?? false,
       isFilterNonInternetApp: json['isFilterNonInternetApp'] as bool? ?? false,
     );
@@ -188,7 +188,7 @@ _VpnProps _$VpnPropsFromJson(Map<String, dynamic> json) => _VpnProps(
   systemProxy: json['systemProxy'] as bool? ?? false,
   allowBypass: json['allowBypass'] as bool? ?? false,
   bypassPrivateRoute: json['bypassPrivateRoute'] as bool? ?? true,
-  dozeSuspend: json['dozeSuspend'] as bool? ?? true,
+  dozeSuspend: json['dozeSuspend'] as bool? ?? false,
   smartAutoStop: json['smartAutoStop'] as bool? ?? false,
   smartAutoStopNetworks: json['smartAutoStopNetworks'] as String? ?? '',
   storeFix: json['storeFix'] as bool? ?? false,

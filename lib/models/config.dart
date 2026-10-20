@@ -179,12 +179,12 @@ abstract class AppSettingProps with _$AppSettingProps {
 abstract class AccessControl with _$AccessControl {
   const factory AccessControl({
     @Default(false) bool enable,
-    @Default(AccessControlMode.rejectSelected) AccessControlMode mode,
+    @Default(AccessControlMode.acceptSelected) AccessControlMode mode,
     @Default([]) List<String> acceptList,
     @Default([]) List<String> rejectList,
     @Default([]) List<String> manualList,
     @JsonKey(unknownEnumValue: AccessSortType.none)
-    @Default(AccessSortType.none)
+    @Default(AccessSortType.updateTime)
     AccessSortType sort,
     @Default(false) bool isFilterSystemApp,
     @Default(false) bool isFilterNonInternetApp,
@@ -222,7 +222,7 @@ abstract class VpnProps with _$VpnProps {
     @Default(false) bool systemProxy,
     @Default(false) bool allowBypass,
     @Default(true) bool bypassPrivateRoute,
-    @Default(true) bool dozeSuspend,
+    @Default(false) bool dozeSuspend,
     @Default(false) bool smartAutoStop,
     @Default('') String smartAutoStopNetworks,
     @Default(false) bool storeFix,

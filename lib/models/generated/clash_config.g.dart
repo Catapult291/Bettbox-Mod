@@ -451,7 +451,7 @@ _ClashConfig _$ClashConfigFromJson(Map<String, dynamic> json) => _ClashConfig(
   logLevel:
       $enumDecodeNullable(_$LogLevelEnumMap, json['log-level']) ??
       LogLevel.error,
-  ipv6: json['ipv6'] as bool? ?? false,
+  ipv6: json['ipv6'] as bool? ?? true,
   findProcessMode:
       $enumDecodeNullable(
         _$FindProcessModeEnumMap,

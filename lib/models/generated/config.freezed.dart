@@ -563,7 +563,7 @@ return $default(_that.enable,_that.mode,_that.acceptList,_that.rejectList,_that.
 @JsonSerializable()
 
 class _AccessControl implements AccessControl {
-  const _AccessControl({this.enable = false, this.mode = AccessControlMode.rejectSelected, final  List<String> acceptList = const [], final  List<String> rejectList = const [], final  List<String> manualList = const [], @JsonKey(unknownEnumValue: AccessSortType.none) this.sort = AccessSortType.none, this.isFilterSystemApp = false, this.isFilterNonInternetApp = false}): _acceptList = acceptList,_rejectList = rejectList,_manualList = manualList;
+  const _AccessControl({this.enable = false, this.mode = AccessControlMode.acceptSelected, final  List<String> acceptList = const [], final  List<String> rejectList = const [], final  List<String> manualList = const [], @JsonKey(unknownEnumValue: AccessSortType.none) this.sort = AccessSortType.updateTime, this.isFilterSystemApp = false, this.isFilterNonInternetApp = false}): _acceptList = acceptList,_rejectList = rejectList,_manualList = manualList;
   factory _AccessControl.fromJson(Map<String, dynamic> json) => _$AccessControlFromJson(json);
 
 @override@JsonKey() final  bool enable;
@@ -1161,7 +1161,7 @@ return $default(_that.enable,_that.systemProxy,_that.allowBypass,_that.bypassPri
 @JsonSerializable()
 
 class _VpnProps implements VpnProps {
-  const _VpnProps({this.enable = true, this.systemProxy = false, this.allowBypass = false, this.bypassPrivateRoute = true, this.dozeSuspend = true, this.smartAutoStop = false, this.smartAutoStopNetworks = '', this.storeFix = false, this.networkFix = false, this.disableQuic = false, this.highPriorityNotification = false, this.networkSpeedNotification = false, this.excludeChina = false, this.trayEnhancement = false, this.trayLeftClickBehavior = TrayClickBehavior.showPanel, this.trayRightClickBehavior = TrayClickBehavior.showMenu, this.enableTraySpeed = false, this.alwaysShowTitleBar = true, this.quickResponse = true, this.accessControl = defaultAccessControl});
+  const _VpnProps({this.enable = true, this.systemProxy = false, this.allowBypass = false, this.bypassPrivateRoute = true, this.dozeSuspend = false, this.smartAutoStop = false, this.smartAutoStopNetworks = '', this.storeFix = false, this.networkFix = false, this.disableQuic = false, this.highPriorityNotification = false, this.networkSpeedNotification = false, this.excludeChina = false, this.trayEnhancement = false, this.trayLeftClickBehavior = TrayClickBehavior.showPanel, this.trayRightClickBehavior = TrayClickBehavior.showMenu, this.enableTraySpeed = false, this.alwaysShowTitleBar = true, this.quickResponse = true, this.accessControl = defaultAccessControl});
   factory _VpnProps.fromJson(Map<String, dynamic> json) => _$VpnPropsFromJson(json);
 
 @override@JsonKey() final  bool enable;
