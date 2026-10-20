@@ -14,6 +14,16 @@ void main() {
       expect(style.hasCustomizedStyle, isFalse);
     });
 
+    test('排序默认选中延迟', () {
+      expect(const ProxiesStyle().sortType, ProxiesSortType.delay);
+
+      final oldJson = {'type': 'tab', 'iconStyle': 'none'};
+      expect(
+        ProxiesStyle.fromJson(oldJson).sortType,
+        ProxiesSortType.delay,
+      );
+    });
+
     test('序列化后能够正确恢复 hasCustomizedStyle 状态', () {
       const style = ProxiesStyle(
         type: ProxiesType.list,

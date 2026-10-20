@@ -277,7 +277,7 @@ extension NetworkPropsExt on NetworkProps {
 abstract class ProxiesStyle with _$ProxiesStyle {
   const factory ProxiesStyle({
     @Default(ProxiesType.tab) ProxiesType type,
-    @Default(ProxiesSortType.none) ProxiesSortType sortType,
+    @Default(ProxiesSortType.delay) ProxiesSortType sortType,
     @Default(ProxiesLayout.standard) ProxiesLayout layout,
     @Default(ProxiesIconStyle.none) ProxiesIconStyle iconStyle,
     @Default(ProxyCardType.shrink) ProxyCardType cardType,
