@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.23`（tag `v1.19.23` 随本提交推送发布）
+- 本仓库当前版本：`1.19.24`（tag `v1.19.24` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -82,6 +82,7 @@
 | 67 | 默认值 | 内核 IPv6 默认开、休眠支持默认关、应用访问控制默认白名单+按更新时间排序 | v1.19.22 |
 | 68 | 更新 | 应用内检查更新改用 GitHub API 条件请求（ETag/304），API 不可达时回退网页端点 | v1.19.22 |
 | 69 | 安全/工程 | 内核与随包主程序用 Go 1.26.10 重编；CI 的 Go 钉版 1.25.x → 1.26.10（CVE-2026-111943） | v1.19.23 |
+| 70 | 上游/内核 | vendored mihomo 同步到 v1.19.33（原约 v1.19.32 + FlClash 补丁）；保留本地 mixed-port 修复 | v1.19.24 |
 
 ---
 
@@ -3310,3 +3311,34 @@ arm64 签名待首个 `v*` tag 发版验证。
 `v1.19.23` 标签全流程。
 
 **未决**：mihomo 上游同步到 v1.19.33 单独跟进（安全升级手册 Step D2）。
+
+---
+
+## 70. vendored mihomo 同步到 v1.19.33
+
+**文件**：`core/Clash.Meta/**`、`core/go.mod`、`core/go.sum`、`pubspec.yaml`
+
+**问题**：内核树原基线约为 mihomo **v1.19.32** + FlClash/Bettbox 补丁（与
+`appshubcc/Bettbox` 的 `Update core` 快照对齐）。上游已发 **v1.19.33**（2026-10-21，
+含 sudoku 重构、fakeip CloneFrom 并发修复、WireGuard 生命周期加固、DoH dial 超时等），
+本仓库 Step D2 需要跟上。
+
+**改动**：
+
+- 以 `appshubcc/Bettbox` 当前 `core/Clash.Meta`（≈ v1.19.32 + FlClash 补丁）为底，
+  叠上 mihomo 纯上游 `v1.19.32…v1.19.33` 差分；FlClash 独立改动全部保留：
+  - `UrlTestHook` / `DefaultProviderLoadedHook` / `StopListener` / `UpdateMMDBWithPath`
+  - GlobalUA `FlClash/ClashMetaForAndroid/2.11.33.Bettbox`、ExternalUIURL→zashboard
+  - `constant/features.Android`（非 CMFA）、PacketRejector、sing_tun reject、
+    statistic IsDirect / 代理维度流量等
+- 依赖对齐 v1.19.33：`sing-tun` v0.4.28、`metacubex/tls` v0.1.9、
+  `mipstack` 20261019、`mieru/v3` v3.38.1；`go.mod`/`go.sum` 随 `go mod tidy` 更新。
+- 本地 B⑦ 修复（`ReCreateMixed` UDP 失败时 `mixedListener = nil`）在同步后重放。
+- 应用版本 `1.19.23+2026102201` → `1.19.24+2026102202`，随 `v1.19.24` 标签发版。
+- CI `go-version: '1.26.10'` 在 v1.19.23 已钉，本轮无改动。
+
+**验证**：`CGO_ENABLED=0 go build -tags=with_gvisor -trimpath`（与
+`setup.dart windows --out core-only` 等价）成功；产物 `go version` 为 **go1.26.10**，
+二进制内含 easytier 符号。未做出站连通性测试。
+
+**未决**：无。

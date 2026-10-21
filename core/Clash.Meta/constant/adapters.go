@@ -53,6 +53,7 @@ const (
 	OpenVPN
 	Tailscale
 	ZeroTier
+	EasyTier
 	GostRelay
 )
 
@@ -238,6 +239,8 @@ func (at AdapterType) String() string {
 		return "Tailscale"
 	case ZeroTier:
 		return "ZeroTier"
+	case EasyTier:
+		return "EasyTier"
 	case GostRelay:
 		return "GostRelay"
 	case Relay:
@@ -300,6 +303,17 @@ func (s *packetAdapter) Metadata() *Metadata {
 // Key is a SNAT key
 func (s *packetAdapter) Key() string {
 	return s.key
+}
+
+type PacketRejector interface {
+	Reject() error
+}
+
+func (s *packetAdapter) Reject() error {
+	if rejector, ok := s.UDPPacket.(PacketRejector); ok {
+		return rejector.Reject()
+	}
+	return nil
 }
 
 func NewPacketAdapter(packet UDPPacket, metadata *Metadata) PacketAdapter {
