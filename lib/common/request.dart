@@ -200,17 +200,89 @@ class Request {
     return MemoryImage(bytes);
   }
 
+  /// 更新检测的 ETag：GitHub REST API 条件请求（If-None-Match）。
+  /// 未发新版时返回 304，且 304 不计入 API 限速配额，分钟级轮询成本≈0。
+  String? _updateEtag;
+
+  /// 最近一次 200 响应的判定结果（null=无更新）。304 时复用，
+  /// 保证「已发现但未安装」在会话内可重复查询（关于页手动检查）。
+  Map<String, dynamic>? _lastUpdateResult;
+
   Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
+      return await _checkUpdateViaApi();
+    } catch (e) {
+      commonPrint.log('Check update via api failed: ${e.formatErrorLog}');
+    }
+    // API 不可达（网络隔离、限速、代理剥离响应头等）时回退原网页端点。
+    return _checkUpdateViaWeb();
+  }
+
+  Future<Map<String, dynamic>?> _checkUpdateViaApi() async {
+    final headers = <String, dynamic>{
+      'Accept': 'application/vnd.github+json',
+    };
+    final etag = _updateEtag;
+    if (etag != null) headers['If-None-Match'] = etag;
+    final response = await _dio
+        .get(
+          'https://api.github.com/repos/$repository/releases/latest',
+          options: Options(
+            headers: headers,
+            // 304 空响应体按 plain 读取，避开 JSON 解析对空 body 的报错。
+            responseType: ResponseType.plain,
+            validateStatus: (status) =>
+                status == HttpStatus.ok || status == HttpStatus.notModified,
+          ),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode == HttpStatus.notModified) {
+      return _lastUpdateResult;
+    }
+    final newEtag = response.headers.value('etag');
+    if (newEtag != null && newEtag.isNotEmpty) {
+      _updateEtag = newEtag;
+    }
+    final raw = response.data;
+    final dynamic data = (raw is String && raw.isNotEmpty)
+        ? json.decode(raw)
+        : raw;
+    if (data is! Map<String, dynamic>) {
+      _lastUpdateResult = null;
+      return null;
+    }
+    final remoteVersion = data['tag_name']?.toString() ?? '';
+    final version = globalState.packageInfo.version;
+    final hasUpdate =
+        remoteVersion.isNotEmpty &&
+        utils.compareVersions(remoteVersion.replaceAll('v', ''), version) > 0;
+    if (!hasUpdate) {
+      _lastUpdateResult = null;
+      return null;
+    }
+    _lastUpdateResult = {
+      'tag_name': remoteVersion,
+      'html_url': data['html_url']?.toString() ??
+          'https://github.com/$repository/releases/latest',
+      // 真实 Release 说明，关于页弹窗可直接展示更新内容。
+      'body': data['body']?.toString() ?? '',
+    };
+    return _lastUpdateResult;
+  }
+
+  Future<Map<String, dynamic>?> _checkUpdateViaWeb() async {
+    try {
       final t = DateTime.now().millisecondsSinceEpoch;
-      final response = await _dio.get(
-        'https://github.com/$repository/releases/latest?t=$t',
-        options: Options(
-          followRedirects: false,
-          validateStatus: (status) =>
-              status != null && status >= 300 && status < 400,
-        ),
-      );
+      final response = await _dio
+          .get(
+            'https://github.com/$repository/releases/latest?t=$t',
+            options: Options(
+              followRedirects: false,
+              validateStatus: (status) =>
+                  status != null && status >= 300 && status < 400,
+            ),
+          )
+          .timeout(const Duration(seconds: 15));
       final location = response.headers['location']?.firstOrNull;
       if (location != null && location.contains('/releases/tag/')) {
         final remoteVersion = location.split('/').last.trim();
