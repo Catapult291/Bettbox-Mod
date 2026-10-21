@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.21`（tag `v1.19.21` 已发布 Release）
+- 本仓库当前版本：`1.19.22`（tag `v1.19.22` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -77,6 +77,10 @@
 | 62 | 工程 | Windows MSVC 出货二进制改静态 CRT，不再依赖 VCRUNTIME140（路线稿 §4.3） | v1.19.21 |
 | 63 | 工程 | Windows ARM64 构建腿与安装包（路线稿 §4.3） | v1.19.21 |
 | 64 | 安全/工程 | cargo-deny 进 CI：许可证与安全公告双审计；helper 修 3 条 RustSec 公告 | v1.19.21 |
+| 65 | 稳定性 | 修「关闭代理更新后，更新配置仍需先关启动开关」 | v1.19.22 |
+| 66 | 导入 | 新建/导入配置默认开启自动更新，间隔默认 720 分钟 | v1.19.22 |
+| 67 | 默认值 | 内核 IPv6 默认开、休眠支持默认关、应用访问控制默认白名单+按更新时间排序 | v1.19.22 |
+| 68 | 更新 | 应用内检查更新改用 GitHub API 条件请求（ETag/304），API 不可达时回退网页端点 | v1.19.22 |
 
 ---
 
@@ -3224,3 +3228,63 @@ arm64 签名待首个 `v*` tag 发版验证。
 **未决**：①真机装含本改动的 APK，确认关掉「代理更新」后内核在跑也能更新 Neverlose
 ②桌面重装后同验一次 ③`_directDio` 的 `connectTimeout` 15s 对慢直连可能仍偏紧，若后续
 有「直连也超时」的反馈再调。
+
+---
+
+## 66. 新建/导入配置默认开启自动更新，间隔默认 720 分钟
+
+**文件**：`lib/common/constant.dart`、`lib/views/profiles/edit_profile.dart`　**测试**：
+`test/views/profiles/edit_profile_import_defaults_test.dart`
+
+**问题**：新建/从 URL 导入配置时，编辑页曾强制关掉「自动更新」，间隔也偏长（1440 分钟），
+导入后订阅长期不更新。
+
+**改动**：
+
+- `defaultUpdateDuration`：`Duration(days: 1)` → `Duration(hours: 12)`（720 分钟），
+  经 `Profile.normal` 统一生效；已保存的旧订阅保留各自已写入值，不批量改写。
+- `EditProfileView.initState`：`isNew` 时不再强制关掉自动更新，直接取
+  `profile.autoUpdate`（模型 `@Default(true)`）；「从 URL 导入」页开关默认打开。
+
+**验证**：`edit_profile_import_defaults_test` 覆盖默认间隔 720、导入页开关开、
+编辑旧配置仍取自己的值，3 项全过。真机「配置→添加→URL」：自动更新开关为开、间隔显示 720。
+
+**未决**：无新开项。
+
+---
+
+## 67. 内核 IPv6 默认开、休眠支持默认关、应用访问控制默认白名单+按更新时间排序
+
+**文件**：`lib/models/clash_config.dart`、`lib/models/config.dart`（含重新跑 build_runner
+同步的 freezed/json 生成文件）
+
+**改动**（均为默认值，仅影响新建配置/重置后的初始状态，不改写已有用户配置）：
+
+- `ClashConfig.ipv6`：`false` → `true`（内核配置 > 常规）。
+- `VpnProps.dozeSuspend`：`true` → `false`（增强工具 > 休眠支持）。
+- `AccessControl.mode`：`rejectSelected` → `acceptSelected`（白名单模式）。
+- `AccessControl.sort`：`none` → `updateTime`（更新时间）。
+
+**验证**：`flutter analyze` 相关模型无问题；已重新跑 `build_runner` 同步生成文件。
+
+**未决**：无新开项。
+
+---
+
+## 68. 应用内检查更新改用 GitHub API 条件请求（ETag/304），API 不可达时回退网页端点
+
+**文件**：`lib/common/request.dart`
+
+**问题**：`checkForUpdate` 此前只走 `github.com/.../releases/latest` 的 302 跳转解析，
+拿不到 Release 正文，且每次都是完整请求。
+
+**改动**（仅请求层，不引入运行期轮询弹窗；启动 `autoCheckUpdate` 与关于页手动检查行为不变）：
+
+- 优先走 `api.github.com/repos/.../releases/latest`，带 `If-None-Match`；304 复用上次
+  结果、不计限速配额。
+- 失败（网络隔离、限速、代理剥离响应头等）回退原网页 302 跳转解析。
+- 请求加 15s 超时；命中时返回真实 Release body，关于页弹窗可直接展示更新内容。
+
+**验证**：`flutter analyze lib/common/request.dart` 无问题。
+
+**未决**：无新开项。
