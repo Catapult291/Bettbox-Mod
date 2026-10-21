@@ -60,9 +60,7 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 | Android | `Bettbox-<版本>-android-arm64-v8a.apk`（主流机型）、`Bettbox-<版本>-android-universal.apk`（通用） |
 | Windows | `Bettbox-<版本>-windows-amd64-setup.exe`（x64）、`Bettbox-<版本>-windows-arm64-setup.exe`（ARM64，下个版本起） |
 
-Windows 安装包与随包主程序的代码签名由 CI 在发版时自动提交至 [SignPath](https://signpath.io)
-云签名服务（当前为自签测试证书 `CN=Bettbox-Mod Test`，非 CA 签发；SmartScreen 仍可能提示未知发布者），
-策略见[代码签名策略](#代码签名策略code-signing-policy)。
+Windows 安装包与随包主程序不做 Authenticode 代码签名；下载后如被 SmartScreen 或杀软拦截属预期。
 
 ## 自行构建
 
@@ -93,22 +91,17 @@ Release 标题只写版本号，正文取自 [.github/release-notes/versions/](.
 - 感谢 **[linux.do](https://linux.do) 社区**。
 - 感谢 [Bettbox](https://github.com/appshubcc/Bettbox)、[FlClash](https://github.com/chen08209/FlClash)、[Mihomo](https://github.com/MetaCubeX/mihomo) 及其贡献者。
 
-## 代码签名策略（Code signing policy）
+## 代码签名与隐私（Code signing & privacy）
 
-Free code signing provided by [SignPath.io](https://signpath.io). 本 fork 的 Foundation 开源
-证书申请因 Reputation 未达标未通过，已放弃；正式产物继续用 SignPath 云端签名 + 项目自签测试证书。
-
-- **范围**：Windows 安装包及随包的一方主程序（`Bettbox.exe`、`BettboxCore.exe`、
-  `BettboxHelperService.exe`、`bettbox_native.dll`、`WindowsLoopbackManager.exe`）；签名由
-  CI 在推送版本标签时自动提交，不允许人工签名出货。完整流程与不变量见
-  [SIGNING-POLICY.md](SIGNING-POLICY.md)。
+- **签名**：本仓库已移除 SignPath 云端签名；Windows 发布产物不带 Authenticode 签名
+  （SmartScreen / 杀软提示属预期）。
 - **角色**：本项目为单人维护仓库。Author、Reviewer、Approver 均为仓库维护者
   [Catapult291](https://github.com/Catapult291)（GitHub 仓库 admin）；外部 PR 一律经审阅后合入。
 - **隐私**：本程序不上传遥测或崩溃数据（发行构建不包含崩溃上报）。对外网络访问仅发生在以下
   用户可见场景：添加/更新订阅（访问用户自己提供的订阅地址）、检查更新（访问本仓库的
   GitHub Releases，自动检查可在设置中关闭）、网络检测页查询出口 IP（点击时才触发，
   查询 ipinfo.io）。除此之外不向任何第三方系统传输信息。
-- 事故响应与吊销流程见 [SIGNING-POLICY.md](SIGNING-POLICY.md) 第 6 节。
+- 事故响应：如怀疑仓库或 CI 泄露，立即轮换相关 secret 并发布 advisory 通知用户。
 
 ## 许可证
 
