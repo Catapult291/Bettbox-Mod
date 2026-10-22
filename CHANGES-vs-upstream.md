@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.24`（tag `v1.19.24` 随本提交推送发布）
+- 本仓库当前版本：`1.19.25`（tag `v1.19.25` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -83,6 +83,7 @@
 | 68 | 更新 | 应用内检查更新改用 GitHub API 条件请求（ETag/304），API 不可达时回退网页端点 | v1.19.22 |
 | 69 | 安全/工程 | 内核与随包主程序用 Go 1.26.10 重编；CI 的 Go 钉版 1.25.x → 1.26.10（CVE-2026-111943） | v1.19.23 |
 | 70 | 上游/内核 | vendored mihomo 同步到 v1.19.33（原约 v1.19.32 + FlClash 补丁）；保留本地 mixed-port 修复 | v1.19.24 |
+| 71 | 安全/工程 | Rust 工具链钉版 1.98.0 → 1.99.1，随包原生库/helper 重编；刷新 rust 与 helper 的 Cargo.lock | v1.19.25 |
 
 ---
 
@@ -3340,5 +3341,31 @@ arm64 签名待首个 `v*` tag 发版验证。
 **验证**：`CGO_ENABLED=0 go build -tags=with_gvisor -trimpath`（与
 `setup.dart windows --out core-only` 等价）成功；产物 `go version` 为 **go1.26.10**，
 二进制内含 easytier 符号。未做出站连通性测试。
+
+**未决**：无。
+
+---
+
+## 71. Rust 工具链钉版 1.99.1；随包原生库/helper 重编并刷新 lockfile
+
+**文件**：`rust-toolchain.toml`、`rust/Cargo.lock`、`services/helper/Cargo.lock`、`pubspec.yaml`
+
+**问题**：本机安全升级后 rustup 已到 1.29.2，stable 可用 1.99.1；仓库仍钉 1.98.0。
+`rustls-webpki` / `webpki-roots` / `zip` **不在**本仓库出货依赖树中（`cargo-deny` 对
+rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的工具链重编 Rust 部分并
+发版」执行：钉新工具链、在 semver 范围内刷新 lockfile、本地验证后随 v1.19.25 发布。
+
+**改动**：
+
+- `rust-toolchain.toml`：`channel` `1.98.0` → `1.99.1`（components/targets 清单不变）。
+- `cargo update`：rust 工作区 7 个包、helper 29 个包（含 `serde` 1.0.215→1.0.229、
+  `tokio` 1.53.3→1.54.1、`serde_json` 等）；`cargo-deny` 复检仍全绿。
+- 本地用 1.99.1 重编：`cargo build/test --workspace`（debug+release）、helper
+  `--features windows-service` clippy/test/release 均通过；ARM64 交叉交由 CI
+  （本机无 arm64 `cl.exe`）。
+- 应用版本 `1.19.24+2026102202` → `1.19.25+2026102203`，随 `v1.19.25` 标签发版。
+
+**验证**：`rustc 1.99.1`；`cargo fmt --check` / `clippy -D warnings` / debug+release
+测试全过；`cargo-deny` advisories/bans/licenses/sources ok。
 
 **未决**：无。
