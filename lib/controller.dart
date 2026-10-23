@@ -39,12 +39,20 @@ class AppController {
   WidgetRef get ref => _ref;
 
   Timer? _wakelockSyncTimer;
+  Timer? _updateCheckTimer;
+  String? _lastNotifiedUpdateTag;
   Completer<void>? _exitLock;
   final Lock _coreLifecycleLock = Lock(reentrant: true);
   int _backgroundLoadVersion = 0;
 
   /// 内核状态对账的周期。桌面端没有内核退出通知，只能主动探测。
   static const _coreReconcileInterval = Duration(seconds: 5);
+
+  /// 运行期应用内更新提示的轮询周期。
+  ///
+  /// 走 GitHub API 条件请求：未发新版时返回 304，不计限速配额、几乎无流量，
+  /// 因此可以做到分钟级——新版本发布后通常 1~2 分钟内弹窗。
+  static const _updateCheckInterval = Duration(minutes: 2);
 
   /// 单次探测（内核忙时会超时）不算数，连续同向多次才动手，避免开关来回跳。
   static const _coreReconcileConfirmations = 2;
@@ -1328,6 +1336,7 @@ class AppController {
     _exitLock = exitLock;
     globalState.isExiting = true;
     stopCoreStateWatchdog();
+    stopUpdateCheckTimer();
     clashService?.onCoreDisconnected = null;
 
     try {
@@ -1390,14 +1399,39 @@ class AppController {
     final forceCheck =
         (now - lastCheckTime) > const Duration(days: 28).inMilliseconds;
 
-    if (!isAutoCheck && !forceCheck) return;
-
-    final res = await request.checkForUpdate();
-    if (res != null) {
-      checkUpdateResultHandle(data: res);
+    if (isAutoCheck || forceCheck) {
+      final res = await request.checkForUpdate();
+      if (res != null) {
+        _lastNotifiedUpdateTag = res['tag_name']?.toString();
+        unawaited(checkUpdateResultHandle(data: res));
+      }
+      await prefs?.setInt('last_check_update_time', now);
     }
 
-    await prefs?.setInt('last_check_update_time', now);
+    startUpdateCheckTimer();
+  }
+
+  /// 启动运行期周期性更新检测：应用开着时，新版本发布后也会在应用内弹出提示。
+  void startUpdateCheckTimer() {
+    _updateCheckTimer ??= Timer.periodic(_updateCheckInterval, (_) {
+      unawaited(_periodicCheckUpdate());
+    });
+  }
+
+  void stopUpdateCheckTimer() {
+    _updateCheckTimer?.cancel();
+    _updateCheckTimer = null;
+  }
+
+  Future<void> _periodicCheckUpdate() async {
+    if (!_ref.read(appSettingProvider).autoCheckUpdate) return;
+    final res = await request.checkForUpdate();
+    if (res == null) return;
+    final tag = res['tag_name']?.toString();
+    // 同一版本只提示一次，避免每轮检测都弹窗打扰。
+    if (tag == null || tag == _lastNotifiedUpdateTag) return;
+    _lastNotifiedUpdateTag = tag;
+    await checkUpdateResultHandle(data: res);
   }
 
   Future<void> checkUpdateResultHandle({
