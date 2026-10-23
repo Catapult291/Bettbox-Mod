@@ -122,6 +122,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "ago": MessageLookupByLibrary.simpleMessage(" ago"),
     "agree": MessageLookupByLibrary.simpleMessage("Agree"),
+    "airportLink": MessageLookupByLibrary.simpleMessage("Subscription Link"),
     "allApps": MessageLookupByLibrary.simpleMessage("All Apps"),
     "allowBypass": MessageLookupByLibrary.simpleMessage("Allow Bypassing VPN"),
     "allowBypassDesc": MessageLookupByLibrary.simpleMessage(
@@ -1088,6 +1089,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "serviceReady": MessageLookupByLibrary.simpleMessage("Service Ready"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("Service Running"),
     "settings": MessageLookupByLibrary.simpleMessage("Settings"),
+    "share": MessageLookupByLibrary.simpleMessage("Share"),
     "show": MessageLookupByLibrary.simpleMessage("Show"),
     "showHiddenItems": MessageLookupByLibrary.simpleMessage(
       "Show Hidden Items",

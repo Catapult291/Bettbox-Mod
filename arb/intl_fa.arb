@@ -535,6 +535,8 @@
   "success": "موفقیت‌آمیز",
   "copyLink": "کپی لینک",
   "exportFile": "خروجی فایل",
+  "share": "اشتراک‌گذاری",
+  "airportLink": "لینک اشتراک",
   "cacheCorrupt": "حافظه پنهان آسیب دیده است. آیا پاکسازی شود؟",
   "detectionTip": "استفاده از API جانبی (صرفاً جهت اطلاع)",
   "ipClickBehavior": "تغییر نمایش",

@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 
 import 'add_profile.dart';
+import 'share_profile.dart';
 
 class ProfilesView extends ConsumerStatefulWidget {
   const ProfilesView({super.key});
@@ -455,41 +456,6 @@ class ProfileItem extends StatelessWidget {
     return '$useShow / $totalShow';
   }
 
-  // _handleCopyLink(BuildContext context) async {
-  //   await Clipboard.setData(
-  //     ClipboardData(
-  //       text: profile.url,
-  //     ),
-  //   );
-  //   if (context.mounted) {
-  //     context.showNotifier(appLocalizations.copySuccess);
-  //   }
-  // }
-
-  Future<void> _handleExportFile(BuildContext context) async {
-    final res = await globalState.appController.safeRun<bool>(
-      () async {
-        final file = await profile.getFile();
-        final rawName = (profile.label ?? profile.id).trim();
-        final fileName = (rawName.endsWith('.yaml') || rawName.endsWith('.yml'))
-            ? rawName
-            : '$rawName.yaml';
-        final value = await picker.saveFile(
-          fileName,
-          await file.readAsBytes(),
-          allowedExtensions: ['yaml', 'yml'],
-        );
-        if (value == null) return false;
-        return true;
-      },
-      needLoading: true,
-      title: appLocalizations.tip,
-    );
-    if (res == true && context.mounted) {
-      context.showNotifier(appLocalizations.exportSuccess);
-    }
-  }
-
   void _handlePushGenProfilePage(BuildContext context, String id) {
     final overrideProfileView = OverrideProfileView(profileId: id);
     BaseNavigator.push(context, overrideProfileView);
@@ -513,18 +479,19 @@ class ProfileItem extends StatelessWidget {
           },
         ),
       ],
+      if (profile.url.isNotEmpty)
+        PopupMenuItemData(
+          icon: Icons.share_outlined,
+          label: appLocalizations.share,
+          onPressed: () {
+            showProfileShareDialog(context: context, profile: profile);
+          },
+        ),
       PopupMenuItemData(
         icon: Icons.extension_outlined,
         label: appLocalizations.override,
         onPressed: () {
           _handlePushGenProfilePage(context, profile.id);
-        },
-      ),
-      PopupMenuItemData(
-        icon: Icons.file_copy_outlined,
-        label: appLocalizations.exportFile,
-        onPressed: () {
-          _handleExportFile(context);
         },
       ),
       PopupMenuItemData(

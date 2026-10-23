@@ -535,6 +535,8 @@
   "success": "Success",
   "copyLink": "Copy Link",
   "exportFile": "Export File",
+  "share": "Share",
+  "airportLink": "Subscription Link",
   "cacheCorrupt": "Cache corrupted. Clear it?",
   "detectionTip": "Third-party API result (for reference only)",
   "ipClickBehavior": "Toggle Display",

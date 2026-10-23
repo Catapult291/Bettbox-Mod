@@ -103,6 +103,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "ago": MessageLookupByLibrary.simpleMessage("전"),
     "agree": MessageLookupByLibrary.simpleMessage("동의함"),
+    "airportLink": MessageLookupByLibrary.simpleMessage("구독 링크"),
     "allApps": MessageLookupByLibrary.simpleMessage("모든 앱"),
     "allowBypass": MessageLookupByLibrary.simpleMessage("VPN 우회 허용"),
     "allowBypassDesc": MessageLookupByLibrary.simpleMessage(
@@ -879,6 +880,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "serviceReady": MessageLookupByLibrary.simpleMessage("서비스 준비 완료"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("서비스 실행 중"),
     "settings": MessageLookupByLibrary.simpleMessage("설정"),
+    "share": MessageLookupByLibrary.simpleMessage("공유"),
     "show": MessageLookupByLibrary.simpleMessage("표시"),
     "showHiddenItems": MessageLookupByLibrary.simpleMessage("숨겨진 항목 표시"),
     "showMenu": MessageLookupByLibrary.simpleMessage("메뉴 열기"),

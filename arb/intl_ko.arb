@@ -535,6 +535,8 @@
   "success": "성공",
   "copyLink": "링크 복사",
   "exportFile": "파일 내보내기",
+  "share": "공유",
+  "airportLink": "구독 링크",
   "cacheCorrupt": "캐시가 손상되었습니다. 초기화하시겠습니까?",
   "detectionTip": "타사 API를 사용하므로 참고용으로만 확인하세요",
   "ipClickBehavior": "표시 전환",

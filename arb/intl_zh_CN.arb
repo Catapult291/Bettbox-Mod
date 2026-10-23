@@ -535,6 +535,8 @@
   "success": "Success",
   "copyLink": "复制链接",
   "exportFile": "导出文件",
+  "share": "分享",
+  "airportLink": "机场链接",
   "cacheCorrupt": "缓存已损坏，是否清空？",
   "detectionTip": "依赖第三方 API，仅供参考",
   "ipClickBehavior": "显示切换",

@@ -535,6 +535,8 @@
   "success": "成功",
   "copyLink": "リンクをコピー",
   "exportFile": "ファイルをエクスポート",
+  "share": "共有",
+  "airportLink": "サブスクリプションリンク",
   "cacheCorrupt": "キャッシュが破損しています。クリアしますか？",
   "detectionTip": "サードパーティAPIを使用しているため、参考値です",
   "ipClickBehavior": "表示切替",

@@ -114,6 +114,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "ago": MessageLookupByLibrary.simpleMessage("قبل"),
     "agree": MessageLookupByLibrary.simpleMessage("موافقم"),
+    "airportLink": MessageLookupByLibrary.simpleMessage("لینک اشتراک"),
     "allApps": MessageLookupByLibrary.simpleMessage("همه برنامه‌ها"),
     "allowBypass": MessageLookupByLibrary.simpleMessage("اجازه میانبر VPN"),
     "allowBypassDesc": MessageLookupByLibrary.simpleMessage(
@@ -1120,6 +1121,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "سرویس در حال اجرا است",
     ),
     "settings": MessageLookupByLibrary.simpleMessage("تنظیمات"),
+    "share": MessageLookupByLibrary.simpleMessage("اشتراک‌گذاری"),
     "show": MessageLookupByLibrary.simpleMessage("نمایش"),
     "showHiddenItems": MessageLookupByLibrary.simpleMessage(
       "نمایش موارد پنهان",

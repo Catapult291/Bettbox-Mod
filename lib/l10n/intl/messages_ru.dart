@@ -125,6 +125,7 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "ago": MessageLookupByLibrary.simpleMessage(" назад"),
     "agree": MessageLookupByLibrary.simpleMessage("Согласен"),
+    "airportLink": MessageLookupByLibrary.simpleMessage("Ссылка подписки"),
     "allApps": MessageLookupByLibrary.simpleMessage("Все приложения"),
     "allowBypass": MessageLookupByLibrary.simpleMessage("Разрешить обход VPN"),
     "allowBypassDesc": MessageLookupByLibrary.simpleMessage(
@@ -1129,6 +1130,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "serviceReady": MessageLookupByLibrary.simpleMessage("Служба готова"),
     "serviceRunning": MessageLookupByLibrary.simpleMessage("Служба запущена"),
     "settings": MessageLookupByLibrary.simpleMessage("Настройки"),
+    "share": MessageLookupByLibrary.simpleMessage("Поделиться"),
     "show": MessageLookupByLibrary.simpleMessage("Показать"),
     "showHiddenItems": MessageLookupByLibrary.simpleMessage("Показать скрытые"),
     "showMenu": MessageLookupByLibrary.simpleMessage("Открыть меню"),

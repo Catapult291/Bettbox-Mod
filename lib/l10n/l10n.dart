@@ -4409,6 +4409,21 @@ class AppLocalizations {
     return Intl.message('Export File', name: 'exportFile', desc: '', args: []);
   }
 
+  /// `Share`
+  String get share {
+    return Intl.message('Share', name: 'share', desc: '', args: []);
+  }
+
+  /// `Subscription Link`
+  String get airportLink {
+    return Intl.message(
+      'Subscription Link',
+      name: 'airportLink',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Cache corrupted. Clear it?`
   String get cacheCorrupt {
     return Intl.message(
