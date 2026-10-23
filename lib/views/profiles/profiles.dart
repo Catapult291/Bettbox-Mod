@@ -345,24 +345,28 @@ class ProfileItem extends StatelessWidget {
     );
   }
 
-  Widget _buildContentInfo(BuildContext context) {
+  String _getBottomText(String updateTimeText) {
     final subscriptionInfo = profile.subscriptionInfo;
-    final updateTimeText = profile.lastUpdateDate?.lastUpdateTimeDesc ?? '';
     final hasUsageBar = subscriptionInfo != null &&
         ((subscriptionInfo.upload + subscriptionInfo.download > 0) ||
             subscriptionInfo.total > 0);
-
-    String bottomText;
     if (hasUsageBar) {
-      bottomText = '${_getTrafficText(subscriptionInfo)} · $updateTimeText';
-    } else if (profile.type == ProfileType.url) {
+      return '${_getTrafficText(subscriptionInfo)} · $updateTimeText';
+    }
+    if (profile.type == ProfileType.url) {
       final trafficText = subscriptionInfo != null
           ? _getTrafficText(subscriptionInfo)
           : 'Unlimited';
-      bottomText = '$trafficText · $updateTimeText';
-    } else {
-      bottomText = '${appLocalizations.lastEdit} · $updateTimeText';
+      return '$trafficText · $updateTimeText';
     }
+    return '${appLocalizations.lastEdit} · $updateTimeText';
+  }
+
+  Widget _buildContentInfo(BuildContext context) {
+    final subscriptionInfo = profile.subscriptionInfo;
+    final hasUsageBar = subscriptionInfo != null &&
+        ((subscriptionInfo.upload + subscriptionInfo.download > 0) ||
+            subscriptionInfo.total > 0);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -413,11 +417,19 @@ class ProfileItem extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 6),
-        Text(
-          bottomText,
-          style: context.textTheme.labelMedium?.toLight,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        // 相对时间随全局刷新节拍重算，否则卡片会停留在上次构建时的描述。
+        ValueListenableBuilder<int>(
+          valueListenable: dashboardRefreshManager.tick5s,
+          builder: (_, _, _) {
+            final updateTimeText =
+                profile.lastUpdateDate?.lastUpdateTimeDesc ?? '';
+            return Text(
+              _getBottomText(updateTimeText),
+              style: context.textTheme.labelMedium?.toLight,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            );
+          },
         ),
       ],
     );
