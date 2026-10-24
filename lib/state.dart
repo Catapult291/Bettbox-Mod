@@ -39,6 +39,10 @@ class GlobalState {
   bool isService = false;
   bool isExiting = false;
   bool isScreenOn = true;
+
+  /// 「应用访问控制」页面是否处于编辑中：页面内的名单改动在退出页面时统一生效，
+  /// 期间不触发 VPN 重启提示。
+  bool isEditingAccessControl = false;
   Timer? timer;
   Timer? groupsUpdateTimer;
   late Config config;

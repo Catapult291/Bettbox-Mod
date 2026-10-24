@@ -22,6 +22,9 @@ class _VpnContainerState extends ConsumerState<VpnManager> {
     ref.listenManual(vpnStateProvider, (prev, next) {
       // Skip tip
       if (prev == null || prev == next) return;
+
+      // 应用访问控制的改动在退出页面时直接生效，不需要重启 VPN。
+      if (globalState.isEditingAccessControl) return;
       
       final prevProps = prev.vpnProps;
       final nextProps = next.vpnProps;
@@ -57,6 +60,8 @@ class _VpnContainerState extends ConsumerState<VpnManager> {
 
   void showTip() {
     debouncer.call(FunctionTag.vpnTip, () {
+      // 防抖期间可能已经进入访问控制页，此时的改动会在退出页面时直接生效。
+      if (globalState.isEditingAccessControl) return;
       if (ref.read(runTimeProvider.notifier).isStart) {
         globalState.showNotifier(
           appLocalizations.vpnTip,

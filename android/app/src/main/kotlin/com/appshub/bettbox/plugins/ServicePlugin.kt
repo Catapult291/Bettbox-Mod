@@ -59,6 +59,18 @@ class ServicePlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "startVpn" -> handleStartVpn(call, result)
+            "refreshVpnAccessControl" -> {
+                val data = call.argument<String>("data")
+                if (data.isNullOrBlank() || data == "null") {
+                    result.error("INVALID_ARGUMENT", "options data is null", null)
+                    return
+                }
+                runCatching { gson.fromJson(data, VpnOptions::class.java) }
+                    .onSuccess { options ->
+                        VpnPlugin.handleRefreshAccessControl(options, result)
+                    }
+                    .onFailure { result.error("PARSE_ERROR", it.message, null) }
+            }
             "stopVpn" -> {
                 VpnPlugin.handleStop(force = true)
                 result.success(true)

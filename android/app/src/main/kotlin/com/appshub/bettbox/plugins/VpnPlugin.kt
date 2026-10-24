@@ -299,6 +299,76 @@ data object VpnPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         return true
     }
 
+    /// 重建 TUN 接口以应用新的应用名单，内核、监听端口与 VPN 服务都保持运行。
+    ///
+    /// 安卓的应用名单只能在 `VpnService.Builder` 建立接口时确定，运行期间改名单
+    /// 必须重新 establish 一次；这里只换接口并让内核接管新 fd（[Core.startTun]
+    /// 会关掉旧 TUN），不像停启流程那样重启内核。
+    fun handleRefreshAccessControl(options: VpnOptions, result: MethodChannel.Result) {
+        scope.launch {
+            val applied = runCatching { refreshAccessControl(options) }
+                .onFailure {
+                    android.util.Log.e(
+                        "VpnPlugin",
+                        "Refresh access control failed: ${it.message}",
+                        it
+                    )
+                }
+                .getOrDefault(false)
+            withContext(Dispatchers.Main) { result.success(applied) }
+        }
+    }
+
+    private suspend fun refreshAccessControl(newOptions: VpnOptions): Boolean {
+        if (!newOptions.enable) return false
+        val service = GlobalState.runLock.withLock {
+            if (GlobalState.currentRunState != RunState.START) return@withLock null
+            this.options = newOptions
+            bettBoxService as? BettboxVpnService
+        } ?: return false
+
+        var fd = establishTun(service, newOptions)
+        if (fd <= 0) {
+            android.util.Log.w("VpnPlugin", "Access control refresh retrying establish")
+            delay(200)
+            fd = establishTun(service, newOptions)
+        }
+        if (fd <= 0) {
+            android.util.Log.e("VpnPlugin", "Access control refresh failed to establish TUN")
+            return false
+        }
+
+        // establish 期间可能刚好被停止：停止状态下不要再把 TUN 拉起来。
+        val canApply = GlobalState.runLock.withLock {
+            if (GlobalState.currentRunState == RunState.START) {
+                true
+            } else {
+                runCatching { android.os.ParcelFileDescriptor.adoptFd(fd).close() }
+                false
+            }
+        }
+        if (!canApply) return false
+
+        Core.startTun(
+            fd = fd,
+            protect = this@VpnPlugin::protect,
+            resolverProcess = this@VpnPlugin::resolverProcess,
+        )
+        return true
+    }
+
+    private suspend fun establishTun(service: BettboxVpnService, options: VpnOptions): Int {
+        return runCatching { service.start(options) }
+            .onFailure {
+                android.util.Log.e(
+                    "VpnPlugin",
+                    "Establish TUN for access control failed: ${it.message}",
+                    it
+                )
+            }
+            .getOrDefault(-1)
+    }
+
     private fun handleStartVpn() {
         GlobalState.getCurrentAppPlugin()?.requestVpnPermission {
             handleStartService()

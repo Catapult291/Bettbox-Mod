@@ -1278,6 +1278,25 @@ class AppController {
     await preferences.saveConfig(globalState.config);
   }
 
+  /// 应用「应用访问控制」页面的改动。
+  ///
+  /// 安卓的 VPN 应用名单只能在建立 TUN 接口时确定，运行中改名单需要重建接口；
+  /// 这里把新名单先同步给内核，再重建 TUN，内核与监听端口保持运行。VPN 未运行
+  /// 时无需处理，下次启动会带上最新名单。
+  Future<void> applyAccessControlChanges() async {
+    if (!system.isAndroid) return;
+    final serviceHandle = vpn_service.service;
+    if (serviceHandle == null || !globalState.isStart) return;
+    try {
+      await clashCore.setState(globalState.getCoreState());
+      final options = await clashLib?.getAndroidVpnOptions();
+      if (options == null || !options.enable) return;
+      await serviceHandle.refreshVpnAccessControl(options);
+    } catch (e) {
+      commonPrint.log('[AccessControl] Failed to apply changes: $e');
+    }
+  }
+
   Future<void> changeProxy({
     required String groupName,
     required String proxyName,

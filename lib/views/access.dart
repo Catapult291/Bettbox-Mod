@@ -28,6 +28,7 @@ class _AccessViewState extends ConsumerState<AccessView>
     with WidgetsBindingObserver {
   _AppListFilter _appListFilter = _AppListFilter.selected;
   late ScrollController _controller;
+  late AccessControl _initialAccessControl;
   final Completer<void> _completer = Completer<void>();
   bool _requestedPackageListPermission = false;
   bool _notifiedPackageListPermissionDenied = false;
@@ -38,6 +39,9 @@ class _AccessViewState extends ConsumerState<AccessView>
   void initState() {
     super.initState();
     _controller = ScrollController();
+    _initialAccessControl = globalState.config.vpnProps.accessControl;
+    // 页面内的勾选不再逐次生效，改动统一在退出页面时应用；期间不弹重启提示。
+    globalState.isEditingAccessControl = true;
     WidgetsBinding.instance.addObserver(this);
     _checkPermissionAndLoadPackages(interactive: true);
   }
@@ -241,6 +245,21 @@ class _AccessViewState extends ConsumerState<AccessView>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
+    globalState.isEditingAccessControl = false;
+    if (!globalState.isExiting) {
+      final current = globalState.config.vpnProps.accessControl;
+      final acceptListChanged =
+          current.acceptList.length != _initialAccessControl.acceptList.length ||
+          !current.acceptList.toSet().containsAll(
+            _initialAccessControl.acceptList,
+          );
+      if (current.enable != _initialAccessControl.enable || acceptListChanged) {
+        final controller = globalState.appControllerOrNull;
+        if (controller != null) {
+          unawaited(controller.applyAccessControlChanges());
+        }
+      }
+    }
     super.dispose();
   }
 

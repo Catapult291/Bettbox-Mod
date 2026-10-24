@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:bett_box/common/system.dart';
+import 'package:bett_box/models/models.dart';
 import 'package:bett_box/state.dart';
 import 'package:flutter/services.dart';
 
@@ -49,6 +50,13 @@ class Service {
   Future<bool?> startVpn() async {
     final options = await clashLib?.getAndroidVpnOptions();
     return await methodChannel.invokeMethod<bool>('startVpn', {
+      'data': json.encode(options),
+    });
+  }
+
+  /// 重建 TUN 接口以应用新的应用访问控制名单，内核保持运行。
+  Future<bool?> refreshVpnAccessControl(AndroidVpnOptions options) {
+    return methodChannel.invokeMethod<bool>('refreshVpnAccessControl', {
       'data': json.encode(options),
     });
   }
