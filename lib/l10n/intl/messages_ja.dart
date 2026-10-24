@@ -61,7 +61,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "選択したアプリのみVPN経由で通信",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
-      "アプリのブラック/ホワイトリストを設定",
+      "アプリごとのアクセス許可リストを設定",
     ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選択したアプリをVPN対象外に設定",

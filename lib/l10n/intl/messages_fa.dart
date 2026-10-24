@@ -62,7 +62,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "تنها برنامه‌های انتخاب شده از VPN عبور کنند",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
-      "تنظیم لیست سیاه/سفید دسترسی برنامه‌ها",
+      "تنظیم لیست مجاز دسترسی برنامه‌ها",
     ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "برنامه‌های انتخاب شده از VPN استثنا شوند",

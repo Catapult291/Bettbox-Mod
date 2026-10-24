@@ -112,7 +112,7 @@
   "autoCheckUpdate": "自動檢查更新",
   "autoCheckUpdateDesc": "應用啟動時自動檢查更新",
   "accessControl": "存取控制",
-  "accessControlDesc": "設定應用存取黑白名單",
+  "accessControlDesc": "設定應用存取白名單",
   "clearCacheTitle": "清理快取",
   "clearCacheDesc": "是否需要清理 FakeIP & DNS 快取？",
   "forceGCTitle": "強制垃圾回收",

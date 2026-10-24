@@ -112,7 +112,7 @@
   "autoCheckUpdate": "자동 업데이트 확인",
   "autoCheckUpdateDesc": "앱 실행 시 업데이트 자동 확인",
   "accessControl": "액세스 제어",
-  "accessControlDesc": "앱 블랙리스트/화이트리스트 설정",
+  "accessControlDesc": "앱별 접근 허용 목록 구성",
   "clearCacheTitle": "캐시 지우기",
   "clearCacheDesc": "FakeIP 및 DNS 캐시를 지우시겠습니까?",
   "forceGCTitle": "강제 가비지 컬렉션",

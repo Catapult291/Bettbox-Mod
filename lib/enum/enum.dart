@@ -116,7 +116,7 @@ enum ProxiesSortType { none, delay, name }
 
 enum TunStack { gvisor, system, mixed }
 
-enum AccessControlMode { acceptSelected, rejectSelected }
+enum AccessControlMode { acceptSelected }
 
 enum AccessSortType { none, installTime, updateTime }
 

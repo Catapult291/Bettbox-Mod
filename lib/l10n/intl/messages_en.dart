@@ -66,7 +66,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Only route selected apps through VPN",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
-      "Configure per-app access allowlist/blocklist",
+      "Configure per-app access allowlist",
     ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Exclude selected apps from VPN",

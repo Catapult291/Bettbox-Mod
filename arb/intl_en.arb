@@ -112,7 +112,7 @@
   "autoCheckUpdate": "Auto Check Updates",
   "autoCheckUpdateDesc": "Check updates on app launch",
   "accessControl": "Access Control",
-  "accessControlDesc": "Configure per-app access allowlist/blocklist",
+  "accessControlDesc": "Configure per-app access allowlist",
   "clearCacheTitle": "Clear Cache",
   "clearCacheDesc": "Clear FakeIP and DNS cache?",
   "forceGCTitle": "Force Garbage Collection",

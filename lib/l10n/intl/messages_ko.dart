@@ -60,9 +60,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlAllowDesc": MessageLookupByLibrary.simpleMessage(
       "선택한 앱만 VPN을 통해 연결",
     ),
-    "accessControlDesc": MessageLookupByLibrary.simpleMessage(
-      "앱 블랙리스트/화이트리스트 설정",
-    ),
+    "accessControlDesc": MessageLookupByLibrary.simpleMessage("앱별 접근 허용 목록 구성"),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "선택한 앱은 VPN 연결에서 제외",
     ),

@@ -112,7 +112,7 @@
   "autoCheckUpdate": "自動更新確認",
   "autoCheckUpdateDesc": "起動時にアップデートを自動確認",
   "accessControl": "アクセス制御",
-  "accessControlDesc": "アプリのブラック/ホワイトリストを設定",
+  "accessControlDesc": "アプリごとのアクセス許可リストを設定",
   "clearCacheTitle": "キャッシュ削除",
   "clearCacheDesc": "FakeIPとDNSキャッシュをクリアしますか？",
   "forceGCTitle": "強制ガベージコレクション",

@@ -18,7 +18,6 @@ import com.appshub.bettbox.GlobalState
 import com.appshub.bettbox.extensions.getIpv4RouteAddress
 import com.appshub.bettbox.extensions.getIpv6RouteAddress
 import com.appshub.bettbox.extensions.toCIDR
-import com.appshub.bettbox.models.AccessControlMode
 import com.appshub.bettbox.models.VpnOptions
 import com.appshub.bettbox.plugins.VpnPlugin
 import com.appshub.bettbox.R
@@ -126,19 +125,11 @@ class BettboxVpnService : VpnService(), BaseServiceInterface {
 
         val accessControl = options.accessControl
         if (accessControl.enable) {
-            when (accessControl.mode) {
-                AccessControlMode.acceptSelected -> {
-                    // 名单里不再加入自身：自身走下面统一的 addDisallowedApplication，
-                    // 保证应用自身流量不被自己的 VPN 按规则二次劫持。
-                    accessControl.acceptList.filter { it.isNotBlank() }.distinct().forEach { appPkg ->
-                        runCatching { addAllowedApplication(appPkg) }
-                            .onFailure { Log.e(TAG, "Failed to allow package $appPkg: ${it.message}", it) }
-                    }
-                }
-                AccessControlMode.rejectSelected -> (accessControl.rejectList - packageName).filter { it.isNotBlank() }.distinct().forEach { appPkg ->
-                    runCatching { addDisallowedApplication(appPkg) }
-                        .onFailure { Log.e(TAG, "Failed to disallow package $appPkg: ${it.message}", it) }
-                }
+            // 名单里不再加入自身：自身走下面统一的 addDisallowedApplication，
+            // 保证应用自身流量不被自己的 VPN 按规则二次劫持。
+            accessControl.acceptList.filter { it.isNotBlank() }.distinct().forEach { appPkg ->
+                runCatching { addAllowedApplication(appPkg) }
+                    .onFailure { Log.e(TAG, "Failed to allow package $appPkg: ${it.message}", it) }
             }
         }
         // 无论访问控制怎么配，都把自身排除在自己的 VPN 之外：VPN 默认会捕获本应用

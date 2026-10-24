@@ -3,14 +3,13 @@ package com.appshub.bettbox.models
 import java.net.InetAddress
 
 enum class AccessControlMode {
-    acceptSelected, rejectSelected,
+    acceptSelected,
 }
 
 data class AccessControl(
     val enable: Boolean,
     val mode: AccessControlMode,
     val acceptList: List<String>,
-    val rejectList: List<String>,
 )
 
 data class CIDR(val address: InetAddress, val prefixLength: Int)

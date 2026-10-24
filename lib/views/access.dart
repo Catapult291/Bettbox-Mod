@@ -25,7 +25,6 @@ class AccessView extends ConsumerStatefulWidget {
 class _AccessViewState extends ConsumerState<AccessView>
     with WidgetsBindingObserver {
   List<String> acceptList = [];
-  List<String> rejectList = [];
   late ScrollController _controller;
   final Completer<void> _completer = Completer<void>();
   bool _requestedPackageListPermission = false;
@@ -246,7 +245,6 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   void _updateInitList() {
     acceptList = globalState.config.vpnProps.accessControl.acceptList;
-    rejectList = globalState.config.vpnProps.accessControl.rejectList;
   }
 
   Widget _buildSearchButton() {
@@ -255,10 +253,7 @@ class _AccessViewState extends ConsumerState<AccessView>
       onPressed: () {
         showSearch(
           context: context,
-          delegate: AccessControlSearchDelegate(
-            acceptList: acceptList,
-            rejectList: rejectList,
-          ),
+          delegate: AccessControlSearchDelegate(acceptList: acceptList),
         ).then((_) {
           if (mounted) {
             setState(() {
@@ -306,38 +301,6 @@ class _AccessViewState extends ConsumerState<AccessView>
     );
   }
 
-  Widget _buildSelectedAllButton({
-    required bool isSelectedAll,
-    required List<String> allValueList,
-  }) {
-    final tooltip = isSelectedAll
-        ? appLocalizations.cancelSelectAll
-        : appLocalizations.selectAll;
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: () {
-        ref.read(vpnSettingProvider.notifier).updateState((state) {
-          final isAccept =
-              state.accessControl.mode == AccessControlMode.acceptSelected;
-          if (isSelectedAll) {
-            return switch (isAccept) {
-              true => state.copyWith.accessControl(acceptList: []),
-              false => state.copyWith.accessControl(rejectList: []),
-            };
-          } else {
-            return switch (isAccept) {
-              true => state.copyWith.accessControl(acceptList: allValueList),
-              false => state.copyWith.accessControl(rejectList: allValueList),
-            };
-          }
-        });
-      },
-      icon: isSelectedAll
-          ? const Icon(Icons.deselect)
-          : const Icon(Icons.select_all),
-    );
-  }
-
   Future<void> _intelligentSelected() async {
     final packageNames = ref.read(
       packageListSelectorStateProvider.select(
@@ -357,16 +320,10 @@ class _AccessViewState extends ConsumerState<AccessView>
     final acceptList = packageNames
         .where((item) => !selectedPackageNames.contains(item))
         .toList();
-    final rejectList = packageNames
-        .where((item) => selectedPackageNames.contains(item))
-        .toList();
     ref
         .read(vpnSettingProvider.notifier)
         .updateState(
-          (state) => state.copyWith.accessControl(
-            acceptList: acceptList,
-            rejectList: rejectList,
-          ),
+          (state) => state.copyWith.accessControl(acceptList: acceptList),
         );
   }
 
@@ -404,17 +361,10 @@ class _AccessViewState extends ConsumerState<AccessView>
               currentManualList.contains(package.packageName)
           ? currentManualList.where((e) => e != package.packageName).toList()
           : currentManualList;
-      return switch (state.accessControl.mode ==
-          AccessControlMode.acceptSelected) {
-        true => state.copyWith.accessControl(
-            acceptList: valueList,
-            manualList: newManualList,
-          ),
-        false => state.copyWith.accessControl(
-            rejectList: valueList,
-            manualList: newManualList,
-          ),
-      };
+      return state.copyWith.accessControl(
+        acceptList: valueList,
+        manualList: newManualList,
+      );
     });
   }
 
@@ -422,18 +372,9 @@ class _AccessViewState extends ConsumerState<AccessView>
   Widget build(BuildContext context) {
     final state = ref.watch(packageListSelectorStateProvider);
     final accessControl = state.accessControl;
-    final accessControlMode = accessControl.mode;
-    final packages = state.getSortList(
-      accessControlMode == AccessControlMode.acceptSelected
-          ? acceptList
-          : rejectList,
-    );
-    final currentList = accessControl.currentList;
+    final packages = state.getSortList(acceptList);
     final packageNameList = packages.map((e) => e.packageName).toList();
-    final valueList = currentList.intersection(packageNameList);
-    final describe = accessControlMode == AccessControlMode.acceptSelected
-        ? '${appLocalizations.accessControlAllowDesc} (${appLocalizations.whitelistMode})'
-        : '${appLocalizations.accessControlNotAllowDesc} (${appLocalizations.blacklistMode})';
+    final valueList = acceptList.intersection(packageNameList);
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -489,49 +430,36 @@ class _AccessViewState extends ConsumerState<AccessView>
                           mainAxisSize: MainAxisSize.max,
                           children: [
                             Expanded(
-                              child: IntrinsicHeight(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.max,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              appLocalizations.selected,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelLarge
-                                                  ?.copyWith(
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary,
-                                                  ),
-                                            ),
+                              child: Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      appLocalizations.selected,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                           ),
-                                          const Flexible(
-                                            child: SizedBox(width: 8),
-                                          ),
-                                          Flexible(
-                                            child: Text(
-                                              '${valueList.length}',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .labelLarge
-                                                  ?.copyWith(
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary,
-                                                  ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
                                     ),
-                                    Flexible(child: Text(describe)),
-                                  ],
-                                ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      '${valueList.length}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             Row(
@@ -539,14 +467,6 @@ class _AccessViewState extends ConsumerState<AccessView>
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 Flexible(child: _buildSearchButton()),
-                                Flexible(
-                                  child: _buildSelectedAllButton(
-                                    isSelectedAll:
-                                        valueList.length ==
-                                        packageNameList.length,
-                                    allValueList: packageNameList,
-                                  ),
-                                ),
                                 Flexible(child: _buildSettingButton()),
                               ],
                             ),
@@ -722,12 +642,8 @@ class PackageListItem extends ConsumerWidget {
 
 class AccessControlSearchDelegate extends SearchDelegate {
   List<String> acceptList = [];
-  List<String> rejectList = [];
 
-  AccessControlSearchDelegate({
-    required this.acceptList,
-    required this.rejectList,
-  });
+  AccessControlSearchDelegate({required this.acceptList});
 
   @override
   List<Widget>? buildActions(BuildContext context) {
@@ -773,17 +689,10 @@ class AccessControlSearchDelegate extends SearchDelegate {
               currentManualList.contains(package.packageName)
           ? currentManualList.where((e) => e != package.packageName).toList()
           : currentManualList;
-      return switch (state.accessControl.mode ==
-          AccessControlMode.acceptSelected) {
-        true => state.copyWith.accessControl(
-            acceptList: valueList,
-            manualList: newManualList,
-          ),
-        false => state.copyWith.accessControl(
-            rejectList: valueList,
-            manualList: newManualList,
-          ),
-      };
+      return state.copyWith.accessControl(
+        acceptList: valueList,
+        manualList: newManualList,
+      );
     });
   }
 
@@ -794,13 +703,9 @@ class AccessControlSearchDelegate extends SearchDelegate {
         final vm3 = ref.watch(
           packageListSelectorStateProvider.select(
             (state) => VM3(
-              a: state.getSortList(
-                state.accessControl.mode == AccessControlMode.acceptSelected
-                    ? acceptList
-                    : rejectList,
-              ),
+              a: state.getSortList(acceptList),
               b: state.accessControl.enable,
-              c: state.accessControl.currentList,
+              c: state.accessControl.acceptList,
             ),
           ),
         );
@@ -864,20 +769,6 @@ class AccessControlPanel extends ConsumerStatefulWidget {
 }
 
 class _AccessControlPanelState extends ConsumerState<AccessControlPanel> {
-  IconData _getIconWithAccessControlMode(AccessControlMode mode) {
-    return switch (mode) {
-      AccessControlMode.acceptSelected => Icons.adjust_outlined,
-      AccessControlMode.rejectSelected => Icons.block_outlined,
-    };
-  }
-
-  String _getTextWithAccessControlMode(AccessControlMode mode) {
-    return switch (mode) {
-      AccessControlMode.acceptSelected => appLocalizations.whitelistMode,
-      AccessControlMode.rejectSelected => appLocalizations.blacklistMode,
-    };
-  }
-
   String _getTextWithAccessSortType(AccessSortType type) {
     return switch (type) {
       AccessSortType.none => appLocalizations.defaultText,
@@ -913,8 +804,8 @@ class _AccessControlPanelState extends ConsumerState<AccessControlPanel> {
                   for (final item in AccessControlMode.values)
                     SettingInfoCard(
                       Info(
-                        label: _getTextWithAccessControlMode(item),
-                        iconData: _getIconWithAccessControlMode(item),
+                        label: appLocalizations.whitelistMode,
+                        iconData: Icons.adjust_outlined,
                       ),
                       isSelected: accessControlMode == item,
                       onPressed: () {
@@ -1059,15 +950,11 @@ class _AccessControlPanelState extends ConsumerState<AccessControlPanel> {
             .toList();
 
         final currentState = ref.read(vpnSettingProvider).accessControl;
-        final isAccept = currentState.mode == AccessControlMode.acceptSelected;
-        final currentList =
-            isAccept ? currentState.acceptList : currentState.rejectList;
-        final newList = {...currentList, ...packages}.toList();
+        final newList = {...currentState.acceptList, ...packages}.toList();
         final newManualList = {...currentState.manualList, ...packages}.toList();
 
         newAccessControl = currentState.copyWith(
-          acceptList: isAccept ? newList : currentState.acceptList,
-          rejectList: !isAccept ? newList : currentState.rejectList,
+          acceptList: newList,
           manualList: newManualList,
         );
       }

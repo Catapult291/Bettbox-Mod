@@ -112,7 +112,7 @@
   "autoCheckUpdate": "Автообновление",
   "autoCheckUpdateDesc": "Проверка обновлений при запуске",
   "accessControl": "Маршрутизация приложений",
-  "accessControlDesc": "Настройка доступа приложений к прокси",
+  "accessControlDesc": "Настройка списка разрешённых приложений",
   "clearCacheTitle": "Очистить кэш",
   "clearCacheDesc": "Очистить кэш FakeIP и DNS?",
   "forceGCTitle": "Очистка кеша ядра",

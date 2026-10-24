@@ -69,7 +69,7 @@ class MessageLookup extends MessageLookupByLibrary {
       "Только выбранные приложения используют VPN",
     ),
     "accessControlDesc": MessageLookupByLibrary.simpleMessage(
-      "Настройка доступа приложений к прокси",
+      "Настройка списка разрешённых приложений",
     ),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "Выбранные приложения исключены из VPN",

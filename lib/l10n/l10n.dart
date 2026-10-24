@@ -1004,10 +1004,10 @@ class AppLocalizations {
     );
   }
 
-  /// `Configure per-app access allowlist/blocklist`
+  /// `Configure per-app access allowlist`
   String get accessControlDesc {
     return Intl.message(
-      'Configure per-app access allowlist/blocklist',
+      'Configure per-app access allowlist',
       name: 'accessControlDesc',
       desc: '',
       args: [],

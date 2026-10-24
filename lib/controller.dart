@@ -2682,8 +2682,7 @@ class AppController {
         final currentVpnProps = _ref.read(vpnSettingProvider);
         final hasBackupAccessControl =
             config.vpnProps.accessControl.enable ||
-            config.vpnProps.accessControl.acceptList.isNotEmpty ||
-            config.vpnProps.accessControl.rejectList.isNotEmpty;
+            config.vpnProps.accessControl.acceptList.isNotEmpty;
         _ref.read(vpnSettingProvider.notifier).value = config.vpnProps.copyWith(
           accessControl: hasBackupAccessControl
               ? config.vpnProps.accessControl

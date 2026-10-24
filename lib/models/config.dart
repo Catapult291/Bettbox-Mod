@@ -179,9 +179,10 @@ abstract class AppSettingProps with _$AppSettingProps {
 abstract class AccessControl with _$AccessControl {
   const factory AccessControl({
     @Default(false) bool enable,
-    @Default(AccessControlMode.acceptSelected) AccessControlMode mode,
+    @JsonKey(unknownEnumValue: AccessControlMode.acceptSelected)
+    @Default(AccessControlMode.acceptSelected)
+    AccessControlMode mode,
     @Default([]) List<String> acceptList,
-    @Default([]) List<String> rejectList,
     @Default([]) List<String> manualList,
     @JsonKey(unknownEnumValue: AccessSortType.none)
     @Default(AccessSortType.updateTime)
@@ -192,13 +193,6 @@ abstract class AccessControl with _$AccessControl {
 
   factory AccessControl.fromJson(Map<String, Object?> json) =>
       _$AccessControlFromJson(json);
-}
-
-extension AccessControlExt on AccessControl {
-  List<String> get currentList => switch (mode) {
-    AccessControlMode.acceptSelected => acceptList,
-    AccessControlMode.rejectSelected => rejectList,
-  };
 }
 
 @freezed

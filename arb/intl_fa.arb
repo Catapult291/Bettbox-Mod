@@ -112,7 +112,7 @@
   "autoCheckUpdate": "بررسی خودکار بروزرسانی",
   "autoCheckUpdateDesc": "بررسی خودکار بروزرسانی هنگام اجرای برنامه",
   "accessControl": "کنترل دسترسی",
-  "accessControlDesc": "تنظیم لیست سیاه/سفید دسترسی برنامه‌ها",
+  "accessControlDesc": "تنظیم لیست مجاز دسترسی برنامه‌ها",
   "clearCacheTitle": "پاکسازی حافظه پنهان",
   "clearCacheDesc": "آیا حافظه پنهان FakeIP و DNS پاکسازی شود؟",
   "forceGCTitle": "پاکسازی اجباری حافظه",

@@ -24,10 +24,9 @@ type AndroidVpnOptions struct {
 }
 
 type AccessControl struct {
-	Enable            bool     `json:"enable"`
-	Mode              string   `json:"mode"`
-	AcceptList        []string `json:"acceptList"`
-	RejectList        []string `json:"rejectList"`
+	Enable     bool     `json:"enable"`
+	Mode       string   `json:"mode"`
+	AcceptList []string `json:"acceptList"`
 }
 
 type AndroidVpnRawOptions struct {
@@ -50,8 +49,6 @@ var CurrentState = &State{
 	OnlyStatisticsProxy: false,
 	CurrentProfileName:  "",
 }
-
-
 
 func GetDnsServerAddress() string {
 	return DefaultDnsAddress

@@ -60,7 +60,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "accessControlAllowDesc": MessageLookupByLibrary.simpleMessage(
       "只允許選取的應用進入 VPN",
     ),
-    "accessControlDesc": MessageLookupByLibrary.simpleMessage("設定應用存取黑白名單"),
+    "accessControlDesc": MessageLookupByLibrary.simpleMessage("設定應用存取白名單"),
     "accessControlNotAllowDesc": MessageLookupByLibrary.simpleMessage(
       "選取的應用將被排除在 VPN 之外",
     ),
