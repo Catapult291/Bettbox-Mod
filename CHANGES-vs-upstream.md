@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.25`（tag `v1.19.25` 随本提交推送发布）
+- 本仓库当前版本：`1.19.26`（tag `v1.19.26` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -84,6 +84,11 @@
 | 69 | 安全/工程 | 内核与随包主程序用 Go 1.26.10 重编；CI 的 Go 钉版 1.25.x → 1.26.10（CVE-2026-111943） | v1.19.23 |
 | 70 | 上游/内核 | vendored mihomo 同步到 v1.19.33（原约 v1.19.32 + FlClash 补丁）；保留本地 mixed-port 修复 | v1.19.24 |
 | 71 | 安全/工程 | Rust 工具链钉版 1.98.0 → 1.99.1，随包原生库/helper 重编；刷新 rust 与 helper 的 Cargo.lock | v1.19.25 |
+| 72 | 更新 | 应用内更新提示恢复 2 分钟 ETag 轮询；同一版本只提示一次 | v1.19.26 |
+| 73 | 界面 | 配置卡片新增「分享」（订阅二维码 + 机场链接复制），移除「导出文件」 | v1.19.26 |
+| 74 | 界面 | 配置卡片「上次更新时间」随 5 秒刷新节拍重算 | v1.19.26 |
+| 75 | 平台 | 安卓访问控制固定白名单模式：移除黑名单与全选，新增全部/已选/未选筛选，退出页面时统一生效 | v1.19.26 |
+| 76 | 默认值 | 允许绕过 VPN 默认开启（含缺少该字段的旧配置） | v1.19.26 |
 
 ---
 
@@ -3367,5 +3372,88 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 
 **验证**：`rustc 1.99.1`；`cargo fmt --check` / `clippy -D warnings` / debug+release
 测试全过；`cargo-deny` advisories/bans/licenses/sources ok。
+
+**未决**：无。
+
+---
+
+## 72. 应用内更新提示恢复 2 分钟 ETag 轮询
+
+**文件**：`lib/controller.dart`
+
+**问题**：更新检查只在启动时执行一次（并带 28 天强制检查门槛），应用长时间运行期间发布的版本要等下次启动才提示。
+
+**改动**：
+
+- 新增 `_updateCheckTimer`（2 分钟周期），启动检查完成后无条件拉起；定时器先读 `autoCheckUpdate`，关闭时直接跳过。
+- 每轮走 `request.checkForUpdate()` 条件请求：未发新版返回 304，不计限速配额。
+- `_lastNotifiedUpdateTag` 记录已提示版本，同一版本只弹一次；`handleExit` 中停表。
+
+**验证**：`flutter analyze` 通过；`flutter test` 全量通过。
+
+**未决**：无。
+
+---
+
+## 73. 配置卡片新增「分享」，移除「导出文件」
+
+**文件**：`lib/views/profiles/share_profile.dart`（新增）、`lib/views/profiles/profiles.dart`、`arb/*`、`lib/l10n/**`、`pubspec.yaml`、`pubspec.lock`、`test/views/profiles/share_profile_test.dart`（新增）
+
+**问题**：配置卡片菜单只有「导出文件」，移动端拿到的是文件，订阅二维码与机场链接需要另找入口。
+
+**改动**：
+
+- 新增 `ProfileShareDialog`：用 `qr_flutter` 渲染订阅链接二维码，下方展示链接，点击复制到剪贴板并在 2 秒后恢复图标状态。
+- 菜单项「导出文件」及其实现删除。
+- `share`、`copySuccess` 等文案补齐 7 个 arb 与生成文件；依赖与锁文件按 Flutter 3.47.8 刷新。
+
+**验证**：新增分享弹窗 widget 测试；`flutter test` 全量通过。
+
+**未决**：无。
+
+---
+
+## 74. 配置卡片「上次更新时间」随刷新节拍重算
+
+**文件**：`lib/views/profiles/profiles.dart`
+
+**问题**：相对时间在 build 时算定，卡片只在配置数据变化时重建，页面停留期间一直停在进入时的时间文案。
+
+**改动**：底部描述包进 `ValueListenableBuilder`，监听 `dashboardRefreshManager.tick5s`，每 5 秒重算 `lastUpdateTimeDesc`；配置数据更新仍由原 provider 通知驱动。
+
+**验证**：`flutter analyze` 无告警；`flutter test` 全量 212 项通过。
+
+**未决**：无。
+
+---
+
+## 75. 安卓访问控制固定白名单模式、新增筛选、退出页面时生效
+
+**文件**：`lib/views/access.dart`、`lib/controller.dart`、`lib/state.dart`、`lib/manager/vpn_manager.dart`、`lib/plugins/service.dart`、`lib/enum/enum.dart`、`android/app/src/main/kotlin/com/appshub/bettbox/{models/Props.kt,plugins/VpnPlugin.kt,plugins/ServicePlugin.kt,services/BettboxVpnService.kt}`、`core/state/state.go`、`arb/*`、`lib/l10n/**`
+
+**问题**：访问控制同时存在白名单与黑名单两套列表和全选按钮，模式切换与代理设置页的「模式」栏重复；勾选即时写入会触发「修改 VPN 设置需要重启」提示；在「未选择」列表勾选后，应用被排到已选择列表末尾（排序基于旧快照）。
+
+**改动**：
+
+- 固定白名单模式：删除 `rejectList` / `rejectSelected`（Dart、Kotlin、Go 三层）、黑名单分支、模式切换与全选按钮；代理设置仅展示白名单模式，说明与文案同步改写。
+- 列表头部新增「全部 / 已选择 / 未选择」循环筛选，占据原全选按钮位置；头部计数随筛选显示已选或未选应用数量。
+- 勾选与排序改为读取实时 `acceptList`，搜索页同步使用实时状态，勾选后不再错位。
+- 进入页面置 `globalState.isEditingAccessControl`，勾选不再逐次写入；退出页面比较初始与当前 `accessControl`，有变化才经 `controller.applyAccessControlChanges()` 调用新增的 `updateAccessControl` 原生方法生效，应用退出时跳过。编辑态下 VPN 重启提示的监听与防抖回调直接返回。
+
+**验证**：`flutter analyze` 通过；`flutter test` 全量通过。
+
+**未决**：无。
+
+---
+
+## 76. 允许绕过 VPN 默认开启
+
+**文件**：`lib/models/config.dart`、`lib/models/generated/config.freezed.dart`、`lib/models/generated/config.g.dart`、`test/models/vpn_props_test.dart`
+
+**问题**：`allowBypass` 默认 `false`，新安装用户需手动开启才能绕过 VPN 访问局域网与本机服务。
+
+**改动**：`VpnProps.allowBypass` 改为 `@Default(true)`，缺少该字段的旧配置按默认值解析；freezed 与 JSON 生成代码同步；补默认值与显式关闭后的序列化测试。
+
+**验证**：`flutter test` 覆盖新增用例并全量通过。
 
 **未决**：无。
