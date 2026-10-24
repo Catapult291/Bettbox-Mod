@@ -30,4 +30,23 @@ void main() {
       expect(restored.trayRightClickBehavior, TrayClickBehavior.showPanel);
     });
   });
+
+  group('VpnProps 绕过 VPN', () {
+    test('默认允许绕过 VPN', () {
+      const props = VpnProps();
+
+      expect(props.allowBypass, isTrue);
+      expect(VpnProps.fromJson(const <String, dynamic>{}).allowBypass, isTrue);
+    });
+
+    test('序列化后保留用户关闭的绕过 VPN 设置', () {
+      const props = VpnProps(allowBypass: false);
+
+      final restored = VpnProps.fromJson(
+        jsonDecode(jsonEncode(props.toJson())) as Map<String, dynamic>,
+      );
+
+      expect(restored.allowBypass, isFalse);
+    });
+  });
 }

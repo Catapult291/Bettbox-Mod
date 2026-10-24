@@ -214,7 +214,7 @@ abstract class VpnProps with _$VpnProps {
   const factory VpnProps({
     @Default(true) bool enable,
     @Default(false) bool systemProxy,
-    @Default(false) bool allowBypass,
+    @Default(true) bool allowBypass,
     @Default(true) bool bypassPrivateRoute,
     @Default(false) bool dozeSuspend,
     @Default(false) bool smartAutoStop,
