@@ -1268,6 +1268,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unknown": MessageLookupByLibrary.simpleMessage("Unknown"),
     "unnamed": MessageLookupByLibrary.simpleMessage("Unnamed"),
     "unpin": MessageLookupByLibrary.simpleMessage("Unpin"),
+    "unselected": MessageLookupByLibrary.simpleMessage("Unselected"),
     "update": MessageLookupByLibrary.simpleMessage("Update"),
     "updateTime": MessageLookupByLibrary.simpleMessage("Update Time"),
     "upload": MessageLookupByLibrary.simpleMessage("Upload"),

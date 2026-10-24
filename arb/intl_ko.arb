@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "선택한 앱만 VPN을 통해 연결",
   "accessControlNotAllowDesc": "선택한 앱은 VPN 연결에서 제외",
   "selected": "선택됨",
+  "unselected": "선택 안 됨",
   "unableToUpdateCurrentProfileDesc": "현재 프로필을 업데이트할 수 없습니다",
   "noMoreInfoDesc": "추가 정보가 없습니다",
   "profileParseErrorDesc": "프로필 구문 분석 오류",

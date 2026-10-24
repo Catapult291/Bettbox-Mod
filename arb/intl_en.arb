@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "Only route selected apps through VPN",
   "accessControlNotAllowDesc": "Exclude selected apps from VPN",
   "selected": "Selected",
+  "unselected": "Unselected",
   "unableToUpdateCurrentProfileDesc": "Unable to update current profile",
   "noMoreInfoDesc": "No more info",
   "profileParseErrorDesc": "Profile parse error",

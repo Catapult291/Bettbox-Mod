@@ -15,6 +15,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Force refresh icon flag
 final forceRefreshIconProvider = StateProvider<bool>((ref) => false);
 
+enum _AppListFilter { all, selected, unselected }
+
 class AccessView extends ConsumerStatefulWidget {
   const AccessView({super.key});
 
@@ -25,6 +27,7 @@ class AccessView extends ConsumerStatefulWidget {
 class _AccessViewState extends ConsumerState<AccessView>
     with WidgetsBindingObserver {
   List<String> acceptList = [];
+  _AppListFilter _appListFilter = _AppListFilter.all;
   late ScrollController _controller;
   final Completer<void> _completer = Completer<void>();
   bool _requestedPackageListPermission = false;
@@ -301,6 +304,33 @@ class _AccessViewState extends ConsumerState<AccessView>
     );
   }
 
+  Widget _buildFilterButton() {
+    final (icon, tooltip) = switch (_appListFilter) {
+      _AppListFilter.all => (Icons.apps_outlined, appLocalizations.allApps),
+      _AppListFilter.selected => (
+        Icons.check_circle_outline,
+        appLocalizations.selected,
+      ),
+      _AppListFilter.unselected => (
+        Icons.radio_button_unchecked,
+        appLocalizations.unselected,
+      ),
+    };
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: () {
+        setState(() {
+          _appListFilter = switch (_appListFilter) {
+            _AppListFilter.all => _AppListFilter.selected,
+            _AppListFilter.selected => _AppListFilter.unselected,
+            _AppListFilter.unselected => _AppListFilter.all,
+          };
+        });
+      },
+      icon: Icon(icon),
+    );
+  }
+
   Future<void> _intelligentSelected() async {
     final packageNames = ref.read(
       packageListSelectorStateProvider.select(
@@ -372,9 +402,27 @@ class _AccessViewState extends ConsumerState<AccessView>
   Widget build(BuildContext context) {
     final state = ref.watch(packageListSelectorStateProvider);
     final accessControl = state.accessControl;
-    final packages = state.getSortList(acceptList);
-    final packageNameList = packages.map((e) => e.packageName).toList();
-    final valueList = acceptList.intersection(packageNameList);
+    final sortedPackages = state.getSortList(acceptList);
+    final packageNameList = sortedPackages.map((e) => e.packageName).toList();
+    final valueList = accessControl.acceptList.intersection(packageNameList);
+    final selectedSet = valueList.toSet();
+    final unselectedCount = packageNameList.length - valueList.length;
+    final packages = switch (_appListFilter) {
+      _AppListFilter.all => sortedPackages,
+      _AppListFilter.selected =>
+        sortedPackages
+            .where((e) => selectedSet.contains(e.packageName))
+            .toList(),
+      _AppListFilter.unselected =>
+        sortedPackages
+            .where((e) => !selectedSet.contains(e.packageName))
+            .toList(),
+    };
+    final isUnselectedFilter = _appListFilter == _AppListFilter.unselected;
+    final headerLabel = isUnselectedFilter
+        ? appLocalizations.unselected
+        : appLocalizations.selected;
+    final headerCount = isUnselectedFilter ? unselectedCount : valueList.length;
 
     return Column(
       mainAxisSize: MainAxisSize.max,
@@ -434,7 +482,7 @@ class _AccessViewState extends ConsumerState<AccessView>
                                 children: [
                                   Flexible(
                                     child: Text(
-                                      appLocalizations.selected,
+                                      headerLabel,
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelLarge
@@ -448,7 +496,7 @@ class _AccessViewState extends ConsumerState<AccessView>
                                   const SizedBox(width: 8),
                                   Flexible(
                                     child: Text(
-                                      '${valueList.length}',
+                                      '$headerCount',
                                       style: Theme.of(context)
                                           .textTheme
                                           .labelLarge
@@ -467,6 +515,7 @@ class _AccessViewState extends ConsumerState<AccessView>
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 Flexible(child: _buildSearchButton()),
+                                Flexible(child: _buildFilterButton()),
                                 Flexible(child: _buildSettingButton()),
                               ],
                             ),

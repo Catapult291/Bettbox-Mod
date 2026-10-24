@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "選択したアプリのみVPN経由で通信",
   "accessControlNotAllowDesc": "選択したアプリをVPN対象外に設定",
   "selected": "選択済み",
+  "unselected": "未選択",
   "unableToUpdateCurrentProfileDesc": "現在のプロファイルを更新できません",
   "noMoreInfoDesc": "これ以上の情報はありません",
   "profileParseErrorDesc": "プロファイルの解析エラー",

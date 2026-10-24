@@ -1029,6 +1029,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unknown": MessageLookupByLibrary.simpleMessage("알 수 없음"),
     "unnamed": MessageLookupByLibrary.simpleMessage("제목 없음"),
     "unpin": MessageLookupByLibrary.simpleMessage("고정 해제"),
+    "unselected": MessageLookupByLibrary.simpleMessage("선택 안 됨"),
     "update": MessageLookupByLibrary.simpleMessage("업데이트"),
     "updateTime": MessageLookupByLibrary.simpleMessage("업데이트 시간"),
     "upload": MessageLookupByLibrary.simpleMessage("업로드"),

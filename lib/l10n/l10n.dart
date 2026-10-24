@@ -1609,6 +1609,11 @@ class AppLocalizations {
     return Intl.message('Selected', name: 'selected', desc: '', args: []);
   }
 
+  /// `Unselected`
+  String get unselected {
+    return Intl.message('Unselected', name: 'unselected', desc: '', args: []);
+  }
+
   /// `Unable to update current profile`
   String get unableToUpdateCurrentProfileDesc {
     return Intl.message(

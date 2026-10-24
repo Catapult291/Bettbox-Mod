@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "只允許選取的應用進入 VPN",
   "accessControlNotAllowDesc": "選取的應用將被排除在 VPN 之外",
   "selected": "已選擇",
+  "unselected": "未選擇",
   "unableToUpdateCurrentProfileDesc": "無法更新目前的設定檔",
   "noMoreInfoDesc": "暫無更多資訊",
   "profileParseErrorDesc": "設定檔解析錯誤",

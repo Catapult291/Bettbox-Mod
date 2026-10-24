@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "تنها برنامه‌های انتخاب شده از VPN عبور کنند",
   "accessControlNotAllowDesc": "برنامه‌های انتخاب شده از VPN استثنا شوند",
   "selected": "انتخاب شده",
+  "unselected": "انتخاب نشده",
   "unableToUpdateCurrentProfileDesc": "امکان بروزرسانی پروفایل فعلی وجود ندارد",
   "noMoreInfoDesc": "اطلاعات بیشتری موجود نیست",
   "profileParseErrorDesc": "خطا در پردازش فایل پروفایل",

@@ -186,6 +186,7 @@
   "accessControlAllowDesc": "Только выбранные приложения используют VPN",
   "accessControlNotAllowDesc": "Выбранные приложения исключены из VPN",
   "selected": "Выбрано",
+  "unselected": "Не выбрано",
   "unableToUpdateCurrentProfileDesc": "Невозможно обновить текущий профиль",
   "noMoreInfoDesc": "Нет дополнительной информации",
   "profileParseErrorDesc": "Ошибка чтения профиля",

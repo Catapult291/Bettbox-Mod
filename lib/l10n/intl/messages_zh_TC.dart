@@ -915,6 +915,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unknown": MessageLookupByLibrary.simpleMessage("未知"),
     "unnamed": MessageLookupByLibrary.simpleMessage("未命名"),
     "unpin": MessageLookupByLibrary.simpleMessage("取消置頂"),
+    "unselected": MessageLookupByLibrary.simpleMessage("未選擇"),
     "update": MessageLookupByLibrary.simpleMessage("更新"),
     "updateTime": MessageLookupByLibrary.simpleMessage("更新時間"),
     "upload": MessageLookupByLibrary.simpleMessage("上傳"),

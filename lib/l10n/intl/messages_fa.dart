@@ -1304,6 +1304,7 @@ class MessageLookup extends MessageLookupByLibrary {
     "unknown": MessageLookupByLibrary.simpleMessage("نامشخص"),
     "unnamed": MessageLookupByLibrary.simpleMessage("بدون نام"),
     "unpin": MessageLookupByLibrary.simpleMessage("برداشتن پین"),
+    "unselected": MessageLookupByLibrary.simpleMessage("انتخاب نشده"),
     "update": MessageLookupByLibrary.simpleMessage("بروزرسانی"),
     "updateTime": MessageLookupByLibrary.simpleMessage("زمان به‌روزرسانی"),
     "upload": MessageLookupByLibrary.simpleMessage("آپلود"),
