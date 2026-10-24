@@ -15,7 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Force refresh icon flag
 final forceRefreshIconProvider = StateProvider<bool>((ref) => false);
 
-enum _AppListFilter { all, selected, unselected }
+enum _AppListFilter { selected, unselected }
 
 class AccessView extends ConsumerStatefulWidget {
   const AccessView({super.key});
@@ -26,8 +26,7 @@ class AccessView extends ConsumerStatefulWidget {
 
 class _AccessViewState extends ConsumerState<AccessView>
     with WidgetsBindingObserver {
-  List<String> acceptList = [];
-  _AppListFilter _appListFilter = _AppListFilter.all;
+  _AppListFilter _appListFilter = _AppListFilter.selected;
   late ScrollController _controller;
   final Completer<void> _completer = Completer<void>();
   bool _requestedPackageListPermission = false;
@@ -38,7 +37,6 @@ class _AccessViewState extends ConsumerState<AccessView>
   @override
   void initState() {
     super.initState();
-    _updateInitList();
     _controller = ScrollController();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissionAndLoadPackages(interactive: true);
@@ -246,24 +244,11 @@ class _AccessViewState extends ConsumerState<AccessView>
     super.dispose();
   }
 
-  void _updateInitList() {
-    acceptList = globalState.config.vpnProps.accessControl.acceptList;
-  }
-
   Widget _buildSearchButton() {
     return IconButton(
       tooltip: appLocalizations.search,
       onPressed: () {
-        showSearch(
-          context: context,
-          delegate: AccessControlSearchDelegate(acceptList: acceptList),
-        ).then((_) {
-          if (mounted) {
-            setState(() {
-              _updateInitList();
-            });
-          }
-        });
+        showSearch(context: context, delegate: AccessControlSearchDelegate());
       },
       icon: const Icon(Icons.search),
     );
@@ -293,12 +278,6 @@ class _AccessViewState extends ConsumerState<AccessView>
             ref.read(forceRefreshIconProvider.notifier).state = false;
           }
         }, needLoading: true);
-
-        if (mounted) {
-          setState(() {
-            _updateInitList();
-          });
-        }
       },
       icon: const Icon(Icons.sync),
     );
@@ -306,7 +285,6 @@ class _AccessViewState extends ConsumerState<AccessView>
 
   Widget _buildFilterButton() {
     final (icon, tooltip) = switch (_appListFilter) {
-      _AppListFilter.all => (Icons.apps_outlined, appLocalizations.allApps),
       _AppListFilter.selected => (
         Icons.check_circle_outline,
         appLocalizations.selected,
@@ -321,9 +299,8 @@ class _AccessViewState extends ConsumerState<AccessView>
       onPressed: () {
         setState(() {
           _appListFilter = switch (_appListFilter) {
-            _AppListFilter.all => _AppListFilter.selected,
             _AppListFilter.selected => _AppListFilter.unselected,
-            _AppListFilter.unselected => _AppListFilter.all,
+            _AppListFilter.unselected => _AppListFilter.selected,
           };
         });
       },
@@ -402,13 +379,12 @@ class _AccessViewState extends ConsumerState<AccessView>
   Widget build(BuildContext context) {
     final state = ref.watch(packageListSelectorStateProvider);
     final accessControl = state.accessControl;
-    final sortedPackages = state.getSortList(acceptList);
+    final sortedPackages = state.getSortList(accessControl.acceptList);
     final packageNameList = sortedPackages.map((e) => e.packageName).toList();
     final valueList = accessControl.acceptList.intersection(packageNameList);
     final selectedSet = valueList.toSet();
     final unselectedCount = packageNameList.length - valueList.length;
     final packages = switch (_appListFilter) {
-      _AppListFilter.all => sortedPackages,
       _AppListFilter.selected =>
         sortedPackages
             .where((e) => selectedSet.contains(e.packageName))
@@ -690,10 +666,6 @@ class PackageListItem extends ConsumerWidget {
 }
 
 class AccessControlSearchDelegate extends SearchDelegate {
-  List<String> acceptList = [];
-
-  AccessControlSearchDelegate({required this.acceptList});
-
   @override
   List<Widget>? buildActions(BuildContext context) {
     return [
@@ -752,7 +724,7 @@ class AccessControlSearchDelegate extends SearchDelegate {
         final vm3 = ref.watch(
           packageListSelectorStateProvider.select(
             (state) => VM3(
-              a: state.getSortList(acceptList),
+              a: state.getSortList(state.accessControl.acceptList),
               b: state.accessControl.enable,
               c: state.accessControl.acceptList,
             ),

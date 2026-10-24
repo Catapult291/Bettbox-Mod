@@ -10,6 +10,7 @@ import 'text.dart';
 
 class CommonDialog extends ConsumerWidget {
   final String title;
+  final TextStyle? titleStyle;
   final Widget? child;
   final List<Widget>? actions;
   final EdgeInsets? padding;
@@ -22,6 +23,7 @@ class CommonDialog extends ConsumerWidget {
   const CommonDialog({
     super.key,
     required this.title,
+    this.titleStyle,
     this.actions,
     this.child,
     this.padding,
@@ -45,7 +47,7 @@ class CommonDialog extends ConsumerWidget {
               Navigator.of(context).pop();
             },
       child: AlertDialog(
-        title: EmojiText(title),
+        title: EmojiText(title, style: titleStyle),
         actions: actions,
         contentPadding: padding,
         backgroundColor: backgroundColor,

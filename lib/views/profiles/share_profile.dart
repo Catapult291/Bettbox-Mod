@@ -60,6 +60,7 @@ class _ProfileShareDialogState extends State<ProfileShareDialog> {
 
     return CommonDialog(
       title: appLocalizations.share,
+      titleStyle: context.textTheme.titleMedium,
       maxWidth: 340,
       actions: [
         TextButton(
