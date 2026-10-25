@@ -5,11 +5,21 @@
   在上游基线之上叠加功能改进与内核稳定性修复
 </p>
 
+<p align="center">
+  <a href="https://github.com/Catapult291/Bettbox-Mod/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/Catapult291/Bettbox-Mod?style=for-the-badge&logo=github&color=238636&label=Release"></a>
+  <a href="https://github.com/MetaCubeX/mihomo/releases/latest"><img alt="Mihomo" src="https://img.shields.io/github/v/release/MetaCubeX/mihomo?style=for-the-badge&logo=go&logoColor=white&color=8A2BE2&label=Mihomo"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge"></a>
+</p>
+
+<p align="center">
+  <img src="snapshots/home.png" alt="Bettbox-Mod 首页" />
+</p>
+
 ---
 
 ## 简介
 
-Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本重构的多平台网络调试与规则分流客户端。
+Bettbox 是一款使用 Mihomo（Clash Meta）内核、基于 FlClash 早期版本重构的多平台网络调试与规则分流客户端。
 本仓库为其衍生版本，收录面向日常使用的功能改进，以及内核启动、停止与异常恢复链路的稳定性修复，
 仅发布 **Android** 与 **Windows** 构建。
 
@@ -17,39 +27,41 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 任何一笔差异均可直接对照、审阅与回退。
 
 - 基线：上游 `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
-- 完整改动清单（逐条含问题、方案与验证）：[CHANGES-vs-upstream.md](CHANGES-vs-upstream.md)
+- 随包内核：vendored mihomo **v1.19.33**（保留本仓库与 FlClash 的独立补丁）
 
 ## 相对上游的改动
 
-以下为部分主要改动，涉及的文件与实现细节见上述改动清单。
 
-**稳定性**
+### 稳定性
 
 * **状态对账**：桌面端定期核对内核实际状态，界面开关随之校正并提示。
 * **故障自愈**：内核停止应答时自动重启并重新下发配置，无需退出应用。
 * **就绪实测**：启动后实测本地代理端口，端口未监听则显示为已停止并给出提示。
 * **过程可见**：启停全程显示进行中状态，关键等待均设有时间上限。
+* **真停兜底**：停止指令未被应答时按进程真停内核，避免「界面已停、内核仍在跑」。
 
-**界面**
+### 界面与分流
 
-* **快捷控制栏**：Windows 端右侧常驻总开关、系统代理、虚拟网卡与出站模式，与左侧导航栏等宽对齐，移动端不显示。
+* **快捷控制栏**：Windows 端右侧常驻总开关、系统代理、虚拟网卡与出站模式，与左侧导航栏等宽对齐；移动端不显示。
 * **跟随更新**：配置可单独排除在「全部同步」之外，被排除的配置仍可在卡片菜单里单独「同步」。
 * **规则直添**：脚本页可直接追加自定义规则，新规则优先于原有规则，支持编辑与批量删除。
+* **配置分享**：配置卡片新增「分享」，弹窗展示订阅二维码与机场链接，点击链接复制到剪贴板。
+* **进程分流**（Windows）：「更多 → 设置 → 进程分流」可把代理按应用进程设为关闭、黑名单或白名单，带进程选择器，设置即时生效并随配置保存。
+* **应用访问控制**（Android）：固定白名单模式，支持已选/未选筛选与搜索；勾选在退出页面时统一生效，无需重启 VPN 提示。
 
-**导入**
+### 导入与更新
 
 * **扫码导入**：补齐 Windows / Linux 的图片二维码解码，识别成功后直接进入导入页。
 * **名称自取**：导入订阅未填名称时，依次取订阅标题、下载文件名与网址末段。
+* **自动更新**：新建与从 URL 导入的配置默认开启自动更新，间隔默认 720 分钟。
+* **应用内更新**：每 2 分钟向 GitHub 做一次条件请求（ETag/304），新版本发布后通常在 1~2 分钟内提示；同一版本只提示一次。API 不可达时回退网页端点。
 
-**其他**
+### 其他
 
 * **粘贴兼容**：以管理员模式运行时，剪贴板历史、输入法等通过 `WM_PASTE` 插入文本的来源不再被系统过滤丢弃。
-* **更新源**：应用内检查更新与下载入口均取自本仓库 Release。
-* **身份信息**：「关于」页名称显示为 Bettbox-mod，只保留本项目与上游项目入口；安装包的发布者信息指向本仓库作者。
-* **出口探测**：出口 IP 优先经境外地址检测，逐源尝试、成功即停，不再混用多源结果。
-* **内存占用**：内存读数分列应用与内核，大块数据不再常驻，脚本执行设有边界。
-* **配置改写**：Windows 与 Android 端的配置改写、覆写脚本求值均由随包的原生库（Rust）执行，结果与之前一致；原生库不可用或执行失败时不再静默换用另一套实现，而是提示错误并保留上一份可用的运行配置。
-* **上游跟进**：持续吸收上游健壮性补丁，已跟进至 2026-09-28。
+* **配置改写**：Windows 与 Android 端的配置改写、覆写脚本求值均由随包的原生库（Rust）执行；原生库不可用或执行失败时提示错误并保留上一份可用的运行配置，不再静默换用另一套实现。
+* **默认值**：内核 IPv6 默认开、休眠支持默认关；Android「允许绕过 VPN」默认开启。
+* **上游与安全**：持续吸收上游健壮性补丁；内核与随包主程序用 Go 1.26.10 重编，Rust 工具链钉版 1.99.1；CI 接入 cargo-deny 许可证与安全公告审计。
 
 ## 下载
 
@@ -57,10 +69,9 @@ Bettbox 是一款使用 Mihomo(Clash Meta) 内核、基于 FlClash 早期版本�
 
 | 平台 | 产物 |
 | --- | --- |
-| Android | `Bettbox-<版本>-android-arm64-v8a.apk`（主流机型）、`Bettbox-<版本>-android-universal.apk`（通用） |
-| Windows | `Bettbox-<版本>-windows-amd64-setup.exe`（x64）、`Bettbox-<版本>-windows-arm64-setup.exe`（ARM64，下个版本起） |
+| Android | `Bettbox-<版本>-android-arm64-v8a.apk` |
+| Windows | `Bettbox-<版本>-windows-amd64-setup.exe` |
 
-Windows 安装包与随包主程序不做 Authenticode 代码签名；下载后如被 SmartScreen 或杀软拦截属预期。
 
 ## 自行构建
 
@@ -86,22 +97,10 @@ Windows 产物并创建 Release；亦可在 Actions 页面手动触发，手动�
 Release 标题只写版本号，正文取自 [.github/release-notes/versions/](.github/release-notes/versions) 中该标签对应的
 文件（逐版本撰写本版本改动与本版本跟进的上游更新，见 [.github/release-notes/README.md](.github/release-notes/README.md)）。
 
+
 ## 致谢
 
-- 感谢 **[linux.do](https://linux.do) 社区**。
 - 感谢 [Bettbox](https://github.com/appshubcc/Bettbox)、[FlClash](https://github.com/chen08209/FlClash)、[Mihomo](https://github.com/MetaCubeX/mihomo) 及其贡献者。
-
-## 代码签名与隐私（Code signing & privacy）
-
-- **签名**：本仓库已移除 SignPath 云端签名；Windows 发布产物不带 Authenticode 签名
-  （SmartScreen / 杀软提示属预期）。
-- **角色**：本项目为单人维护仓库。Author、Reviewer、Approver 均为仓库维护者
-  [Catapult291](https://github.com/Catapult291)（GitHub 仓库 admin）；外部 PR 一律经审阅后合入。
-- **隐私**：本程序不上传遥测或崩溃数据（发行构建不包含崩溃上报）。对外网络访问仅发生在以下
-  用户可见场景：添加/更新订阅（访问用户自己提供的订阅地址）、检查更新（访问本仓库的
-  GitHub Releases，自动检查可在设置中关闭）、网络检测页查询出口 IP（点击时才触发，
-  查询 ipinfo.io）。除此之外不向任何第三方系统传输信息。
-- 事故响应：如怀疑仓库或 CI 泄露，立即轮换相关 secret 并发布 advisory 通知用户。
 
 ## 许可证
 
