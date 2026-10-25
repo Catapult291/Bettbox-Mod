@@ -279,6 +279,57 @@ void main() {
     });
   });
 
+  group('HelperServiceQuery.fromCliData', () {
+    test('合法载荷映射到状态与标志位', () {
+      final query = HelperServiceQuery.fromCliData({
+        'state': 'running',
+        'binPath': r'C:\Bettbox\helper.exe',
+        'hasLegacyEnvironmentKey': true,
+        'isStopped': false,
+      });
+      expect(query, isNotNull);
+      expect(query!.state, HelperServiceState.running);
+      expect(query.binPath, r'C:\Bettbox\helper.exe');
+      expect(query.hasLegacyEnvironmentKey, isTrue);
+      expect(query.isStopped, isFalse);
+      expect(query.fromFallback, isFalse);
+    });
+
+    test('missing：binPath null、无遗留 key、非 stopped', () {
+      final query = HelperServiceQuery.fromCliData({
+        'state': 'missing',
+        'binPath': null,
+        'hasLegacyEnvironmentKey': false,
+        'isStopped': false,
+      });
+      expect(query!.state, HelperServiceState.missing);
+      expect(query.binPath, isNull);
+    });
+
+    test('inactive 且 isStopped=true 供等待健康识别「已停」', () {
+      final query = HelperServiceQuery.fromCliData({
+        'state': 'inactive',
+        'binPath': r'C:\A\helper.exe',
+        'hasLegacyEnvironmentKey': false,
+        'isStopped': true,
+      });
+      expect(query!.state, HelperServiceState.inactive);
+      expect(query.isStopped, isTrue);
+    });
+
+    test('data 缺失或 state 非法 → null（调用方回退）', () {
+      expect(HelperServiceQuery.fromCliData(null), isNull);
+      expect(HelperServiceQuery.fromCliData({'state': 'weird'}), isNull);
+      expect(HelperServiceQuery.fromCliData({}), isNull);
+    });
+  });
+
+  group('serviceBinPathDiffersFromQuery', () {
+    test('null（拿不到 binPath）按指向别处处理', () {
+      expect(serviceBinPathDiffersFromQuery(null), isTrue);
+    });
+  });
+
   group('probeHelperPingWithRetry', () {
     test('healthy / incompatible 是确定性结论：不重试', () async {
       var calls = 0;

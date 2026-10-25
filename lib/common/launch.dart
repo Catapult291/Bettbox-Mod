@@ -24,14 +24,10 @@ class AutoLaunch {
 
   Future<bool> get isEnable async {
     if (system.isWindows) {
-      // Windows 上改为通过任务计划实现开机自启动
+      // Windows 上改为通过任务计划实现开机自启动；查询走 helper（非提权），
+      // 旧 helper 不支持时由 helper 内部回退 schtasks。
       try {
-        final result = await Process.run('schtasks', [
-          '/Query',
-          '/TN',
-          appName,
-        ]);
-        return result.exitCode == 0;
+        return await windows?.queryTask(appName) ?? false;
       } catch (_) {
         return false;
       }

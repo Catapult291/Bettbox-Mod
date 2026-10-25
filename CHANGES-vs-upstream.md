@@ -90,6 +90,7 @@
 | 75 | 平台 | 安卓访问控制固定白名单模式：移除黑名单与全选，新增已选/未选筛选，退出页面时统一生效 | v1.19.26 |
 | 76 | 默认值 | 允许绕过 VPN 默认开启（含缺少该字段的旧配置） | v1.19.26 |
 | 77 | 界面/工程 | 删除 UWP 回环豁免（「回环解锁」入口与 `WindowsLoopbackManager.exe`） | 随下一版 |
+| 78 | 工程 | helper 增加 `service query` / `task query`（非提权）；应用侧只读查询改走 helper，写路径仍提权 | 随下一版 |
 
 ---
 
@@ -3478,3 +3479,24 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 **验证**：`flutter analyze` 干净（仅遗留 `tools/b4_probe_render.dart` 的既有 `avoid_print` info）；`flutter test` 全量通过；全库 `grep WindowsLoopbackManager` 只剩本文件与 `stage-log.md` 的历史记录。按要求未做真机/打包验证——Windows 本地构建后安装目录无该二进制、「更多」页无回环项一条未实测。
 
 **未决**：这是功能回退，已依赖该工具做 UWP 回环的用户需自备替代（如 `CheckNetIsolation`）；发布说明里写一句。本地部署目录 `Bettbox-win64/bettbox_install_manifest.txt`（未跟踪产物）仍列有该文件名，随下次打包自然消失。
+
+---
+
+## 78. helper 增加查询类子命令（`service query` / `task query`，非提权）
+
+**文件**：`services/helper/src/cli.rs`、`services/helper/src/ops/query.rs`（新增）、`services/helper/src/ops/task.rs`、`lib/common/helper_cli.dart`、`lib/common/system.dart`、`lib/common/launch.dart`、`test/helper_cli_e2e_test.dart`、`test/common/helper_cli_test.dart`、`test/common/helper_service_register_test.dart`
+
+**问题**：应用侧只读查询仍自己拼 `sc query` / `sc qc` / `reg query …Environment` / `schtasks /Query`。写操作已收进 helper CLI（§35），查询还散落在 Dart 里，解析靠正则扫命令行文本，且 `registerService` 决策树要连开 2–3 次外部进程。
+
+**改动**：
+
+- **Rust CLI**：新增 `helper.exe service query <request.json> <result.json>` 与 `task query`；`CliResult` 增加可选 `data` 字段（查询成功时写入，写操作与失败结果省略）。
+- **`service query` 载荷**：`{"state":"missing"|"inactive"|"running","binPath":string|null,"hasLegacyEnvironmentKey":bool,"isStopped":bool}`。实现走 `windows` crate 的 `OpenSCManagerW` / `OpenServiceW` / `QueryServiceStatusEx` / `QueryServiceConfigW` 与注册表 `Environment`（UTF-16LE 解码后扫 `HELPER_AUTH_KEY=`），**不依赖** `windows-service` feature（clippy 无 feature 腿可编）。服务不存在是合法结果（`state=missing`），不是 `NOT_FOUND` 错误。
+- **`task query` 载荷**：`{"exists":bool}`，对齐 `ops/task.rs` 注销路径的 `ITaskFolder::GetTask` 查找方式；不存在 → `ok:true, exists=false`。
+- **权限面**：查询**不提权**。Dart 侧新增 `runHelperQueryCommand`（`Process.run` 直启 helper），与写操作的 `runHelperCommand(launch: runas)` 并列；启动链上的健康检查不会触发 UAC。
+- **Dart 接线**：`checkService` / `registerService` 合并为一次 `service query`（state + binPath + legacy key）；`_waitForHelperHealthy` 用 `isStopped` 区分「已停」与「还在启动」；`AutoLaunch.isEnable` 走 `task query`；`stopHelperService` 开发态兜底从 `sc stop` 改为已有的 `service stop` CLI（仍提权）。
+- **版本偏差回退（保留一版）**：新 app + 旧 helper 时 `query` 被解析成 `unknown … subcommand`（退出码 2、无结果文件），Dart 回退旧的 `sc`/`reg`/`schtasks` 路径并记日志；下下个版本可删回退。
+
+**验证**：`cargo test --features windows-service` 27 例过；`cargo clippy --all-targets` 带/不带 `windows-service` 两腿干净；`cargo fmt --check` 干净。本机非提权冒烟：`service query` 不存在服务 → `state=missing`；`EventLog` → `running` + `binPath=svchost.exe…`；`task query` 不存在任务 → `exists=false`；空 `serviceName` → `INVALID_REQUEST`。`flutter analyze` 干净（仅既有 avoid_print）；`flutter test` 全量通过。helper-e2e 已扩：缺失服务 query、安装后 query、任务 register/unregister 后 query。
+
+**未决**：旧 helper 回退代码按下下版本删除（见上）；查询相对 `Process.run('sc')` 的进程启动开销未单独压测——合并为一次调用后总次数应 ≤ 现状，若实测明显变慢再议常驻（计划 §2.8）。

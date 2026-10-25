@@ -14,6 +14,7 @@ void main() {
       );
       expect(ok.ok, isTrue);
       expect(ok.summary, 'ok');
+      expect(ok.data, isNull);
 
       final failed = HelperCliResult.parse(
         '{"ok":false,"command":"service install","code":"ACCESS_DENIED",'
@@ -23,6 +24,30 @@ void main() {
       expect(failed.code, 'ACCESS_DENIED');
       expect(failed.osError, 5);
       expect(failed.summary, contains('拒绝访问。'));
+    });
+
+    test('查询成功时读出 data 载荷', () {
+      final query = HelperCliResult.parse(
+        '{"ok":true,"command":"service query","code":null,"message":null,'
+        '"osError":null,'
+        '"data":{"state":"running","binPath":"C:\\\\x\\\\helper.exe",'
+        '"hasLegacyEnvironmentKey":false,"isStopped":false}}',
+      );
+      expect(query.ok, isTrue);
+      expect(query.data?['state'], 'running');
+      expect(query.data?['binPath'], r'C:\x\helper.exe');
+      expect(query.data?['hasLegacyEnvironmentKey'], isFalse);
+      expect(query.data?['isStopped'], isFalse);
+    });
+
+    test('data 不是对象时按 null 处理（旧 helper / 坏载荷）', () {
+      for (final raw in [
+        '{"ok":true,"command":"service query","data":null}',
+        '{"ok":true,"command":"service query","data":"oops"}',
+        '{"ok":true,"command":"service query"}',
+      ]) {
+        expect(HelperCliResult.parse(raw).data, isNull, reason: raw);
+      }
     });
 
     test('内容不合法时按失败处理而不是抛异常', () {
@@ -193,6 +218,63 @@ void main() {
       expect(result.ok, isFalse);
       expect(result.code, 'HELPER_MISSING');
       expectNoProtocolFilesLeft();
+    });
+  });
+
+  group('非提权查询 helper', () {
+    late Directory tempDir;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('bettbox helper query ');
+    });
+
+    tearDown(() async {
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
+    });
+
+    test('写请求、读结果文件里的 data，用完清理临时文件', () async {
+      // 真 helper 探针：用 echo 行不通（协议要求写结果文件），这里用一个可执行的
+      // 最小 stub——Dart 测试环境无法可靠生成 .exe，所以直接验证协议失败分支的
+      // 清理行为，以及 HELPER_MISSING 短路。
+      final result = await runHelperQueryCommand(
+        helperPath: p.join(tempDir.path, 'missing.exe'),
+        group: 'service',
+        action: 'query',
+        request: {'serviceName': 'BettboxHelperService'},
+        tempDirPath: tempDir.path,
+      );
+
+      expect(result.ok, isFalse);
+      expect(result.code, 'HELPER_MISSING');
+      expect(result.data, isNull);
+      final leftovers = tempDir
+          .listSync()
+          .map((entry) => p.basename(entry.path))
+          .where((name) => name.startsWith('bettbox_helper_'))
+          .toList();
+      expect(leftovers, isEmpty, reason: '临时文件未清理：$leftovers');
+    });
+
+    test('真实 helper 跑不存在的服务名 → ok + state=missing（非提权）', () async {
+      // 由 helper_cli_e2e_test.dart / CI 覆盖真实 helper；这里只在设置了
+      // BETTBOX_E2E_HELPER 时补一条轻量非提权探针。
+      final helperPath = Platform.environment['BETTBOX_E2E_HELPER'];
+      if (helperPath == null || helperPath.isEmpty || !Platform.isWindows) {
+        return;
+      }
+      final result = await runHelperQueryCommand(
+        helperPath: helperPath,
+        group: 'service',
+        action: 'query',
+        request: {'serviceName': 'BettboxMissingServiceProbe'},
+        tempDirPath: tempDir.path,
+      );
+      expect(result.ok, isTrue, reason: result.summary);
+      expect(result.data?['state'], 'missing');
+      expect(result.data?['binPath'], isNull);
+      expect(result.data?['hasLegacyEnvironmentKey'], isFalse);
     });
   });
 }

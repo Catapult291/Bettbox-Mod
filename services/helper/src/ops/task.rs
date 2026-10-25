@@ -57,6 +57,19 @@ pub fn unregister(task_name: &str) -> Result<(), CliError> {
     }
 }
 
+/// 任务是否存在（`helper.exe task query`）。不存在是合法结果，不走错误路径。
+pub fn query(task_name: &str) -> Result<bool, CliError> {
+    validate_name("task name", task_name)?;
+    let folder = task_folder()?;
+    let name = BSTR::from(task_name);
+
+    match unsafe { folder.GetTask(&name) } {
+        Ok(_) => Ok(true),
+        Err(error) if error.code().0 as u32 == HRESULT_FILE_NOT_FOUND => Ok(false),
+        Err(error) => Err(CliError::from_hresult("TASK_QUERY_FAILED", &error)),
+    }
+}
+
 /// 连上 Task Scheduler 并取根文件夹。
 ///
 /// 这一步与具体的注册/注销动作分开，是为了让「管道起不来」和「动作被拒」在结果里

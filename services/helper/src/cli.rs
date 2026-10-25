@@ -8,17 +8,23 @@
 //! helper.exe service uninstall <request.json> <result.json>
 //! helper.exe service stop      <request.json> <result.json>
 //! helper.exe service config    <request.json> <result.json>
+//! helper.exe service query     <request.json> <result.json>
 //! helper.exe task register     <request.json> <result.json>
 //! helper.exe task unregister   <request.json> <result.json>
+//! helper.exe task query        <request.json> <result.json>
 //! ```
+//!
+//! 写操作走 `ShellExecuteW(runas)` 提权；**查询一律不提权**——`service query` /
+//! `task query` 由应用侧以普通用户权限直接 `Process.run` 启动（与旧 `sc` / `reg` /
+//! `schtasks` 的权限面一致），在启动链上高频调用，任何 UAC 弹窗都不可接受。
 //!
 //! 参数走文件而不是命令行，是为了绕开 Windows 命令行的引号/转义与代码页问题：路径可以
 //! 带空格和非 ASCII 字符，环境变量值里还有 `;`、`=` 之类的字符。
 //!
 //! `ShellExecuteW(runas)` 拿不到子进程的 stdout，所以结果写进 `<result.json>`：
-//! `{"ok":bool,"command":str,"code":str|null,"message":str|null,"osError":u32|null}`；
+//! `{"ok":bool,"command":str,"code":str|null,"message":str|null,"osError":u32|null,"data":object|null}`；
 //! 退出码只作为兜底（见 [`EXIT_OK`] 等常量）。请求文件读不出来时也会写结果文件，应用侧
-//! 因此总能看到一条结构化的失败原因。
+//! 因此总能看到一条结构化的失败原因。查询成功时 `data` 携带只读载荷；写操作没有 `data`。
 
 use std::ffi::OsString;
 use std::fs;
@@ -35,7 +41,7 @@ pub const EXIT_USAGE: i32 = 2;
 /// 请求文件不可用（结果文件已写出）。
 pub const EXIT_REQUEST: i32 = 3;
 
-const USAGE: &str = "usage: helper.exe <service install|service uninstall|service stop|service config|task register|task unregister> <request.json> <result.json>";
+const USAGE: &str = "usage: helper.exe <service install|service uninstall|service stop|service config|service query|task register|task unregister|task query> <request.json> <result.json>";
 
 /// 结构化错误：`code` 供应用侧判断，`message` 给人看。
 #[derive(Debug, Clone)]
@@ -95,8 +101,10 @@ enum Command {
     ServiceUninstall,
     ServiceStop,
     ServiceConfig,
+    ServiceQuery,
     TaskRegister,
     TaskUnregister,
+    TaskQuery,
 }
 
 impl Command {
@@ -106,8 +114,10 @@ impl Command {
             Command::ServiceUninstall => "service uninstall",
             Command::ServiceStop => "service stop",
             Command::ServiceConfig => "service config",
+            Command::ServiceQuery => "service query",
             Command::TaskRegister => "task register",
             Command::TaskUnregister => "task unregister",
+            Command::TaskQuery => "task query",
         }
     }
 }
@@ -152,12 +162,14 @@ fn parse(args: &[OsString]) -> Parsed {
             Some("uninstall") => Command::ServiceUninstall,
             Some("stop") => Command::ServiceStop,
             Some("config") => Command::ServiceConfig,
+            Some("query") => Command::ServiceQuery,
             Some(other) => return Parsed::Usage(format!("unknown service subcommand: {other}")),
             None => return Parsed::Usage("missing service subcommand".to_string()),
         },
         "task" => match args.get(1).and_then(|arg| arg.to_str()) {
             Some("register") => Command::TaskRegister,
             Some("unregister") => Command::TaskUnregister,
+            Some("query") => Command::TaskQuery,
             Some(other) => return Parsed::Usage(format!("unknown task subcommand: {other}")),
             None => return Parsed::Usage("missing task subcommand".to_string()),
         },
@@ -180,7 +192,7 @@ fn parse(args: &[OsString]) -> Parsed {
 
 fn execute(command: Command, request_path: &Path, result_path: &Path) -> i32 {
     let (exit_code, result) = match run(command, request_path) {
-        Ok(()) => (EXIT_OK, CliResult::success(command)),
+        Ok(data) => (EXIT_OK, CliResult::success(command, data)),
         Err(error) => {
             eprintln!(
                 "{} failed: {} ({})",
@@ -205,34 +217,53 @@ fn execute(command: Command, request_path: &Path, result_path: &Path) -> i32 {
     exit_code
 }
 
-fn run(command: Command, request_path: &Path) -> Result<(), CliError> {
+/// 执行子命令。写操作成功时 `data` 为 `None`；查询成功时携带只读载荷。
+fn run(command: Command, request_path: &Path) -> Result<Option<serde_json::Value>, CliError> {
     let raw = fs::read_to_string(request_path)
         .map_err(|error| CliError::from_io("REQUEST_READ_FAILED", &error))?;
 
     match command {
         Command::ServiceInstall => {
             let request: ServiceInstallRequest = parse_request(&raw)?;
-            install_service(&request)
+            install_service(&request)?;
+            Ok(None)
         }
         Command::ServiceUninstall => {
             let request: ServiceUninstallRequest = parse_request(&raw)?;
-            uninstall_service(&request.service_name)
+            uninstall_service(&request.service_name)?;
+            Ok(None)
         }
         Command::ServiceStop => {
             let request: ServiceStopRequest = parse_request(&raw)?;
-            stop_service(&request.service_name)
+            stop_service(&request.service_name)?;
+            Ok(None)
         }
         Command::ServiceConfig => {
             let request: ServiceConfigRequest = parse_request(&raw)?;
-            configure_service(&request)
+            configure_service(&request)?;
+            Ok(None)
+        }
+        Command::ServiceQuery => {
+            let request: ServiceQueryRequest = parse_request(&raw)?;
+            let data = query_service(&request.service_name)?;
+            Ok(Some(serde_json::to_value(data).map_err(|error| {
+                CliError::new("INTERNAL", error.to_string())
+            })?))
         }
         Command::TaskRegister => {
             let request: TaskRegisterRequest = parse_request(&raw)?;
-            crate::ops::task::register(&request)
+            crate::ops::task::register(&request)?;
+            Ok(None)
         }
         Command::TaskUnregister => {
             let request: TaskUnregisterRequest = parse_request(&raw)?;
-            crate::ops::task::unregister(&request.task_name)
+            crate::ops::task::unregister(&request.task_name)?;
+            Ok(None)
+        }
+        Command::TaskQuery => {
+            let request: TaskQueryRequest = parse_request(&raw)?;
+            let exists = crate::ops::task::query(&request.task_name)?;
+            Ok(Some(serde_json::json!({ "exists": exists })))
         }
     }
 }
@@ -287,6 +318,12 @@ fn unsupported_build() -> CliError {
     )
 }
 
+/// `service query` 不依赖 `windows-service`：出货与开发态两种构建都要能查。
+#[cfg(target_os = "windows")]
+fn query_service(service_name: &str) -> Result<crate::ops::query::ServiceQueryData, CliError> {
+    crate::ops::query::query(service_name)
+}
+
 fn parse_request<T: for<'de> Deserialize<'de>>(raw: &str) -> Result<T, CliError> {
     serde_json::from_str(raw).map_err(|error| CliError::new("INVALID_REQUEST", error.to_string()))
 }
@@ -321,6 +358,13 @@ pub struct ServiceStopRequest {
     pub service_name: String,
 }
 
+/// `service query` 只需要服务名；服务不存在也是合法结果（`state = missing`）。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceQueryRequest {
+    pub service_name: String,
+}
+
 /// 就地改指向（升级安装用）。只认 `serviceName` 与 `startType`：`Environment` 由应用侧
 /// 在首次启动时下发，升级不该把它清掉。
 #[cfg_attr(not(feature = "windows-service"), allow(dead_code))]
@@ -348,6 +392,13 @@ pub struct TaskUnregisterRequest {
     pub task_name: String,
 }
 
+/// `task query` 只需要任务名；任务不存在也是合法结果（`exists = false`）。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskQueryRequest {
+    pub task_name: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CliResult {
@@ -356,16 +407,20 @@ struct CliResult {
     code: Option<String>,
     message: Option<String>,
     os_error: Option<u32>,
+    /// 查询成功时的只读载荷；写操作与失败结果为 null（旧 Dart 不读它）。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<serde_json::Value>,
 }
 
 impl CliResult {
-    fn success(command: Command) -> Self {
+    fn success(command: Command, data: Option<serde_json::Value>) -> Self {
         Self {
             ok: true,
             command: command.name(),
             code: None,
             message: None,
             os_error: None,
+            data,
         }
     }
 
@@ -376,6 +431,7 @@ impl CliResult {
             code: Some(error.code.clone()),
             message: Some(error.message.clone()),
             os_error: error.os_error,
+            data: None,
         }
     }
 }
@@ -437,6 +493,10 @@ mod tests {
                 Command::ServiceConfig,
             ),
             (
+                ["service", "query", "a.json", "b.json"],
+                Command::ServiceQuery,
+            ),
+            (
                 ["task", "register", "a.json", "b.json"],
                 Command::TaskRegister,
             ),
@@ -444,6 +504,7 @@ mod tests {
                 ["task", "unregister", "a.json", "b.json"],
                 Command::TaskUnregister,
             ),
+            (["task", "query", "a.json", "b.json"], Command::TaskQuery),
         ];
 
         for (input, expected) in cases {
@@ -485,5 +546,43 @@ mod tests {
         assert!(validate_name("service name", "a\\b").is_err());
         assert!(validate_name("task name", "a/b").is_err());
         assert!(validate_name("task name", "a\nb").is_err());
+    }
+
+    #[test]
+    fn serializes_data_only_when_present() {
+        let with_data = CliResult::success(
+            Command::ServiceQuery,
+            Some(serde_json::json!({"state": "missing"})),
+        );
+        let encoded = serde_json::to_string(&with_data).unwrap();
+        assert!(encoded.contains("\"data\""));
+        assert!(encoded.contains("\"state\":\"missing\""));
+
+        let without_data = CliResult::success(Command::ServiceInstall, None);
+        let encoded = serde_json::to_string(&without_data).unwrap();
+        assert!(!encoded.contains("\"data\""));
+    }
+
+    #[test]
+    fn service_query_request_parses_camel_case() {
+        let request: ServiceQueryRequest =
+            serde_json::from_str(r#"{"serviceName":"Bettbox"}"#).expect("service query request");
+        assert_eq!(request.service_name, "Bettbox");
+
+        assert!(
+            serde_json::from_str::<ServiceQueryRequest>(r#"{"serviceName":""}"#).is_ok(),
+            "empty name is rejected later by validate_name, not by serde"
+        );
+        assert!(
+            serde_json::from_str::<ServiceQueryRequest>("{}").is_err(),
+            "missing serviceName is INVALID_REQUEST"
+        );
+    }
+
+    #[test]
+    fn task_query_request_parses_camel_case() {
+        let request: TaskQueryRequest =
+            serde_json::from_str(r#"{"taskName":"Bettbox"}"#).expect("task query request");
+        assert_eq!(request.task_name, "Bettbox");
     }
 }

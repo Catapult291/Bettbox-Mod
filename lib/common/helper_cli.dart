@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,7 +7,8 @@ import 'package:path/path.dart' show join;
 /// `helper.exe` 子命令的结果文件内容（见 `services/helper/src/cli.rs`）。
 ///
 /// `ShellExecuteW(runas)` 拿不到子进程的 stdout，所以 helper 把结果写成 JSON：
-/// `{"ok":bool,"command":str,"code":str|null,"message":str|null,"osError":u32|null}`。
+/// `{"ok":bool,"command":str,"code":str|null,"message":str|null,"osError":u32|null,"data":object|null}`。
+/// 查询成功时 `data` 携带只读载荷；写操作与失败结果没有 `data`（旧 helper 同样如此）。
 class HelperCliResult {
   const HelperCliResult({
     required this.ok,
@@ -14,19 +16,24 @@ class HelperCliResult {
     this.code,
     this.message,
     this.osError,
+    this.data,
   });
 
   /// 还没走到 helper（提权被拒、helper 不存在、超时）时的失败结果。
   const HelperCliResult.localFailure(this.code, this.message)
     : ok = false,
       command = null,
-      osError = null;
+      osError = null,
+      data = null;
 
   final bool ok;
   final String? command;
   final String? code;
   final String? message;
   final int? osError;
+
+  /// 查询子命令的成功载荷；非查询与旧 helper 为 null。
+  final Map<String, dynamic>? data;
 
   /// 解析结果文件。内容不合法时按失败处理而不是抛异常——调用方要的是「成没成」。
   static HelperCliResult parse(String raw) {
@@ -39,12 +46,14 @@ class HelperCliResult {
         );
       }
 
+      final rawData = decoded['data'];
       return HelperCliResult(
         ok: decoded['ok'] == true,
         command: decoded['command'] as String?,
         code: decoded['code'] as String?,
         message: decoded['message'] as String?,
         osError: decoded['osError'] as int?,
+        data: rawData is Map ? Map<String, dynamic>.from(rawData) : null,
       );
     } catch (e) {
       return HelperCliResult.localFailure(
@@ -108,6 +117,9 @@ typedef HelperLauncher =
 /// 默认等结果文件出现的上限。
 const Duration defaultHelperCommandTimeout = Duration(seconds: 60);
 
+/// 查询路径的默认上限：启动链上高频调用，不能像写操作那样等 60s。
+const Duration defaultHelperQueryTimeout = Duration(seconds: 10);
+
 /// 以一次提权调用 helper 的子命令，并把结果文件读回来。
 ///
 /// 参数走请求文件而不是命令行：路径可能带空格与非 ASCII 字符，服务 `Environment` 的值里
@@ -163,6 +175,71 @@ Future<HelperCliResult> runHelperCommand({
       await Future.delayed(const Duration(milliseconds: 200));
     }
 
+    return HelperCliResult.localFailure(
+      'HELPER_TIMEOUT',
+      'helper did not return a result within ${timeout.inSeconds}s',
+    );
+  } catch (e) {
+    return HelperCliResult.localFailure('HELPER_FAILED', '$e');
+  } finally {
+    for (final file in [requestFile, resultFile]) {
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+    }
+  }
+}
+
+/// 非提权查询：直接 `Process.run` 启动 helper（不走 `ShellExecuteW(runas)`）。
+///
+/// 与 [runHelperCommand] 共用请求/结果文件协议，但启动方式不同——`service query` /
+/// `task query` 在启动链上高频调用，走提权会每次都可能弹 UAC。协议与写操作一致，
+/// 旧 helper 不认识 `query` 子命令时退出码 2 且不写结果文件，这里按失败返回，
+/// 由调用方决定是否回退旧的 `sc` / `schtasks` 路径。
+Future<HelperCliResult> runHelperQueryCommand({
+  required String helperPath,
+  required String group,
+  required String action,
+  required Map<String, Object?> request,
+  required String tempDirPath,
+  Duration timeout = defaultHelperQueryTimeout,
+}) async {
+  if (!await File(helperPath).exists()) {
+    return HelperCliResult.localFailure(
+      'HELPER_MISSING',
+      'helper executable not found: $helperPath',
+    );
+  }
+
+  final stamp = DateTime.now().microsecondsSinceEpoch;
+  final requestFile = File(
+    join(tempDirPath, 'bettbox_helper_q_$stamp.request.json'),
+  );
+  final resultFile = File(
+    join(tempDirPath, 'bettbox_helper_q_$stamp.result.json'),
+  );
+
+  try {
+    await requestFile.writeAsString(jsonEncode(request), flush: true);
+
+    final process = await Process.run(helperPath, [
+      group,
+      action,
+      requestFile.path,
+      resultFile.path,
+    ]).timeout(timeout);
+
+    if (await resultFile.exists()) {
+      return HelperCliResult.parse(await resultFile.readAsString());
+    }
+
+    // 旧 helper：`unknown service/task subcommand` → 退出码 2，不写结果文件。
+    final stderr = process.stderr.toString().trim();
+    return HelperCliResult.localFailure(
+      'HELPER_QUERY_FAILED',
+      'exit=${process.exitCode}${stderr.isEmpty ? '' : ': $stderr'}',
+    );
+  } on TimeoutException {
     return HelperCliResult.localFailure(
       'HELPER_TIMEOUT',
       'helper did not return a result within ${timeout.inSeconds}s',

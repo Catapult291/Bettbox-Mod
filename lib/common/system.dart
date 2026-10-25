@@ -225,6 +225,54 @@ enum HelperServiceState {
   running,
 }
 
+/// 一次 `service query`（或回退路径）得到的只读快照。
+///
+/// 写操作仍走提权；本结构只服务查询。`isStopped` 供等待健康时把「已停」和
+/// 「还在启动」分开——`inactive` 同时覆盖两者，单靠 [state] 会提前放弃等待。
+class HelperServiceQuery {
+  const HelperServiceQuery({
+    required this.state,
+    required this.binPath,
+    required this.hasLegacyEnvironmentKey,
+    required this.isStopped,
+    this.fromFallback = false,
+  });
+
+  /// 从 `service query` 的 `data` 解析；字段缺失或非法返回 null（调用方回退旧路径）。
+  static HelperServiceQuery? fromCliData(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final state = switch (data['state'] as String?) {
+      'missing' => HelperServiceState.missing,
+      'inactive' => HelperServiceState.inactive,
+      'running' => HelperServiceState.running,
+      _ => null,
+    };
+    if (state == null) return null;
+    return HelperServiceQuery(
+      state: state,
+      binPath: data['binPath'] as String?,
+      hasLegacyEnvironmentKey: data['hasLegacyEnvironmentKey'] == true,
+      isStopped: data['isStopped'] == true,
+    );
+  }
+
+  final HelperServiceState state;
+  final String? binPath;
+  final bool hasLegacyEnvironmentKey;
+  final bool isStopped;
+
+  /// true 表示走了旧的 `sc`/`reg` 回退（旧 helper 不认识 `service query`）。
+  final bool fromFallback;
+}
+
+/// 由 `data.binPath` 判断现装服务是否指向别处。
+///
+/// 拿不到 binPath 时按「指向别处」处理——比较不了时保护优先，宁可不重装。
+bool serviceBinPathDiffersFromQuery(String? binPath) {
+  if (binPath == null) return true;
+  return !sameServiceBinaryPath(binPath, appPath.helperPath);
+}
+
 /// `registerService` 对「服务状态 × ping 分类 × binPath 指向」要执行的动作。
 enum RegisterServiceAction {
   /// 执行 `service install`（停 → 删 → 建，binPath 会被改为当前 exe 所在目录）。
@@ -543,11 +591,11 @@ class Windows {
 
   Future<WindowsHelperServiceStatus> checkService() async {
     await HelperAuthManager.ensureAuthKey();
-    final state = await _queryServiceState();
-    if (state == HelperServiceState.missing) {
+    final query = await _queryService();
+    if (query.state == HelperServiceState.missing) {
       return WindowsHelperServiceStatus.none;
     }
-    if (state != HelperServiceState.running) {
+    if (query.state != HelperServiceState.running) {
       return WindowsHelperServiceStatus.presence;
     }
 
@@ -567,10 +615,13 @@ class Windows {
   Future<bool> _registerService() async {
     await HelperAuthManager.ensureAuthKey();
 
-    final state = await _queryServiceState();
+    // 一次 `service query` 合并 state / binPath / legacy key，避免拆成 2–3 次
+    // helper 启动（CLI 每次都是新进程）。
+    final query = await _queryService();
+    final state = query.state;
     final binPathDiffers = state == HelperServiceState.missing
         ? false
-        : await _serviceBinPathDiffers();
+        : serviceBinPathDiffersFromQuery(query.binPath);
 
     // 只有「正在运行」才有应答可探。探测带瞬时重试（unreachable/authFailed
     // 各再给两轮，单次 2s；healthy/incompatible 确定性不重试），把「疑管道/
@@ -592,7 +643,7 @@ class Windows {
       // 服务已在运行且健康：默认沿用。仅当注册表还留着旧版明文 key 且服务本来
       // 就指在本目录时才做迁移重装；指在他处时迁移会把 binPath 改到当前 exe，
       // 跳过（那份明文 key 属于对方安装的配置，由对方自己管）。
-      if (!await _serviceEnvHasLegacyPlaintextKey()) return true;
+      if (!query.hasLegacyEnvironmentKey) return true;
       if (binPathDiffers) {
         commonPrint.log(
           '[Helper] skipping plaintext key migration: service binary is '
@@ -633,52 +684,87 @@ class Windows {
         ping == HelperPingStatus.healthy;
   }
 
-  Future<HelperServiceState> _queryServiceState() async {
-    final result = await Process.run('sc', ['query', appHelperService]);
-    return serviceStateFromScQuery(result.exitCode, result.stdout.toString());
-  }
-
-  /// 现装服务的 binPath 是否不指向本应用的 helper。
+  /// 非提权查一次服务状态/binPath/遗留明文 key。
   ///
-  /// `sc qc` 失败或解析不出 `BINARY_PATH_NAME` 一律按「指向别处」处理——
-  /// 比较不了时保护优先，宁可不重装也不改写现网服务。
-  Future<bool> _serviceBinPathDiffers() async {
+  /// 优先走 `helper.exe service query`；旧 helper 不认识该子命令时回退
+  /// `sc` / `reg`（版本偏差兼容，见计划 §2.5），并记日志。
+  Future<HelperServiceQuery> _queryService() async {
     try {
-      final result = await Process.run('sc', ['qc', appHelperService]);
-      if (result.exitCode != 0) {
-        commonPrint.log(
-          '[Helper] sc qc failed (exit=${result.exitCode}), treating binPath '
-          'as foreign',
-        );
-        return true;
-      }
-      final binPath = parseServiceBinPath(result.stdout.toString());
-      if (binPath == null) {
-        commonPrint.log(
-          '[Helper] BINARY_PATH_NAME missing in sc qc output, treating binPath '
-          'as foreign',
-        );
-        return true;
-      }
-      if (!sameServiceBinaryPath(binPath, appPath.helperPath)) {
-        commonPrint.log(
-          '[Helper] service binPath=$binPath differs from this build helper='
-          '${appPath.helperPath}',
-        );
-        return true;
-      }
-      return false;
+      final result = await _runHelperQueryCommand('service', 'query', {
+        'serviceName': appHelperService,
+      });
+      final query = HelperServiceQuery.fromCliData(result.data);
+      if (result.ok && query != null) return query;
+      commonPrint.log(
+        '[Helper] service query unavailable (${result.summary}), '
+        'falling back to sc/reg',
+      );
     } catch (e) {
       commonPrint.log(
-        '[Helper] failed to query service binPath: $e, treating binPath as '
-        'foreign',
+        '[Helper] service query failed: $e, falling back to sc/reg',
       );
-      return true;
     }
+    return _queryServiceViaLegacy();
+  }
+
+  /// 旧 helper / 新路径异常时的回退：与切换前的 `sc query` + `sc qc` + `reg query` 一致。
+  Future<HelperServiceQuery> _queryServiceViaLegacy() async {
+    final scQuery = await Process.run('sc', ['query', appHelperService]);
+    final output = scQuery.stdout.toString();
+    final state = serviceStateFromScQuery(scQuery.exitCode, output);
+
+    String? binPath;
+    var hasLegacyEnvironmentKey = false;
+    if (state != HelperServiceState.missing) {
+      try {
+        final scQc = await Process.run('sc', ['qc', appHelperService]);
+        if (scQc.exitCode == 0) {
+          binPath = parseServiceBinPath(scQc.stdout.toString());
+        } else {
+          commonPrint.log(
+            '[Helper] sc qc failed (exit=${scQc.exitCode}), treating binPath '
+            'as foreign',
+          );
+        }
+      } catch (e) {
+        commonPrint.log(
+          '[Helper] failed to query service binPath: $e, treating binPath as '
+          'foreign',
+        );
+      }
+
+      // 值里含用户目录路径，可能有非 UTF-8 字符（用户名、安装路径），用 latin1 读，
+      // 只做 ASCII 子串判断。
+      try {
+        final reg = await Process.run('reg', [
+          'query',
+          'HKLM\\SYSTEM\\CurrentControlSet\\Services\\$appHelperService',
+          '/v',
+          'Environment',
+        ], stdoutEncoding: latin1);
+        if (reg.exitCode == 0) {
+          hasLegacyEnvironmentKey = reg.stdout
+              .toString()
+              .contains('HELPER_AUTH_KEY=');
+        }
+      } catch (_) {
+        // 读不到按没有遗留 key 处理，与切换前一致。
+      }
+    }
+
+    return HelperServiceQuery(
+      state: state,
+      binPath: binPath,
+      hasLegacyEnvironmentKey: hasLegacyEnvironmentKey,
+      isStopped: state == HelperServiceState.inactive &&
+          output.contains('STOPPED'),
+      fromFallback: true,
+    );
   }
 
   Future<bool> _isHelperHealthy() async {
-    if (await _queryServiceState() != HelperServiceState.running) return false;
+    final query = await _queryService();
+    if (query.state != HelperServiceState.running) return false;
     return _pingHelper();
   }
 
@@ -697,25 +783,6 @@ class Windows {
 
   Future<bool> _pingHelper() async {
     return (await _pingHelperStatus()) == HelperPingStatus.healthy;
-  }
-
-  /// 服务注册表里是否还留着旧版的明文 `HELPER_AUTH_KEY`。
-  ///
-  /// `HKLM\SYSTEM\CurrentControlSet\Services\<name>` 对 `BUILTIN\Users` 是
-  /// `ReadKey`，明文写在那里等于本机任何用户都能拿到 key，所以要迁到
-  /// `HELPER_AUTH_KEY_FILE`。注意 `HELPER_AUTH_KEY_FILE=` 不含
-  /// `HELPER_AUTH_KEY=`，不会误判。
-  Future<bool> _serviceEnvHasLegacyPlaintextKey() async {
-    // 值里含用户目录路径，可能有非 UTF-8 字符（用户名、安装路径），用 latin1 读，
-    // 只做 ASCII 子串判断。
-    final result = await Process.run('reg', [
-      'query',
-      'HKLM\\SYSTEM\\CurrentControlSet\\Services\\$appHelperService',
-      '/v',
-      'Environment',
-    ], stdoutEncoding: latin1);
-    if (result.exitCode != 0) return false;
-    return result.stdout.toString().contains('HELPER_AUTH_KEY=');
   }
 
   /// 配置/重装 helper 服务。
@@ -771,9 +838,8 @@ class Windows {
       if (await _isHelperHealthy()) return true;
 
       if (attempt > 0 && attempt % 4 == 0) {
-        final check = await Process.run('sc', ['query', appHelperService]);
-        final output = check.stdout.toString();
-        if (output.contains('STOPPED')) {
+        final query = await _queryService();
+        if (query.isStopped) {
           commonPrint.log('Helper service stopped/failed, skipping wait');
           break;
         }
@@ -791,7 +857,41 @@ class Windows {
       return;
     }
 
-    await Process.run('sc', ['stop', appHelperService]);
+    // 开发态兜底：管道停不掉时改走已有的 `service stop` CLI（仍提权）。
+    final result = await _runHelperCommand('service', 'stop', {
+      'serviceName': appHelperService,
+    });
+    if (!result.ok) {
+      commonPrint.log(
+        '[Helper] failed to stop the service via CLI: ${result.summary}',
+      );
+    }
+  }
+
+  /// 计划任务是否已注册（开机自启用）。旧 helper 不认识 `task query` 时回退 `schtasks`。
+  Future<bool> queryTask(String appName) async {
+    try {
+      final result = await _runHelperQueryCommand('task', 'query', {
+        'taskName': appName,
+      });
+      if (result.ok && result.data != null) {
+        return result.data!['exists'] == true;
+      }
+      commonPrint.log(
+        '[Helper] task query unavailable (${result.summary}), '
+        'falling back to schtasks',
+      );
+    } catch (e) {
+      commonPrint.log(
+        '[Helper] task query failed: $e, falling back to schtasks',
+      );
+    }
+    try {
+      final schtasks = await Process.run('schtasks', ['/Query', '/TN', appName]);
+      return schtasks.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> registerTask(String appName) async {
@@ -844,6 +944,21 @@ class Windows {
       request: request,
       tempDirPath: await appPath.tempPath,
       launch: runas,
+    );
+  }
+
+  /// 非提权查询子命令（与 [_runHelperCommand] 并列：查询禁止走 runas）。
+  Future<HelperCliResult> _runHelperQueryCommand(
+    String group,
+    String action,
+    Map<String, Object?> request,
+  ) async {
+    return runHelperQueryCommand(
+      helperPath: appPath.helperPath,
+      group: group,
+      action: action,
+      request: request,
+      tempDirPath: await appPath.tempPath,
     );
   }
 }

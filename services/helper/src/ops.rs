@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+pub mod query;
 #[cfg(all(target_os = "windows", feature = "windows-service"))]
 pub mod service;
 #[cfg(target_os = "windows")]

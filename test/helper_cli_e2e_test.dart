@@ -65,6 +65,21 @@ void main() {
       );
     }
 
+    /// 查询路径：非提权 `Process.run`（与写操作的 runas 分开，对齐计划 §2.2）。
+    Future<HelperCliResult> callQuery(
+      String group,
+      String action,
+      Map<String, Object?> request,
+    ) {
+      return runHelperQueryCommand(
+        helperPath: helperPath!,
+        group: group,
+        action: action,
+        request: request,
+        tempDirPath: workspace.path,
+      );
+    }
+
     /// 协议要求：用完的请求/结果文件不能留在临时目录里。
     void expectNoTempFilesLeft() {
       final leftovers = workspace
@@ -165,6 +180,103 @@ void main() {
 
       final again = await call('service', 'uninstall', {'serviceName': serviceName});
       expect(again.ok, isTrue, reason: '重复卸载应幂等：${again.summary}');
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
+    test('service query：不存在的服务 → ok + missing（非提权）', () async {
+      final result = await callQuery('service', 'query', {
+        'serviceName': 'BettboxE2EMissing$_stamp',
+      });
+      expect(result.ok, isTrue, reason: 'service query: ${result.summary}');
+      expect(result.command, 'service query');
+      expect(result.data?['state'], 'missing');
+      expect(result.data?['binPath'], isNull);
+      expect(result.data?['hasLegacyEnvironmentKey'], isFalse);
+      expectNoTempFilesLeft();
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test(
+      'service query：安装后 → running + binPath 指向本 helper + legacy key 与注入值一致',
+      () async {
+        final serviceName = 'BettboxE2EQuery$_stamp';
+        final pipeName = 'Bettbox.E2E.Query.$_stamp';
+        final pipePath = r'\\.\pipe\' + pipeName;
+        addTearDown(() => Process.run('sc', ['delete', serviceName]));
+
+        final legacyKey = 'a1' * 32;
+        final installed = await call('service', 'install', {
+          'serviceName': serviceName,
+          'startType': 'demand',
+          'environment': [
+            'HELPER_AUTH_KEY=$legacyKey',
+            'HELPER_SERVICE_NAME=$serviceName',
+            'HELPER_PIPE_NAME=$pipePath',
+          ],
+        });
+        expect(
+          installed.ok,
+          isTrue,
+          reason: 'service install: ${installed.summary}',
+        );
+
+        final query = await callQuery('service', 'query', {
+          'serviceName': serviceName,
+        });
+        expect(query.ok, isTrue, reason: 'service query: ${query.summary}');
+        expect(query.data?['state'], 'running');
+        expect(query.data?['isStopped'], isFalse);
+        // binPath 是 install 时 helper 的 current_exe。
+        expect(
+          query.data?['binPath'].toString().toLowerCase(),
+          contains('helper.exe'),
+        );
+        expect(query.data?['hasLegacyEnvironmentKey'], isTrue);
+
+        final uninstalled = await call('service', 'uninstall', {
+          'serviceName': serviceName,
+        });
+        expect(uninstalled.ok, isTrue);
+
+        final gone = await callQuery('service', 'query', {
+          'serviceName': serviceName,
+        });
+        expect(gone.ok, isTrue);
+        expect(gone.data?['state'], 'missing');
+      },
+      timeout: const Timeout(Duration(minutes: 5)),
+    );
+
+    test('task query：register 后 exists=true，unregister 后 false（非提权）', () async {
+      final taskName = 'BettboxE2EQueryTask$_stamp';
+      final executable =
+          Platform.environment['COMSPEC'] ?? r'C:\Windows\System32\cmd.exe';
+      addTearDown(
+        () => Process.run('schtasks', ['/Delete', '/TN', taskName, '/F']),
+      );
+
+      final before = await callQuery('task', 'query', {'taskName': taskName});
+      expect(before.ok, isTrue, reason: 'task query: ${before.summary}');
+      expect(before.data?['exists'], isFalse);
+
+      final registered = await call('task', 'register', {
+        'taskName': taskName,
+        'executablePath': executable,
+        'workingDirectory': r'C:\Windows\System32',
+        'description': 'Bettbox E2E 探针（可删）',
+      });
+      expect(registered.ok, isTrue);
+
+      final exists = await callQuery('task', 'query', {'taskName': taskName});
+      expect(exists.ok, isTrue);
+      expect(exists.data?['exists'], isTrue);
+
+      final unregistered = await call('task', 'unregister', {
+        'taskName': taskName,
+      });
+      expect(unregistered.ok, isTrue);
+
+      final after = await callQuery('task', 'query', {'taskName': taskName});
+      expect(after.ok, isTrue);
+      expect(after.data?['exists'], isFalse);
     }, timeout: const Timeout(Duration(minutes: 5)));
 
     test('请求文件缺失时仍写出结构化结果（退出码 3）', () async {
