@@ -470,8 +470,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "logs": MessageLookupByLibrary.simpleMessage("日誌"),
     "logsDesc": MessageLookupByLibrary.simpleMessage("查看日誌擷取記錄"),
     "logsTest": MessageLookupByLibrary.simpleMessage("日誌測試"),
-    "loopback": MessageLookupByLibrary.simpleMessage("迴環解鎖工具"),
-    "loopbackDesc": MessageLookupByLibrary.simpleMessage("用於 UWP 迴環解鎖"),
     "loose": MessageLookupByLibrary.simpleMessage("寬鬆"),
     "manualRefreshIp": MessageLookupByLibrary.simpleMessage("重新取得 IP"),
     "maximize": MessageLookupByLibrary.simpleMessage("最大化"),

@@ -682,10 +682,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "logs": MessageLookupByLibrary.simpleMessage("Логи"),
     "logsDesc": MessageLookupByLibrary.simpleMessage("Просмотр логов"),
     "logsTest": MessageLookupByLibrary.simpleMessage("Тест логов"),
-    "loopback": MessageLookupByLibrary.simpleMessage("Разблокировка UWP"),
-    "loopbackDesc": MessageLookupByLibrary.simpleMessage(
-      "Инструмент для разблокировки UWP loopback",
-    ),
     "loose": MessageLookupByLibrary.simpleMessage("Максимальная"),
     "manualRefreshIp": MessageLookupByLibrary.simpleMessage("Обновить IP"),
     "maximize": MessageLookupByLibrary.simpleMessage("Развернуть"),

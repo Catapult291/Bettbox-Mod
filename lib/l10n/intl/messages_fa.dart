@@ -659,12 +659,6 @@ class MessageLookup extends MessageLookupByLibrary {
       "مشاهده گزارش‌های ثبت شده",
     ),
     "logsTest": MessageLookupByLibrary.simpleMessage("تست گزارش‌ها"),
-    "loopback": MessageLookupByLibrary.simpleMessage(
-      "ابزار رفع محدودیت Loopback",
-    ),
-    "loopbackDesc": MessageLookupByLibrary.simpleMessage(
-      "رفع محدودیت Loopback برای برنامه‌های UWP",
-    ),
     "loose": MessageLookupByLibrary.simpleMessage("باز"),
     "manualRefreshIp": MessageLookupByLibrary.simpleMessage("دریافت مجدد IP"),
     "maximize": MessageLookupByLibrary.simpleMessage("بزرگ کردن"),

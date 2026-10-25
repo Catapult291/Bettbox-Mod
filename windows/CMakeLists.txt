@@ -111,9 +111,6 @@ install(PROGRAMS "${CLASH_DIR}/BettboxHelperService.exe" DESTINATION "${INSTALL_
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
 
-install(FILES "WindowsLoopbackManager.exe" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-  COMPONENT Runtime)
-
 # Rust 原生动态库（配置管道 + 覆写脚本引擎，已合并为一个 cdylib）。由
 # `dart setup.dart windows --out config` 构建到 libclash/windows/；用 EXISTS 守卫，
 # 避免没有该产物的旧工作区在配置/安装阶段直接失败（此时 Dart 侧会退回仓库内的 cargo 产物，

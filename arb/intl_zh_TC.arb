@@ -357,8 +357,6 @@
   "vpnTip": "重啟 VPN 後生效",
   "vpnEnableDesc": "透過 VpnService 自動路由系統流量",
   "options": "選項",
-  "loopback": "迴環解鎖工具",
-  "loopbackDesc": "用於 UWP 迴環解鎖",
   "providers": "提供者",
   "proxyProviders": "代理提供者",
   "ruleProviders": "規則提供者",

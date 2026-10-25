@@ -89,6 +89,7 @@
 | 74 | 界面 | 配置卡片「上次更新时间」随 5 秒刷新节拍重算 | v1.19.26 |
 | 75 | 平台 | 安卓访问控制固定白名单模式：移除黑名单与全选，新增已选/未选筛选，退出页面时统一生效 | v1.19.26 |
 | 76 | 默认值 | 允许绕过 VPN 默认开启（含缺少该字段的旧配置） | v1.19.26 |
+| 77 | 界面/工程 | 删除 UWP 回环豁免（「回环解锁」入口与 `WindowsLoopbackManager.exe`） | 随下一版 |
 
 ---
 
@@ -3457,3 +3458,23 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 **验证**：`flutter test` 覆盖新增用例并全量通过。
 
 **未决**：无。
+
+---
+
+## 77. 删除 UWP 回环豁免（WindowsLoopbackManager）
+
+**文件**：`lib/views/tools.dart`、`windows/CMakeLists.txt`、`windows/WindowsLoopbackManager.exe`（删除）、`arb/intl_*.arb`、`lib/l10n/`（重新生成）
+
+**问题**：「更多」页的「回环解锁」拉起仓库内 x64 预编译的 `WindowsLoopbackManager.exe`（Go 实现，197 KB，源在上游 `core/Clash.Meta/component/loopback`）为 UWP 应用做回环豁免。该功能维护成本高于价值（预编译二进制不随架构走、ARM64 腿只能仿真加载），且属可选遗留能力，决定删除而非收敛进 `bettbox-native`。
+
+**改动**：
+
+- `lib/views/tools.dart`：删搜索列表 `_SearchItem` 与常规列表 `_LoopbackItem` 两处入口及其列表挂载（`if (system.isWindows) _LoopbackItem(),`），顺带清掉因此不再使用的 `dart:io` 与 `package:path` 导入。
+- `windows/CMakeLists.txt`：删 `install(FILES "WindowsLoopbackManager.exe" …)`。
+- 删除仓库内 `windows/WindowsLoopbackManager.exe`。
+- `arb/*.arb`（7 语言）：删 `loopback` / `loopbackDesc` 两个 key；`flutter pub run intl_utils:generate` 重新生成 `lib/l10n/`。
+- `isLoopbackPortListening`（`lib/common/network.dart` 端口探测）与 UWP 豁免无关，保留。
+
+**验证**：`flutter analyze` 干净（仅遗留 `tools/b4_probe_render.dart` 的既有 `avoid_print` info）；`flutter test` 全量通过；全库 `grep WindowsLoopbackManager` 只剩本文件与 `stage-log.md` 的历史记录。按要求未做真机/打包验证——Windows 本地构建后安装目录无该二进制、「更多」页无回环项一条未实测。
+
+**未决**：这是功能回退，已依赖该工具做 UWP 回环的用户需自备替代（如 `CheckNetIsolation`）；发布说明里写一句。本地部署目录 `Bettbox-win64/bettbox_install_manifest.txt`（未跟踪产物）仍列有该文件名，随下次打包自然消失。

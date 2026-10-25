@@ -2884,26 +2884,6 @@ class AppLocalizations {
     return Intl.message('Options', name: 'options', desc: '', args: []);
   }
 
-  /// `Loopback Unlock`
-  String get loopback {
-    return Intl.message(
-      'Loopback Unlock',
-      name: 'loopback',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `UWP loopback unlocking tool`
-  String get loopbackDesc {
-    return Intl.message(
-      'UWP loopback unlocking tool',
-      name: 'loopbackDesc',
-      desc: '',
-      args: [],
-    );
-  }
-
   /// `Providers`
   String get providers {
     return Intl.message('Providers', name: 'providers', desc: '', args: []);

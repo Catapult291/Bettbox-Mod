@@ -357,8 +357,6 @@
   "vpnTip": "VPN 재시작 후 적용됩니다",
   "vpnEnableDesc": "VpnService를 통해 시스템 트래픽 라우팅",
   "options": "옵션",
-  "loopback": "루프백 해제 도구",
-  "loopbackDesc": "UWP 앱 루프백 제한 해제",
   "providers": "프로바이더",
   "proxyProviders": "프록시 프로바이더",
   "ruleProviders": "규칙 프로바이더",

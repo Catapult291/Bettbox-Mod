@@ -357,8 +357,6 @@
   "vpnTip": "Перезапустите VPN для применения изменений",
   "vpnEnableDesc": "Автоматическая маршрутизация всего трафика через VpnService",
   "options": "Опции",
-  "loopback": "Разблокировка UWP",
-  "loopbackDesc": "Инструмент для разблокировки UWP loopback",
   "providers": "Провайдеры",
   "proxyProviders": "Провайдеры прокси",
   "ruleProviders": "Провайдеры правил",

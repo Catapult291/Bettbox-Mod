@@ -357,8 +357,6 @@
   "vpnTip": "VPN再起動後に有効化されます",
   "vpnEnableDesc": "VpnServiceでシステム通信をルーティング",
   "options": "オプション",
-  "loopback": "ループバック解除ツール",
-  "loopbackDesc": "UWPアプリのループバック制限を解除",
   "providers": "プロバイダー",
   "proxyProviders": "プロキシプロバイダー",
   "ruleProviders": "ルールプロバイダー",

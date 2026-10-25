@@ -357,8 +357,6 @@
   "vpnTip": "Restart VPN to apply changes",
   "vpnEnableDesc": "Route system traffic via VpnService",
   "options": "Options",
-  "loopback": "Loopback Unlock",
-  "loopbackDesc": "UWP loopback unlocking tool",
   "providers": "Providers",
   "proxyProviders": "Proxy Providers",
   "ruleProviders": "Rule Providers",

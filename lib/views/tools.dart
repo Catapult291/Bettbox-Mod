@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:bett_box/common/common.dart';
 import 'package:bett_box/enum/enum.dart';
@@ -26,7 +25,6 @@ import 'package:bett_box/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' show dirname, join;
 
 import 'backup_and_recovery.dart';
 import 'developer.dart';
@@ -256,20 +254,6 @@ class _ToolViewState extends ConsumerState<ToolsView> {
             appLocalizations.hotkeyManagement,
             const HotKeyView(),
           ),
-        ),
-      if (system.isWindows)
-        _SearchItem(
-          title: appLocalizations.loopback,
-          subtitle: appLocalizations.loopbackDesc,
-          category: settingsCategory,
-          leading: const Icon(Icons.lock),
-          onTap: (context, _) {
-            windows?.runas(
-              '"${join(dirname(Platform.resolvedExecutable), "WindowsLoopbackManager.exe")}"',
-              '',
-              showWindow: true,
-            );
-          },
         ),
       if (system.isAndroid)
         _SearchItem(
@@ -1398,7 +1382,6 @@ class _ToolViewState extends ConsumerState<ToolsView> {
           _ThemeItem(),
           _BackupItem(),
           if (system.isDesktop) _HotkeyItem(),
-          if (system.isWindows) _LoopbackItem(),
           if (system.isWindows) _ProcessAccessItem(),
           if (system.isAndroid) _AccessItem(),
           _ConfigItem(),
@@ -1543,26 +1526,6 @@ class _HotkeyItem extends StatelessWidget {
         title: appLocalizations.hotkeyManagement,
         builder: (_) => const HotKeyView(),
       ),
-    );
-  }
-}
-
-class _LoopbackItem extends StatelessWidget {
-  const _LoopbackItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem(
-      leading: const Icon(Icons.lock),
-      title: Text(appLocalizations.loopback),
-      subtitle: Text(appLocalizations.loopbackDesc),
-      onTap: () {
-        windows?.runas(
-          '"${join(dirname(Platform.resolvedExecutable), "WindowsLoopbackManager.exe")}"',
-          '',
-          showWindow: true,
-        );
-      },
     );
   }
 }

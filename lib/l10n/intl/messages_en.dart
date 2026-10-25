@@ -661,10 +661,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "logs": MessageLookupByLibrary.simpleMessage("Logs"),
     "logsDesc": MessageLookupByLibrary.simpleMessage("View captured logs"),
     "logsTest": MessageLookupByLibrary.simpleMessage("Logs Test"),
-    "loopback": MessageLookupByLibrary.simpleMessage("Loopback Unlock"),
-    "loopbackDesc": MessageLookupByLibrary.simpleMessage(
-      "UWP loopback unlocking tool",
-    ),
     "loose": MessageLookupByLibrary.simpleMessage("Loose"),
     "manualRefreshIp": MessageLookupByLibrary.simpleMessage("Refresh IP"),
     "maximize": MessageLookupByLibrary.simpleMessage("Maximize"),

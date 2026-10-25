@@ -534,8 +534,6 @@ class MessageLookup extends MessageLookupByLibrary {
     "logs": MessageLookupByLibrary.simpleMessage("로그"),
     "logsDesc": MessageLookupByLibrary.simpleMessage("캡처된 로그 기록 보기"),
     "logsTest": MessageLookupByLibrary.simpleMessage("로그 테스트"),
-    "loopback": MessageLookupByLibrary.simpleMessage("루프백 해제 도구"),
-    "loopbackDesc": MessageLookupByLibrary.simpleMessage("UWP 앱 루프백 제한 해제"),
     "loose": MessageLookupByLibrary.simpleMessage("여유있게"),
     "manualRefreshIp": MessageLookupByLibrary.simpleMessage("IP 다시 가져오기"),
     "maximize": MessageLookupByLibrary.simpleMessage("최대화"),

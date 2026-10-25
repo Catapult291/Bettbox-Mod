@@ -357,8 +357,6 @@
   "vpnTip": "تغییرات پس از راه‌اندازی مجدد VPN اعمال می‌شود",
   "vpnEnableDesc": "هدایت ترافیک سیستم از طریق VpnService",
   "options": "گزینه‌ها",
-  "loopback": "ابزار رفع محدودیت Loopback",
-  "loopbackDesc": "رفع محدودیت Loopback برای برنامه‌های UWP",
   "providers": "ارائه‌دهندگان",
   "proxyProviders": "ارائه‌دهندگان پروکسی",
   "ruleProviders": "ارائه‌دهندگان قوانین",
