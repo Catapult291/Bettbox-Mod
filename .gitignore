@@ -92,6 +92,10 @@ app.*.map.json
 /tools/
 /*旧脚本.txt
 
+# 分类整理后的交付产物与运行日志（release=当前版，archive=旧版归档），不入库
+/release/
+/logs/
+
 # 交付用的构建产物落在工作区根，方便取用，不入库
 /Bettbox-*.apk
 /Bettbox-*.zip
