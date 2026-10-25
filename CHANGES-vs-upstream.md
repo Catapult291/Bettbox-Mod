@@ -91,6 +91,7 @@
 | 76 | 默认值 | 允许绕过 VPN 默认开启（含缺少该字段的旧配置） | v1.19.26 |
 | 77 | 界面/工程 | 删除 UWP 回环豁免（「回环解锁」入口与 `WindowsLoopbackManager.exe`） | 随下一版 |
 | 78 | 工程 | helper 增加 `service query` / `task query`（非提权）；应用侧只读查询改走 helper，写路径仍提权 | 随下一版 |
+| 79 | 工程 | `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI（`cargo bench`，不进 CI） | 随下一版 |
 
 ---
 
@@ -3500,3 +3501,42 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 **验证**：`cargo test --features windows-service` 27 例过；`cargo clippy --all-targets` 带/不带 `windows-service` 两腿干净；`cargo fmt --check` 干净。本机非提权冒烟：`service query` 不存在服务 → `state=missing`；`EventLog` → `running` + `binPath=svchost.exe…`；`task query` 不存在任务 → `exists=false`；空 `serviceName` → `INVALID_REQUEST`。`flutter analyze` 干净（仅既有 avoid_print）；`flutter test` 全量通过。helper-e2e 已扩：缺失服务 query、安装后 query、任务 register/unregister 后 query。
 
 **未决**：旧 helper 回退代码按下下版本删除（见上）；查询相对 `Process.run('sc')` 的进程启动开销未单独压测——合并为一次调用后总次数应 ≤ 现状，若实测明显变慢再议常驻（计划 §2.8）。
+
+---
+
+## 79. `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI
+
+**文件**：`rust/bettbox-native/benches/process_profile.rs`（新增）、`rust/bettbox-native/Cargo.toml`（`[[bench]]` `harness = false`）
+
+**问题**：§28 的合并入口让整份配置只跨一次 FFI，但一直没给数字（路线稿 §1.4 的「尚未量化」欠账）：合并相对历史的「脚本 + patch 两次 FFI」快多少、真实体量配置上一次调用的绝对耗时是多少。
+
+**改动**：
+
+- 新增 `benches/process_profile.rs`（`harness = false`）：手写 `std::time::Instant` 循环，**不引 criterion**（新依赖进 deny.toml 审计面，一次量化不需要统计框架）。每路径预热 3 次后自适应采样到累计 ≥1 s（至少 5 次，上限 60 s / 100 万次），报告 min / p50 / mean；`cargo bench --bench process_profile -- --json <path>` 可落盘。夹具路径由 `CARGO_MANIFEST_DIR/../../fixtures/golden` 解析，不设环境变量也能跑。
+- 每个夹具测三条路径（同进程、同一份已解析输入）：`merged` = `bb_process_profile`（出货路径）；`two-ffi` = 模拟删 Dart 镜像前的两次往返（`bb_eval_script` → 结果替换 `rawConfig` → `bb_patch_config`）；`patch-only` = 单独 `bb_patch_config`（纯管道基线）。
+- 夹具用计划点名的三份：`process_profile/profile-{a,b}-real-script.json`（真实脚本 × 真实 profile）与 `patch_config/profile-a-default.json`（纯 patch 对照；无脚本，`merged` / `two-ffi` 用恒等脚本补齐结构——QuickJS 会把 `127.0` 归一成 `127`（数值种类变化），故该夹具这两条只互相对拍、不与 golden 逐字段比，`patch-only` 与 golden 比）。
+- **三路径轮流采样**：首轮顺序各测一段时，先跑的 `merged` 吃 CPU 频率爬坡的亏，`two-ffi` 反而测出 0.97×；改为同一夹具内三路径交替各取一个样本（谁没跑够谁继续）后偏差消除。这是本基准方法上的关键修正。
+- 计时前先对拍再计数：真实脚本夹具的 `merged` / `two-ffi` 输出与 golden 逐字段相等（含 `scriptError`），纯 patch 夹具的 `patch-only` 与 golden 相等，确保测的是出货语义。
+
+**数字**（第二轮；AMD Ryzen 5 7640HS、Windows 11 专业版 build 22631、x86_64、`cargo bench` = release，2026-10-25 UTC+8；单位 ms）：
+
+| 夹具 | 路径 | min | p50 | mean |
+| --- | --- | ---: | ---: | ---: |
+| profile-a-real-script（rawConfig 102 KB × 脚本 33 KB） | merged | 9.58 | 10.61 | 11.31 |
+| | two-ffi | 9.92 | 10.80 | 11.60 |
+| | patch-only | 0.77 | 0.80 | 0.94 |
+| profile-b-real-script（rawConfig 328 KB × 脚本 33 KB） | merged | 31.98 | 33.95 | 37.17 |
+| | two-ffi | 32.93 | 35.82 | 36.54 |
+| | patch-only | 3.57 | 3.75 | 4.00 |
+| profile-a-default（恒等脚本对照，rawConfig 102 KB） | merged | 5.35 | 5.60 | 5.74 |
+| | two-ffi | 5.78 | 6.07 | 6.21 |
+| | patch-only | 0.76 | 0.80 | 0.82 |
+
+- **加速比（two-ffi ÷ merged，p50）：1.02× / 1.06× / 1.08×**——三个夹具上合并入口都更快；按 min 算为 1.04× / 1.03× / 1.08×。方向在两轮复跑的 min 与 p50 上无翻转（第一轮 min：9.57/10.18、31.55/32.95、5.35/6.70 ms）。mean 受桌面后台抖动的长尾离群值影响，轮间会漂（profile-b 第一轮 mean 比 1.03、第二轮 0.98），结论以 min / p50 为准。
+- **收益被脚本求值主导**：真实脚本下 QuickJS 求值 ≈ 9.8 ms（profile-a）/ 30 ms（profile-b，`merged p50 − patch-only p50`），JSON 边界往返差只是零头 → 真实工作负载上合并入口快 2–6%。恒等脚本把求值压到最小后，纯边界差异露出：每次约 +0.4~1.5 ms（两轮 p50/min 差值区间，102 KB 配置）——即 `two-ffi` 多付的 `is_json_object` 整份解析、输入二次序列化/解析与 `Value` clone。
+- **绝对耗时**：出货路径真实体量一次 p50 ≈ 10.6 ms（102 KB 配置）、34 ms（328 KB 订阅）；纯管道基线 0.8 / 3.8 ms。恒等脚本对照里 `merged 5.60 − patch-only 0.80 ≈ 4.8 ms` 是每次脚本求值的固定开销（QuickJS 每次新建 runtime + 整份配置解析与回写序列化）。
+- **模拟口径**：`two-ffi` 在同进程串两次 C ABI，含信封解析与二次序列化，但没有历史 Dart 镜像侧的 map 构造/序列化成本，相对真实历史往返**偏乐观（下界方向）**；即便如此它仍然更慢，真实历史差距只会更大。
+
+**验证**：`cargo bench --bench process_profile` 本机跑完并打印三路径对比与加速比；`cargo fmt --all --check`、`cargo clippy --all-targets -- -D warnings` 干净；`cargo test --workspace` 通过（bench 只被编译、不被 CI 运行）。`rust.yml` 未改——CI 不跑 bench。
+
+**未决**：单机实测，桌面抖动使 p50 轮间浮动约 2–15%（min 更稳）；跨机复现或发布说明级引用前可换机器再跑一轮，命令见上。

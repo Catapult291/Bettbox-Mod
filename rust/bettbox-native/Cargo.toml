@@ -16,6 +16,12 @@ crate-type = ["cdylib", "rlib"]
 name = "BettboxProxyGuard"
 path = "src/bin/bettbox_proxy_guard.rs"
 
+# 性能基准（计划 §3）：手写 Instant 循环量化合并入口 vs 两次 FFI，
+# 不引入 criterion（新依赖进 deny.toml 审计面）。CI 不跑（见 benches/process_profile.rs）。
+[[bench]]
+name = "process_profile"
+harness = false
+
 [dependencies]
 md5 = "0.7"
 serde = { version = "1", features = ["derive"] }
