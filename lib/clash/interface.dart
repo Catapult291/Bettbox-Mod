@@ -30,6 +30,12 @@ mixin ClashInterface {
 
   Future<String> asyncTestDelay(String url, String proxyName);
 
+  /// 批量延迟测速：一次 action 带多个 `{proxy-name, test-url}`。
+  ///
+  /// 内核按 [delayTestBatchConcurrency] 并发跑整批，单次请求的墙钟时间
+  /// 仍约为一个节点的超时；超时或内核未连上时回一批 -1，避免界面停在测速动画上。
+  Future<String> asyncTestDelayBatch(List<Map<String, String>> targets);
+
   FutureOr<String> updateConfig(UpdateParams updateParams);
 
   FutureOr<String> setupConfig(
@@ -79,6 +85,8 @@ mixin ClashInterface {
   Future<bool> crash();
 
   FutureOr<String> getConnections();
+
+  FutureOr<String> getConnectionsCount();
 
   FutureOr<bool> closeConnection(String id);
 
@@ -362,6 +370,14 @@ abstract class ClashHandlerInterface with ClashInterface {
   }
 
   @override
+  FutureOr<String> getConnectionsCount() {
+    return invoke<String>(
+      method: ActionMethod.getConnectionsCount,
+      timeout: const Duration(seconds: 5),
+    );
+  }
+
+  @override
   Future<bool> closeConnections() {
     return invoke<bool>(method: ActionMethod.closeConnections);
   }
@@ -427,6 +443,35 @@ abstract class ClashHandlerInterface with ClashInterface {
       onTimeout: () {
         return json.encode(Delay(name: proxyName, value: -1, url: url));
       },
+    );
+  }
+
+  @override
+  Future<String> asyncTestDelayBatch(List<Map<String, String>> targets) {
+    if (targets.isEmpty) {
+      return Future.value('[]');
+    }
+    final params = {
+      'proxies': targets,
+      'timeout': httpTimeoutDuration.inMilliseconds,
+    };
+    final waves = (targets.length / delayTestBatchConcurrency).ceil();
+    String timeoutPayload() => json.encode(
+      targets
+          .map(
+            (t) => Delay(
+              name: t['proxy-name'] ?? '',
+              url: t['test-url'] ?? '',
+              value: -1,
+            ),
+          )
+          .toList(),
+    );
+    return invoke<String>(
+      method: ActionMethod.asyncTestDelayBatch,
+      data: json.encode(params),
+      timeout: httpTimeoutDuration * waves + const Duration(seconds: 1),
+      onTimeout: timeoutPayload,
     );
   }
 

@@ -113,6 +113,27 @@ Future<Delay> _testProxyDelay(DelayTestTarget target) {
   });
 }
 
+/// 一次批量测速请求最多带多少个目标。
+///
+/// 内核侧并发上限是 [delayTestBatchConcurrency]；超过这个数只会让这一批
+/// 的等待时间按波次拉长，不会更快。
+int delayTestBatchSize(int concurrencyLimit) {
+  return concurrencyLimit.clamp(1, delayTestBatchConcurrency);
+}
+
+/// 对一批目标做一次批量测速：先整批置为测速中，再一次性写回结果。
+Future<void> _testDelayBatch(List<DelayTestTarget> targets) async {
+  if (targets.isEmpty) return;
+  final appController = globalState.appController;
+  appController.setDelays(
+    targets.map((t) => Delay(url: t.url, name: t.name, value: 0)),
+  );
+  final delays = await clashCore.getDelays(
+    targets.map((t) => {'proxy-name': t.name, 'test-url': t.url}).toList(),
+  );
+  appController.setDelays(delays);
+}
+
 bool _isNonTestableProxyName(String proxyName) {
   final name = proxyName.toUpperCase();
   return name == 'REJECT' || name == 'REJECT-DROP' || name == 'PASS';
@@ -165,18 +186,14 @@ Future<void> delayTest(
     }
     final concurrencyLimit = globalState.config.proxiesStyle.concurrencyLimit;
 
-    // 按实际节点和实际测试地址创建任务，避免多个代理组别名重复测速。
-    final delayTasks = targets.map((target) {
-      return () async {
-        await _testProxyDelay(target);
-        await onDelayUpdated?.call();
-      };
-    }).toList();
-
-    // Execute tasks in batches
-    final batchedTasks = delayTasks.batch(concurrencyLimit);
-    for (final batchTasks in batchedTasks) {
-      await Future.wait(batchTasks.map((task) => task()));
+    // 批量测速：一组目标一次 IPC。批大小沿用并发上限，同时不超过内核
+    // 侧的并发上限；每批结果回来就整批写回 delayMap 并回调一次。
+    final batchedTargets = targets
+        .toList()
+        .batch(delayTestBatchSize(concurrencyLimit));
+    for (final batchTargets in batchedTargets) {
+      await _testDelayBatch(batchTargets);
+      await onDelayUpdated?.call();
     }
     appController.addSortNum();
   }

@@ -75,6 +75,23 @@ func (m *Manager) Range(f func(c Tracker) bool) {
 	})
 }
 
+// Count 返回当前连接数。只读哈希表的大小，不物化连接表，
+// 供 UI 计数卡片这类只要数字的调用方使用。
+func (m *Manager) Count() int {
+	return m.connections.Size()
+}
+
+// Connections 只收集连接表，不读取内存与累计流量。
+// 与 Snapshot 相比省掉一次 runtime.ReadMemStats，且调用方可以按需裁剪字段。
+func (m *Manager) Connections() []TrackerInfo {
+	connections := make([]TrackerInfo, 0, m.connections.Size())
+	m.connections.Range(func(key string, value Tracker) bool {
+		connections = append(connections, *value.Info())
+		return true
+	})
+	return connections
+}
+
 func (m *Manager) PushUploaded(isDirect bool, size int64) {
 	if !isDirect {
 		m.proxyUploadTemp.Add(size)

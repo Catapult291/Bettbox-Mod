@@ -264,6 +264,30 @@ class Traffic {
   int get hashCode => id.hashCode ^ up.hashCode ^ down.hashCode;
 }
 
+/// 一次 IPC 取回的流量：当前速率 [traffic] 与累计 [totalTraffic]。
+///
+/// 内核 `getTraffic` 单包返回 `{up, down, totalUp, totalDown}`；
+/// 缺 `totalUp`/`totalDown`（旧内核）时按 0 处理。
+class TrafficSnapshot {
+  final Traffic traffic;
+  final Traffic totalTraffic;
+
+  TrafficSnapshot({required this.traffic, required this.totalTraffic});
+
+  factory TrafficSnapshot.empty() =>
+      TrafficSnapshot(traffic: Traffic(), totalTraffic: Traffic());
+
+  factory TrafficSnapshot.fromMap(Map<String, dynamic> map) {
+    return TrafficSnapshot(
+      traffic: Traffic.fromMap(map),
+      totalTraffic: Traffic(
+        up: (map['totalUp'] as num?)?.toInt(),
+        down: (map['totalDown'] as num?)?.toInt(),
+      ),
+    );
+  }
+}
+
 @immutable
 class TrafficValueShow {
   final double value;

@@ -30,6 +30,12 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
   DateTime? _lastMissedUpdateCheck;
   late final VoidCallback _dashboardTickListener;
 
+  /// 设置写入后拨动 [GlobalState.configRevision]：这里只负责起防抖，具体变了
+  /// 哪些分片由 `GlobalState` 记账，落盘时只重编码这些分片。
+  void _configRevisionListener() {
+    globalState.appControllerOrNull?.savePreferencesDebounce();
+  }
+
   static const _missedUpdateCheckDelay = Duration(seconds: 5);
   static const _missedUpdateCheckThrottle = Duration(seconds: 60);
 
@@ -56,11 +62,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
         detectionState.startCheck();
       }
     });
-    ref.listenManual(configStateProvider, (prev, next) {
-      if (prev != next) {
-        globalState.appController.savePreferencesDebounce();
-      }
-    });
+    globalState.configRevision.addListener(_configRevisionListener);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateDashboardRefreshState();
       detectionState.tryStartCheck();
@@ -88,6 +90,7 @@ class _AppStateManagerState extends ConsumerState<AppStateManager>
   void dispose() {
     _dashboardRefreshDebounceTimer?.cancel();
     _missedUpdateCheckTimer?.cancel();
+    globalState.configRevision.removeListener(_configRevisionListener);
     dashboardRefreshManager.tick1s.removeListener(_dashboardTickListener);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();

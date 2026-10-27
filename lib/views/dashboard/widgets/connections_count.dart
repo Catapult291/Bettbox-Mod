@@ -41,10 +41,10 @@ class _ConnectionsCountState extends State<ConnectionsCount> {
     _isUpdating = true;
 
     try {
-      final connections = await clashCore.getConnections();
+      final count = await clashCore.getConnectionsCount();
       if (mounted) {
         setState(() {
-          _count = connections.length;
+          _count = count;
         });
       }
     } catch (e) {

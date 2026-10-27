@@ -4,17 +4,21 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:bett_box/clash/clash.dart';
+import 'package:bett_box/clash/groups_build_cache.dart';
 import 'package:bett_box/clash/interface.dart';
 import 'package:bett_box/common/common.dart';
 import 'package:bett_box/enum/enum.dart';
 import 'package:bett_box/models/models.dart';
 import 'package:bett_box/state.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 import 'package:path/path.dart';
 
 class ClashCore {
   static ClashCore? _instance;
   late ClashHandlerInterface clashInterface;
+
+  final _groupsCache = GroupsBuildCache();
 
   ClashCore._internal() {
     if (system.isAndroid) {
@@ -100,6 +104,10 @@ class ClashCore {
   /// provider 的全节点列表体积最大，这里把它当作构组的临时输入：原文送进
   /// isolate 内解码，主 isolate 不物化它，isolate 结束即随之释放，
   /// 不会被任何常驻状态持有。
+  ///
+  /// 代理表与 provider 原文都没变（见 [groupsSourceDigest]）时直接复用上一次
+  /// 结果：`updateGroups` 的多数触发（延迟测速、回前台、切模式）并不改内容，
+  /// 这类刷新只付取数的 IPC，不再付 isolate 与 `Group.fromJson`。
   Future<List<Group>> getProxiesGroups({String? providersRawContent}) async {
     final proxies = await clashInterface.getProxies();
     if (proxies.isEmpty) return [];
@@ -107,9 +115,37 @@ class ClashCore {
     final rawContent =
         providersRawContent ?? await getExternalProvidersRawContent();
 
-    return Isolate.run<List<Group>>(
-      () => buildProxiesGroups(proxies, rawContent),
+    return buildGroupsWithCache(
+      cache: _groupsCache,
+      proxies: proxies,
+      rawProvidersContent: rawContent,
     );
+  }
+
+  /// [getProxiesGroups] 取数之后的构组步骤：指纹命中就复用上次结果，否则在
+  /// isolate 内重建。单独抽出来是为了能直接测「跳过重建」这条分支。
+  @visibleForTesting
+  static Future<List<Group>> buildGroupsWithCache({
+    required GroupsBuildCache cache,
+    required Map proxies,
+    required String rawProvidersContent,
+  }) async {
+    final digest = groupsSourceDigest(proxies, rawProvidersContent);
+    final cached = cache.lookup(digest);
+    if (cached != null) {
+      return cached;
+    }
+
+    final groups = await Isolate.run<List<Group>>(
+      () => buildProxiesGroups(proxies, rawProvidersContent),
+    );
+    cache.store(digest, groups);
+    return groups;
+  }
+
+  /// 内核重启、换配置后作废构组缓存（旧结果可能来自另一个内核实例）。
+  void invalidateGroupsCache() {
+    _groupsCache.clear();
   }
 
   /// 由内核代理表 + provider 原文构建分组（含把 provider 节点并入代理表）。
@@ -215,6 +251,16 @@ class ClashCore {
       commonPrint.log('Failed to parse connections: $e');
       return [];
     }
+  }
+
+  /// 只取连接数：内核走 `Manager.Count()`，不物化连接表也不序列化。
+  /// 首页计数卡片用它替代整包 [getConnections]。
+  Future<int> getConnectionsCount() async {
+    final res = await clashInterface.getConnectionsCount();
+    if (res.isEmpty) {
+      return 0;
+    }
+    return int.tryParse(res) ?? 0;
   }
 
   void closeConnection(String id) {
@@ -341,6 +387,18 @@ class ClashCore {
     }
   }
 
+  /// 批量延迟测速：一次 IPC 拿回一整批节点的结果。
+  ///
+  /// 内核按请求顺序回包；超时、未连上内核或整批应答不可解析时，
+  /// 每个目标都落回 -1（Timeout），不让界面停在测速动画上。
+  Future<List<Delay>> getDelays(List<Map<String, String>> targets) async {
+    if (targets.isEmpty) {
+      return const [];
+    }
+    final data = await clashInterface.asyncTestDelayBatch(targets);
+    return parseDelays(data, targets);
+  }
+
   Future<Map<String, dynamic>> getConfig(String id, {String? ageSecretKey}) async {
     final profilePath = await appPath.getProfilePath(id);
     final res = await clashInterface.getConfig(profilePath, ageSecretKey: ageSecretKey);
@@ -359,16 +417,19 @@ class ClashCore {
     }
   }
 
-  Future<Traffic> getTraffic() async {
+  /// 当前速率与累计流量的合并读取：内核 `getTraffic` 单包返回
+  /// `{up, down, totalUp, totalDown}`，一次 IPC 取全。原先每秒各调一次
+  /// getTraffic/getTotalTraffic 是固定两次往返，合并后减半。
+  Future<TrafficSnapshot> getTraffic() async {
     final trafficString = await clashInterface.getTraffic();
     if (trafficString.isEmpty) {
-      return Traffic();
+      return TrafficSnapshot.empty();
     }
     try {
-      return Traffic.fromMap(json.decode(trafficString));
+      return TrafficSnapshot.fromMap(json.decode(trafficString));
     } catch (e) {
       commonPrint.log('Failed to parse traffic: $e');
-      return Traffic();
+      return TrafficSnapshot.empty();
     }
   }
 
@@ -378,19 +439,6 @@ class ClashCore {
       return null;
     }
     return IpInfo(ip: ip, countryCode: countryCode);
-  }
-
-  Future<Traffic> getTotalTraffic() async {
-    final totalTrafficString = await clashInterface.getTotalTraffic();
-    if (totalTrafficString.isEmpty) {
-      return Traffic();
-    }
-    try {
-      return Traffic.fromMap(json.decode(totalTrafficString));
-    } catch (e) {
-      commonPrint.log('Failed to parse total traffic: $e');
-      return Traffic();
-    }
   }
 
   Future<int> getMemory() async {
@@ -439,3 +487,57 @@ class ClashCore {
 }
 
 final clashCore = ClashCore();
+
+/// 解析 `asyncTestDelayBatch` 的应答。
+///
+/// [targets] 是发起请求时的目标列表，用于两件事：缺项补 -1，以及把内核
+/// 找不到节点时回的空 `url`（与单节点应答形态一致）换回请求里的地址——
+/// 界面按 url 查延迟，空 url 会让卡片一直停在测速动画上。
+@visibleForTesting
+List<Delay> parseDelays(String raw, List<Map<String, String>> targets) {
+  List<Delay> fallback() => targets
+      .map(
+        (t) => Delay(
+          name: t['proxy-name'] ?? '',
+          url: t['test-url'] ?? '',
+          value: -1,
+        ),
+      )
+      .toList();
+
+  if (raw.isEmpty) {
+    return fallback();
+  }
+
+  final List decoded;
+  try {
+    final value = json.decode(raw);
+    if (value is! List) {
+      commonPrint.log('Failed to parse delay batch: not a list');
+      return fallback();
+    }
+    decoded = value;
+  } catch (e) {
+    commonPrint.log('Failed to parse delay batch: $e');
+    return fallback();
+  }
+
+  final delays = fallback();
+  final count =
+      decoded.length < targets.length ? decoded.length : targets.length;
+  for (var i = 0; i < count; i++) {
+    final item = decoded[i];
+    if (item is! Map) {
+      continue;
+    }
+    try {
+      final delay = Delay.fromJson(Map<String, dynamic>.from(item));
+      delays[i] = delay.url.isEmpty
+          ? delay.copyWith(url: targets[i]['test-url'] ?? '')
+          : delay;
+    } catch (e) {
+      commonPrint.log('Failed to parse delay at $i: $e');
+    }
+  }
+  return delays;
+}

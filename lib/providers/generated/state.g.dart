@@ -6,23 +6,6 @@ part of '../state.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$configStateHash() => r'1ebe455a448d4daaddf6d9cc90bddf7033185421';
-
-/// See also [configState].
-@ProviderFor(configState)
-final configStateProvider = AutoDisposeProvider<Config>.internal(
-  configState,
-  name: r'configStateProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$configStateHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef ConfigStateRef = AutoDisposeProviderRef<Config>;
 String _$currentGroupsStateHash() =>
     r'f97e7d4a45fdbc18c23d2837224369193c6ad2e3';
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bett_box/common/constant.dart';
 import 'package:bett_box/models/models.dart';
 import 'package:bett_box/views/proxies/common.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -102,5 +103,15 @@ void main() {
     );
 
     expect({first, second}, hasLength(2));
+  });
+
+  test('batches no larger than the core concurrency cap', () {
+    expect(delayTestBatchConcurrency, 50);
+    expect(delayTestBatchSize(250), delayTestBatchConcurrency);
+    expect(delayTestBatchSize(delayTestBatchConcurrency), 50);
+    expect(delayTestBatchSize(10), 10);
+    // 并发上限被设成 0/负数时仍要发得出去。
+    expect(delayTestBatchSize(0), 1);
+    expect(delayTestBatchSize(-5), 1);
   });
 }

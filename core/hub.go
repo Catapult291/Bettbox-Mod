@@ -136,13 +136,21 @@ func handleDecryptAgeConfig(params *DecryptAgeConfigParams) string {
 	return string(decrypted)
 }
 
-func handleGetProxies() map[string]constant.Proxy {
+func handleGetProxies() map[string]leanProxyIPC {
 	runLock.Lock()
 	defer runLock.Unlock()
 	if !isInit {
-		return make(map[string]constant.Proxy)
+		return make(map[string]leanProxyIPC)
 	}
-	return tunnel.Proxies()
+	// 瘦身：只回 UI 构组需要的 name/type/now/all/hidden/icon/testUrl，
+	// 跳过 Proxy.MarshalJSON 的双重序列化与 history/extra/alive 等字段。
+	// 详见 core/proxies_json.go。
+	lean, err := marshalProxiesIPC(tunnel.Proxies())
+	if err != nil {
+		// 分组组字段解析失败时退回空表，不让单个坏分组拖垮整次 IPC。
+		return make(map[string]leanProxyIPC)
+	}
+	return lean
 }
 
 func handleChangeProxy(data string, fn func(string string)) {
@@ -187,11 +195,16 @@ func handleChangeProxy(data string, fn func(string string)) {
 	}()
 }
 
+// handleGetTraffic 单包返回现速与累计流量。UI 每秒同时要两者，拆成两个
+// action 就是每秒两次 IPC 往返，合并后由一次 marshal 一次往返带全。
 func handleGetTraffic() string {
 	up, down := statistic.DefaultManager.NowTraffic(state.CurrentState.OnlyStatisticsProxy)
+	totalUp, totalDown := statistic.DefaultManager.TotalTraffic(state.CurrentState.OnlyStatisticsProxy)
 	traffic := map[string]int64{
-		"up":   up,
-		"down": down,
+		"up":        up,
+		"down":      down,
+		"totalUp":   totalUp,
+		"totalDown": totalDown,
 	}
 	data, err := json.Marshal(traffic)
 	if err != nil {
@@ -219,6 +232,60 @@ func handleResetTraffic() {
 	statistic.DefaultManager.ResetStatistic()
 }
 
+// delayTestBatchConcurrency 是批量测速在内核侧的并发上限。
+//
+// 与改前逐节点路径里 mBatch 的 50 保持一致：一次批量请求最多同时发起
+// 50 个 URL 测试，不会因为界面把整组节点打包发过来而抬高出站连接数。
+const delayTestBatchConcurrency = 50
+
+// delayTestProxyLookup 按名字在内核代理表与各 provider 里找节点。
+type delayTestProxyLookup func(name string) constant.Proxy
+
+func lookupDelayTestProxy(name string) constant.Proxy {
+	if proxy, exist := tunnel.Proxies()[name]; exist {
+		return proxy
+	}
+	for _, provider := range tunnel.Providers() {
+		for _, p := range provider.Proxies() {
+			if p.Name() == name {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+// runDelayTest 对单个节点做一次 URL 测试。所有失败分支都回 -1，
+// 应答形态与改前 handleAsyncTestDelay 一致。
+func runDelayTest(lookup delayTestProxyLookup, name, testUrl string, timeout int64, expectedStatus utils.IntRanges[uint16]) Delay {
+	delayData := Delay{
+		Name: name,
+	}
+
+	proxy := lookup(name)
+	if proxy == nil {
+		delayData.Value = -1
+		return delayData
+	}
+
+	if testUrl == "" {
+		testUrl = constant.DefaultTestURL
+	}
+	delayData.Url = testUrl
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	defer cancel()
+
+	delay, err := proxy.URLTest(ctx, testUrl, expectedStatus)
+	if err != nil || delay == 0 {
+		delayData.Value = -1
+		return delayData
+	}
+
+	delayData.Value = int32(delay)
+	return delayData
+}
+
 func handleAsyncTestDelay(paramsString string, fn func(string)) {
 	mBatch.Go(paramsString, func() (bool, error) {
 		var params = &TestDelayParams{}
@@ -234,69 +301,79 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 			return false, nil
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(params.Timeout))
-		defer cancel()
-
-		var proxy constant.Proxy
-		var exist bool
-		if proxy, exist = tunnel.Proxies()[params.ProxyName]; !exist {
-			for _, provider := range tunnel.Providers() {
-				for _, p := range provider.Proxies() {
-					if p.Name() == params.ProxyName {
-						proxy = p
-						exist = true
-						break
-					}
-				}
-				if exist {
-					break
-				}
-			}
-		}
-
-		delayData := &Delay{
-			Name: params.ProxyName,
-		}
-
-		if proxy == nil {
-			delayData.Value = -1
-			data, _ := json.Marshal(delayData)
-			fn(string(data))
-			return false, nil
-		}
-
-		testUrl := constant.DefaultTestURL
-
-		if params.TestUrl != "" {
-			testUrl = params.TestUrl
-		}
-		delayData.Url = testUrl
-
-		delay, err := proxy.URLTest(ctx, testUrl, expectedStatus)
-		if err != nil || delay == 0 {
-			delayData.Value = -1
-			data, _ := json.Marshal(delayData)
-			fn(string(data))
-			return false, nil
-		}
-
-		delayData.Value = int32(delay)
-		data, _ := json.Marshal(delayData)
+		delay := runDelayTest(lookupDelayTestProxy, params.ProxyName, params.TestUrl, params.Timeout, expectedStatus)
+		data, _ := json.Marshal(delay)
 		fn(string(data))
 		return false, nil
 	})
 }
 
+// runDelayTestBatch 并发跑一整批节点，返回顺序与入参一致。
+func runDelayTestBatch(lookup delayTestProxyLookup, targets []TestDelayTargetParams, timeout int64, expectedStatus utils.IntRanges[uint16]) []Delay {
+	delays := make([]Delay, len(targets))
+	sem := make(chan struct{}, delayTestBatchConcurrency)
+	var wg sync.WaitGroup
+	for i := range targets {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			delays[i] = runDelayTest(lookup, targets[i].ProxyName, targets[i].TestUrl, timeout, expectedStatus)
+		}(i)
+	}
+	wg.Wait()
+	return delays
+}
+
+// handleAsyncTestDelayBatch 一次 action 测一整批节点。
+//
+// 界面按批发送（批大小同时受 delayTestBatchConcurrency 约束），内核在
+// 本 action 的 goroutine 里跑完再一次性回包：N 个节点从 N 次 IPC 降到
+// ceil(N/50) 次。空批次回 `[]`；整批失败回空串，由调用方按超时处理。
+func handleAsyncTestDelayBatch(paramsString string, fn func(string)) {
+	var params TestDelayBatchParams
+	if err := json.Unmarshal([]byte(paramsString), &params); err != nil {
+		fn("")
+		return
+	}
+
+	expectedStatus, err := utils.NewUnsignedRanges[uint16]("")
+	if err != nil {
+		fn("")
+		return
+	}
+
+	timeout := params.Timeout
+	if timeout <= 0 {
+		timeout = 5000
+	}
+
+	data, err := json.Marshal(runDelayTestBatch(lookupDelayTestProxy, params.Proxies, timeout, expectedStatus))
+	if err != nil {
+		fn("")
+		return
+	}
+	fn(string(data))
+}
+
+// handleGetConnections 回连接列表的瘦身快照。
+//
+// 不持有 runLock：连接表的读写由 statistic.Manager 自己保证并发安全，
+// 原先每秒一次的整表序列化会和 setupConfig/getProxies 争同一把锁。
 func handleGetConnections() string {
-	runLock.Lock()
-	defer runLock.Unlock()
-	snapshot := statistic.DefaultManager.Snapshot()
-	data, err := json.Marshal(snapshot)
+	data, err := marshalConnectionsIPC(statistic.DefaultManager.Connections())
 	if err != nil {
 		fmt.Println("Error:", err)
 		return ""
 	}
 	return string(data)
+}
+
+// handleGetConnectionsCount 只回连接数，供首页计数卡片使用：
+// 不物化连接表、不序列化。返回十进制字符串，与 getMemory 一致。
+func handleGetConnectionsCount() string {
+	return strconv.Itoa(statistic.DefaultManager.Count())
 }
 
 func handleCloseConnections() bool {
@@ -349,7 +426,14 @@ func handleGetExternalProviders() string {
 		eps = append(eps, *externalProvider)
 	}
 	sort.Sort(ExternalProviders(eps))
-	data, err := json.Marshal(eps)
+	// 瘦身：provider 的 proxies 从全量节点（每个再走一遍 Proxy.MarshalJSON）
+	// 换成只回 name+type——构组时只用 name 并入 allProxies，类型供
+	// Proxy.fromJson 物化。详见 core/proxies_json.go。
+	lean, err := marshalProvidersIPC(eps)
+	if err != nil {
+		return ""
+	}
+	data, err := json.Marshal(lean)
 	if err != nil {
 		return ""
 	}

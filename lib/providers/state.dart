@@ -30,53 +30,6 @@ List<Group> getVisibleGroups({
 }
 
 @riverpod
-Config configState(Ref ref) {
-  final themeProps = ref.watch(themeSettingProvider);
-  final patchClashConfig = ref.watch(patchClashConfigProvider);
-  final appSetting = ref.watch(appSettingProvider);
-  final profiles = ref.watch(profilesProvider);
-  final currentProfileId = ref.watch(currentProfileIdProvider);
-  final overrideDns = ref.watch(overrideDnsProvider);
-  final overrideNtp = ref.watch(overrideNtpProvider);
-  final overrideSniffer = ref.watch(overrideSnifferProvider);
-  final overrideTunnel = ref.watch(overrideTunnelProvider);
-  final overrideExperimental = ref.watch(overrideExperimentalProvider);
-  final overrideTestUrl = ref.watch(overrideTestUrlProvider);
-  final networkProps = ref.watch(networkSettingProvider);
-  final vpnProps = ref.watch(vpnSettingProvider);
-  final proxiesStyle = ref.watch(proxiesStyleSettingProvider);
-  final scriptProps = ref.watch(scriptStateProvider);
-  final hotKeyActions = ref.watch(hotKeyActionsProvider);
-  final dav = ref.watch(appDAVSettingProvider);
-  final windowProps = ref.watch(windowSettingProvider);
-  // processAccess 必须进 watch 集：ProcessAccessState.onUpdate 只直写
-  // globalState.config，configState 不重算就不会触发 app_manager 里的
-  // savePreferencesDebounce 监听，进程分流的选择改完不落盘（§159）。
-  final processAccess = ref.watch(processAccessStateProvider);
-  return Config(
-    dav: dav,
-    windowProps: windowProps,
-    hotKeyActions: hotKeyActions,
-    scriptProps: scriptProps,
-    proxiesStyle: proxiesStyle,
-    vpnProps: vpnProps,
-    networkProps: networkProps,
-    overrideDns: overrideDns,
-    overrideNtp: overrideNtp,
-    overrideSniffer: overrideSniffer,
-    overrideTunnel: overrideTunnel,
-    overrideExperimental: overrideExperimental,
-    overrideTestUrl: overrideTestUrl,
-    currentProfileId: currentProfileId,
-    profiles: profiles,
-    appSetting: appSetting,
-    themeProps: themeProps,
-    patchClashConfig: patchClashConfig,
-    processAccess: processAccess,
-  );
-}
-
-@riverpod
 GroupsState currentGroupsState(Ref ref) {
   final mode = ref.watch(
     patchClashConfigProvider.select((state) => state.mode),

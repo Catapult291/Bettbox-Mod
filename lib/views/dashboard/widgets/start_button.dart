@@ -112,62 +112,58 @@ class _StartButtonState extends ConsumerState<StartButton> {
     final hasNoProfile =
         state.isInit && !state.hasProfile && !_isDisabled && !isSmartStopped;
 
-    return ValueListenableBuilder<int>(
-      valueListenable: dashboardRefreshManager.tick1s,
-      builder: (_, _, _) {
-        // 用 watch 而不是 read：这个卡片只在 tick/setState 时重建，而 tick 在
-        // 后台（窗口最小化到托盘）会被停掉，read 会让"运行中/已停止"文案冻结在
-        // 旧值上——内核已经起来了，卡片还显示为关闭。
-        final runTime = ref.watch(runTimeProvider);
-        final isStart = runTime != null;
-        final displayStart =
-            isSmartStopped ? false : (_optimisticStart ?? isStart);
-        return SizedBox(
-          height: getWidgetHeight(1),
-          child: CommonCard(
-            info: Info(
-              label: isSmartStopped
-                  ? appLocalizations.coreSuspended
-                  : isRestarting
-                  ? appLocalizations.restartCoreTitle
-                  : displayStart
-                  ? appLocalizations.runTime
-                  : appLocalizations.powerSwitch,
-              iconData: Icons.power_settings_new,
-            ),
-            onPressed: canPress
-                ? _handleStart
-                : hasNoProfile
-                    ? _handleShowAddProfile
-                    : null,
-            onLongPress: canPress ? _handleLongPress : null,
-            child: Container(
-              padding: baseInfoEdgeInsets.copyWith(top: 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.max,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  SizedBox(
-                    height: globalState.measure.bodyMediumHeight + 2,
-                    child: FadeThroughBox(
-                      child: _buildContent(
-                        context,
-                        ref,
-                        state,
-                        isStart,
-                        runTime,
-                        isRestarting || isBusy,
-                        _isDisabled,
-                        isSmartStopped,
-                      ),
-                    ),
+    // 每秒更新来自 runTimeProvider 本身（全局 tick 监听器每秒调用
+    // updateRunTime），不再叠加一层 tick 驱动的整卡重建：内核已停止时 runTime
+    // 不变，卡片也就不重建。仍然 watch 而不是 read——tick 在后台（窗口最小化到
+    // 托盘）会被停掉，靠 watch 才能在运行状态于别处变化时立刻跟上，不把
+    // "运行中/已停止"的文案冻结在旧值上。
+    final runTime = ref.watch(runTimeProvider);
+    final isStart = runTime != null;
+    final displayStart = isSmartStopped ? false : (_optimisticStart ?? isStart);
+    return SizedBox(
+      height: getWidgetHeight(1),
+      child: CommonCard(
+        info: Info(
+          label: isSmartStopped
+              ? appLocalizations.coreSuspended
+              : isRestarting
+              ? appLocalizations.restartCoreTitle
+              : displayStart
+              ? appLocalizations.runTime
+              : appLocalizations.powerSwitch,
+          iconData: Icons.power_settings_new,
+        ),
+        onPressed: canPress
+            ? _handleStart
+            : hasNoProfile
+                ? _handleShowAddProfile
+                : null,
+        onLongPress: canPress ? _handleLongPress : null,
+        child: Container(
+          padding: baseInfoEdgeInsets.copyWith(top: 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              SizedBox(
+                height: globalState.measure.bodyMediumHeight + 2,
+                child: FadeThroughBox(
+                  child: _buildContent(
+                    context,
+                    ref,
+                    state,
+                    isStart,
+                    runTime,
+                    isRestarting || isBusy,
+                    _isDisabled,
+                    isSmartStopped,
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

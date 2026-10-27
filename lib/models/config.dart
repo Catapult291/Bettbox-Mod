@@ -481,3 +481,64 @@ extension ConfigExt on Config {
     return profiles.getProfile(currentProfileId);
   }
 }
+
+/// [Config] 的一个落盘分片：分片名就是它对应的 JSON 字段名。
+///
+/// 落盘时只有发生变更的分片会重新编码（见 `encodeConfigBlob`），其余分片复用
+/// 上一次的编码结果——改一个窗口尺寸不必重新序列化脚本内容与订阅配置。
+///
+/// **新增 [Config] 字段必须同步加到这里**，否则该字段不会写进偏好设置；
+/// `test/common/config_blob_test.dart` 用 `Config.toJson()` 的键集守住这条。
+enum ConfigSlice {
+  appSetting('appSetting'),
+  profiles('profiles'),
+  hotKeyActions('hotKeyActions'),
+  currentProfileId('currentProfileId'),
+  overrideDns('overrideDns'),
+  overrideNtp('overrideNtp'),
+  overrideSniffer('overrideSniffer'),
+  overrideTunnel('overrideTunnel'),
+  overrideExperimental('overrideExperimental'),
+  overrideTestUrl('overrideTestUrl'),
+  dav('dav'),
+  networkProps('networkProps'),
+  vpnProps('vpnProps'),
+  themeProps('themeProps'),
+  proxiesStyle('proxiesStyle'),
+  windowProps('windowProps'),
+  patchClashConfig('patchClashConfig'),
+  scriptProps('scriptProps'),
+  processAccess('processAccess'),
+  nodeExcludeFilter('nodeExcludeFilter'),
+  healthCheckTimeout('healthCheckTimeout');
+
+  const ConfigSlice(this.key);
+
+  /// 落盘 JSON 里的字段名，与 `Config.toJson()` 的键一致。
+  final String key;
+
+  /// 从 [config] 取出这一片的值，交给 `json.encode`。
+  Object? valueOf(Config config) => switch (this) {
+    ConfigSlice.appSetting => config.appSetting,
+    ConfigSlice.profiles => config.profiles,
+    ConfigSlice.hotKeyActions => config.hotKeyActions,
+    ConfigSlice.currentProfileId => config.currentProfileId,
+    ConfigSlice.overrideDns => config.overrideDns,
+    ConfigSlice.overrideNtp => config.overrideNtp,
+    ConfigSlice.overrideSniffer => config.overrideSniffer,
+    ConfigSlice.overrideTunnel => config.overrideTunnel,
+    ConfigSlice.overrideExperimental => config.overrideExperimental,
+    ConfigSlice.overrideTestUrl => config.overrideTestUrl,
+    ConfigSlice.dav => config.dav,
+    ConfigSlice.networkProps => config.networkProps,
+    ConfigSlice.vpnProps => config.vpnProps,
+    ConfigSlice.themeProps => config.themeProps,
+    ConfigSlice.proxiesStyle => config.proxiesStyle,
+    ConfigSlice.windowProps => config.windowProps,
+    ConfigSlice.patchClashConfig => config.patchClashConfig,
+    ConfigSlice.scriptProps => config.scriptProps,
+    ConfigSlice.processAccess => config.processAccess,
+    ConfigSlice.nodeExcludeFilter => config.nodeExcludeFilter,
+    ConfigSlice.healthCheckTimeout => config.healthCheckTimeout,
+  };
+}

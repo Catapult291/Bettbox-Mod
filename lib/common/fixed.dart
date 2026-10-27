@@ -12,8 +12,28 @@ class FixedList<T> {
 
   void add(T item) {
     _list.add(item);
-    _list.truncate(maxLength);
+    _trim();
     _cachedList = null;
+  }
+
+  /// 批量追加，裁剪只做一次。
+  void addAll(Iterable<T> items) {
+    if (items.isEmpty) {
+      return;
+    }
+    _list.addAll(items);
+    _trim();
+    _cachedList = null;
+  }
+
+  void _trim() {
+    if (maxLength == 0) {
+      return;
+    }
+    final overflow = _list.length - maxLength;
+    if (overflow > 0) {
+      _list.removeRange(0, overflow);
+    }
   }
 
   void clear() {
@@ -27,6 +47,10 @@ class FixedList<T> {
 
   T operator [](int index) => _list[index];
 
+  /// 新实例与原实例共享底层 list：写入只换引用（O(1)），读 [list] 时才复制快照。
+  ///
+  /// 每写一次就复制整表会让合帧写入（一次 50 条以上）比逐条写入还贵，而 [list]
+  /// 返回的本来就是不可变副本，读到的内容不会随之后的写入改变。
   FixedList<T> copyWith() {
     return FixedList(maxLength, list: _list);
   }

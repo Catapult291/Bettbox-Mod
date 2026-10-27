@@ -45,7 +45,7 @@ class GlobalState {
   bool isEditingAccessControl = false;
   Timer? timer;
   Timer? groupsUpdateTimer;
-  late Config config;
+  late Config _config;
   late AppState appState;
   bool isPre = true;
   String? coreSHA256;
@@ -95,6 +95,36 @@ class GlobalState {
     return _instance!;
   }
 
+  Config get config => _config;
+
+  /// 整包替换配置：不知道改了哪一片，标脏全部分片并丢掉编码缓存，
+  /// 下次落盘写全。分片级写入走 [updateConfig]。
+  set config(Config value) {
+    _config = value;
+    _dirtyConfigSlices.addAll(ConfigSlice.values);
+    preferences.clearConfigSliceCache();
+  }
+
+  /// 配置变更版本号：分片级写入后自增，`AppStateManager` 监听它来触发防抖落盘。
+  final configRevision = ValueNotifier<int>(0);
+
+  final Set<ConfigSlice> _dirtyConfigSlices = {};
+
+  /// 写入配置的一个分片（各设置 provider 的 `onUpdate` 都走这里）：落盘时只
+  /// 重编码这一片，其余分片复用上次的编码结果。
+  void updateConfig(Config value, ConfigSlice slice) {
+    _config = value;
+    _dirtyConfigSlices.add(slice);
+    configRevision.value++;
+  }
+
+  /// 取走自上次落盘以来变更过的分片。
+  Set<ConfigSlice> takeDirtyConfigSlices() {
+    final dirty = Set<ConfigSlice>.of(_dirtyConfigSlices);
+    _dirtyConfigSlices.clear();
+    return dirty;
+  }
+
   Future<void> initApp(int version) async {
     isExiting = false;
     coreSHA256 = const String.fromEnvironment('CORE_SHA256');
@@ -142,7 +172,7 @@ class GlobalState {
     if (system.isAndroid) {
       _isAndroidTV = await app.isAndroidTV();
     }
-    config =
+    _config =
         await preferences.getConfig() ??
         Config(
           themeProps: defaultThemeProps,
@@ -661,7 +691,7 @@ class GlobalState {
         appSetting: config.appSetting.copyWith(locale: systemLocale.toString()),
       );
       preferences.saveConfig(config);
-      this.config = config;
+      _config = config;
     }
   }
 

@@ -22,16 +22,18 @@ class RealTunEnable extends _$RealTunEnable with AutoDisposeNotifierMixin {
 }
 
 @riverpod
-class Logs extends _$Logs with AutoDisposeNotifierMixin {
+class Logs extends _$Logs
+    with AutoDisposeNotifierMixin, FixedListBatchMixin<Log> {
   @override
   FixedList<Log> build() {
+    // 日志是应用级状态；pending 条目在计时器里写出，provider 不能在窗口内被回收。
+    ref.keepAlive();
+    ref.onDispose(discardBatch);
     return globalState.appState.logs;
   }
 
   void addLog(Log value) {
-    Future.microtask(() {
-      state = state.copyWith()..add(value);
-    });
+    addBatched(value);
   }
 
   @override
@@ -40,7 +42,8 @@ class Logs extends _$Logs with AutoDisposeNotifierMixin {
   }
 
   void clearLogs() {
-    state = FixedList(maxLength);
+    discardBatch();
+    state = FixedList(state.maxLength);
   }
 }
 
@@ -70,9 +73,13 @@ final filteredLogsProvider = Provider<List<Log>>((ref) {
 });
 
 @riverpod
-class Requests extends _$Requests with AutoDisposeNotifierMixin {
+class Requests extends _$Requests
+    with AutoDisposeNotifierMixin, FixedListBatchMixin<TrackerInfo> {
   @override
   FixedList<TrackerInfo> build() {
+    // 同 Logs：pending 条目由计时器写出，provider 需要在整个窗口内存活。
+    ref.keepAlive();
+    ref.onDispose(discardBatch);
     return globalState.appState.requests;
   }
 
@@ -82,13 +89,12 @@ class Requests extends _$Requests with AutoDisposeNotifierMixin {
   }
 
   void addRequest(TrackerInfo value) {
-    Future.microtask(() {
-      state = state.copyWith()..add(value);
-    });
+    addBatched(value);
   }
 
   void clearRequests() {
-    state = FixedList(maxLength);
+    discardBatch();
+    state = FixedList(state.maxLength);
   }
 }
 
@@ -411,14 +417,27 @@ class DelayDataSource extends _$DelayDataSource with AutoDisposeNotifierMixin {
   }
 
   void setDelay(Delay delay) {
-    if (state[delay.url]?[delay.name] != delay.value) {
-      final DelayMap newDelayMap = Map.from(state);
-      if (newDelayMap[delay.url] == null) {
-        newDelayMap[delay.url] = {};
-      }
-      newDelayMap[delay.url]![delay.name] = delay.value;
-      state = newDelayMap;
+    setDelays([delay]);
+  }
+
+  /// 批量写入一轮测速结果，只通知一次。
+  ///
+  /// 批量测速一次回几十个节点；逐条调 [setDelay] 会复制 N 次 delayMap、
+  /// 发出 N 次通知，这里合并成一次状态写入。
+  void setDelays(Iterable<Delay> delays) {
+    final changed = [
+      for (final delay in delays)
+        if (state[delay.url]?[delay.name] != delay.value) delay,
+    ];
+    if (changed.isEmpty) {
+      return;
     }
+    final DelayMap newDelayMap = Map.from(state);
+    for (final delay in changed) {
+      final urlMap = newDelayMap[delay.url] ??= {};
+      urlMap[delay.name] = delay.value;
+    }
+    state = newDelayMap;
   }
 }
 

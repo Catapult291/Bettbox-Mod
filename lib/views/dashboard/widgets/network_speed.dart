@@ -1,40 +1,12 @@
 import 'package:bett_box/common/common.dart';
-import 'package:bett_box/models/models.dart';
-import 'package:bett_box/providers/app.dart';
 import 'package:bett_box/state.dart';
+import 'package:bett_box/views/dashboard/widgets/network_speed_data.dart';
 import 'package:bett_box/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class NetworkSpeed extends ConsumerWidget {
   const NetworkSpeed({super.key});
-
-  // Cache as const
-  static const _initPoints = [Point(0, 0), Point(1, 0)];
-
-  static List<Point> _getPoints(List<Traffic> traffics) {
-    if (traffics.isEmpty) return _initPoints;
-
-    // Pre-allocate array capacity
-    final totalLength = traffics.length + _initPoints.length;
-    final result = List<Point>.filled(totalLength, Point(0, 0));
-
-    // Assign init points
-    result[0] = _initPoints[0];
-    result[1] = _initPoints[1];
-
-    // Assign traffic points
-    for (int i = 0; i < traffics.length; i++) {
-      result[i + 2] = Point((i + 2).toDouble(), traffics[i].speed.toDouble());
-    }
-
-    return result;
-  }
-
-  static Traffic _getLastTraffic(List<Traffic> traffics) {
-    if (traffics.isEmpty) return Traffic();
-    return traffics.last;
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,12 +23,12 @@ class NetworkSpeed extends ConsumerWidget {
           iconData: Icons.speed_sharp,
         ),
         child: RepaintBoundary(
-          child: ValueListenableBuilder<int>(
-            valueListenable: dashboardRefreshManager.tick1s,
-            builder: (_, _, _) {
-              final traffics = ref.read(trafficsProvider).list;
-              final points = _getPoints(traffics);
-              final speedText = _getLastTraffic(traffics).toSpeedText();
+          // 由流量数据驱动，不再跟 tick：内容没变时这两个 provider 返回的还是
+          // 上一次的值，卡片不重建（图表再按内容判定是否重绘，见 LineChart）。
+          child: Consumer(
+            builder: (_, ref, _) {
+              final points = ref.watch(networkSpeedPointsProvider);
+              final speedText = ref.watch(networkSpeedTextProvider);
               return Stack(
                 children: [
                   Positioned.fill(

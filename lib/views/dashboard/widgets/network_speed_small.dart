@@ -1,35 +1,12 @@
 import 'package:bett_box/common/common.dart';
-import 'package:bett_box/models/models.dart';
-import 'package:bett_box/providers/app.dart';
 import 'package:bett_box/state.dart';
+import 'package:bett_box/views/dashboard/widgets/network_speed_data.dart';
 import 'package:bett_box/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class NetworkSpeedSmall extends ConsumerWidget {
   const NetworkSpeedSmall({super.key});
-
-  // Cache as const
-  static const _initPoints = [Point(0, 0), Point(1, 0)];
-
-  static List<Point> _getPoints(List<Traffic> traffics) {
-    if (traffics.isEmpty) return _initPoints;
-
-    // Pre-allocate array capacity
-    final totalLength = traffics.length + _initPoints.length;
-    final result = List<Point>.filled(totalLength, Point(0, 0));
-
-    // Assign init points
-    result[0] = _initPoints[0];
-    result[1] = _initPoints[1];
-
-    // Assign traffic points
-    for (int i = 0; i < traffics.length; i++) {
-      result[i + 2] = Point((i + 2).toDouble(), traffics[i].speed.toDouble());
-    }
-
-    return result;
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -45,11 +22,11 @@ class NetworkSpeedSmall extends ConsumerWidget {
             label: appLocalizations.networkSpeed,
             iconData: Icons.speed_sharp,
           ),
-          child: ValueListenableBuilder<int>(
-            valueListenable: dashboardRefreshManager.tick1s,
-            builder: (_, _, _) {
-              final traffics = ref.read(trafficsProvider).list;
-              final points = _getPoints(traffics);
+          child: Consumer(
+            // 由流量数据驱动，不再跟 tick：内容没变时 provider 返回的还是上一次
+            // 的列表实例，卡片不重建。
+            builder: (_, ref, _) {
+              final points = ref.watch(networkSpeedPointsProvider);
               return Padding(
                 padding: const EdgeInsets.only(
                   top: 16,

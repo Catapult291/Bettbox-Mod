@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:bett_box/common/color.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class Point {
@@ -7,6 +8,14 @@ class Point {
   final double y;
 
   const Point(this.x, this.y);
+
+  // 值相等：卡片每秒刷新时按内容判断要不要重绘，而不是看列表 identity。
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || other is Point && other.x == x && other.y == y;
+
+  @override
+  int get hashCode => Object.hash(x, y);
 }
 
 class LineChart extends StatefulWidget {
@@ -49,7 +58,9 @@ class _LineChartState extends State<LineChart>
   @override
   void didUpdateWidget(LineChart oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.points != points) {
+    // 内容没变就不必重绘：数据每秒重建一次点列表，连接中无流量时窗口里的
+    // 速率完全相同，重绘只会白算一条路径。
+    if (!listEquals(widget.points, points)) {
       prevPoints = points;
       points = widget.points;
 
@@ -262,8 +273,8 @@ class LineChartPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant LineChartPainter oldDelegate) {
     return oldDelegate.progress != progress ||
-        oldDelegate.prevPoints != prevPoints ||
-        oldDelegate.points != points ||
+        !listEquals(oldDelegate.prevPoints, prevPoints) ||
+        !listEquals(oldDelegate.points, points) ||
         oldDelegate.color != color ||
         oldDelegate.gradient != gradient;
   }

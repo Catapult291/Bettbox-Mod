@@ -77,6 +77,17 @@ type TestDelayParams struct {
 	Timeout   int64  `json:"timeout"`
 }
 
+// TestDelayBatchParams 是一次批量测速的入参：一批评测目标共用一个超时。
+type TestDelayBatchParams struct {
+	Proxies []TestDelayTargetParams `json:"proxies"`
+	Timeout int64                   `json:"timeout"`
+}
+
+type TestDelayTargetParams struct {
+	ProxyName string `json:"proxy-name"`
+	TestUrl   string `json:"test-url"`
+}
+
 type ExternalProvider struct {
 	Name             string                     `json:"name"`
 	Type             string                     `json:"type"`
@@ -103,7 +114,9 @@ const (
 	getTotalTrafficMethod          Method = "getTotalTraffic"
 	resetTrafficMethod             Method = "resetTraffic"
 	asyncTestDelayMethod           Method = "asyncTestDelay"
+	asyncTestDelayBatchMethod      Method = "asyncTestDelayBatch"
 	getConnectionsMethod           Method = "getConnections"
+	getConnectionsCountMethod      Method = "getConnectionsCount"
 	closeConnectionsMethod         Method = "closeConnections"
 	resetConnectionsMethod         Method = "resetConnectionsMethod"
 	closeConnectionMethod          Method = "closeConnection"

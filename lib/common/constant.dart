@@ -27,6 +27,13 @@ final defaultTextScaleFactor =
     WidgetsBinding.instance.platformDispatcher.textScaleFactor;
 const httpTimeoutDuration = Duration(milliseconds: 5000);
 
+/// 一次批量延迟测速在内核侧的并发上限，与 `core/hub.go` 的
+/// `delayTestBatchConcurrency` 一致。
+///
+/// 单次 `asyncTestDelayBatch` 的实际墙钟时间仍约为一个节点的超时，
+/// 因此界面按这个上限切批：更大的批次只会把这一批的等待时间拉长。
+const delayTestBatchConcurrency = 50;
+
 /// 界面启停控件等待 `updateStatus` 的上界。
 ///
 /// 启停链路本身可能有较慢的合法分支（下发配置、下载订阅），但一旦某个环节卡住，

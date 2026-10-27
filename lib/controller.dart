@@ -180,6 +180,7 @@ class AppController {
     _updateGroupsRetryTimer?.cancel();
     _updateGroupsRetryTimer = null;
     _updateGroupsRetryCount = 0;
+    clashCore.invalidateGroupsCache();
   }
 
   Future<void> restartCore() {
@@ -692,10 +693,10 @@ class AppController {
       return;
     }
 
-    _ref.read(totalTrafficProvider.notifier).value = await clashCore
-        .getTotalTraffic();
-
-    final traffic = await clashCore.getTraffic();
+    final trafficSnapshot = await clashCore.getTraffic();
+    _ref.read(totalTrafficProvider.notifier).value =
+        trafficSnapshot.totalTraffic;
+    final traffic = trafficSnapshot.traffic;
 
     if (shouldUpdateDashboard) {
       _ref.read(trafficsProvider.notifier).addTraffic(traffic);
@@ -987,8 +988,8 @@ class AppController {
           globalState.showNotifier(err.toString());
         }
       }
-      _ref.read(logsProvider.notifier).value = FixedList(maxLength);
-      _ref.read(requestsProvider.notifier).value = FixedList(maxLength);
+      _ref.read(logsProvider.notifier).clearLogs();
+      _ref.read(requestsProvider.notifier).clearRequests();
       globalState.computeHeightMapCache = {};
       addCheckIpNumDebounce();
     });
@@ -1189,6 +1190,9 @@ class AppController {
       }
 
       final currentProfile = _ref.read(currentProfileProvider);
+      final oldGroupsByName = <String, Group>{
+        for (final group in currentGroups) group.name: group,
+      };
       if (currentProfile != null) {
         final selectedMap = Map<String, String>.from(
           currentProfile.selectedMap,
@@ -1196,9 +1200,7 @@ class AppController {
         bool hasChanged = false;
 
         for (final newGroup in newGroups) {
-          final oldGroup = currentGroups.firstWhereOrNull(
-            (g) => g.name == newGroup.name,
-          );
+          final oldGroup = oldGroupsByName[newGroup.name];
           if (oldGroup != null &&
               newGroup.type == GroupType.Selector &&
               newGroup.now != oldGroup.now) {
@@ -1219,9 +1221,7 @@ class AppController {
       if (currentGroups.isNotEmpty) {
         bool activeProxyChanged = false;
         for (final newGroup in newGroups) {
-          final oldGroup = currentGroups.firstWhereOrNull(
-            (g) => g.name == newGroup.name,
-          );
+          final oldGroup = oldGroupsByName[newGroup.name];
           if (oldGroup != null && oldGroup.now != newGroup.now) {
             activeProxyChanged = true;
             break;
@@ -1275,7 +1275,16 @@ class AppController {
   }
 
   Future<void> savePreferences() async {
-    await preferences.saveConfig(globalState.config);
+    final changedSlices = globalState.takeDirtyConfigSlices();
+    if (changedSlices.isEmpty) {
+      // 没有新的变更，但可能还有一次在途落盘：退出前要等它写完。
+      await preferences.idle;
+      return;
+    }
+    await preferences.saveConfig(
+      globalState.config,
+      changedSlices: changedSlices,
+    );
   }
 
   /// 应用「应用访问控制」页面的改动。
@@ -1780,6 +1789,10 @@ class AppController {
     _ref.read(delayDataSourceProvider.notifier).setDelay(delay);
   }
 
+  void setDelays(Iterable<Delay> delays) {
+    _ref.read(delayDataSourceProvider.notifier).setDelays(delays);
+  }
+
   int? getTrayProxyDelay({required String proxyName, String? testUrl}) {
     return _ref.read(getDelayProvider(proxyName: proxyName, testUrl: testUrl));
   }
@@ -2138,6 +2151,7 @@ class AppController {
   }
 
   Future<bool> exportLogs() async {
+    _ref.read(logsProvider.notifier).flushBatch();
     final logsRaw = _ref.read(logsProvider).list.map((item) => item.toString());
     final data = await Isolate.run<List<int>>(() async {
       final logsRawString = logsRaw.join('\n');

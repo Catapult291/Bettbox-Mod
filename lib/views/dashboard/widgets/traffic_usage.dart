@@ -100,131 +100,131 @@ class _TrafficUsageState extends State<TrafficUsage> {
         onPressed: () {},
         child: Consumer(
           builder: (_, ref, _) {
-            return ValueListenableBuilder<int>(
-              valueListenable: dashboardRefreshManager.tick1s,
-              builder: (_, _, _) {
-                final totalTraffic = ref.read(totalTrafficProvider);
-                final upTotalTrafficValue = totalTraffic.up;
-                final downTotalTrafficValue = totalTraffic.down;
-                return Padding(
-                  padding: baseInfoEdgeInsets.copyWith(top: 0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Flexible(
-                        child: Container(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              AspectRatio(
-                                aspectRatio: 1,
-                                child: DonutChart(
-                                  data: [
-                                    DonutChartData(
-                                      value: upTotalTrafficValue.value.toDouble(),
-                                      color: primaryColor,
-                                    ),
-                                    DonutChartData(
-                                      value: downTotalTrafficValue.value.toDouble(),
-                                      color: secondaryColor,
-                                    ),
-                                  ],
+            // 只随累计流量的显示数值重建：内核停止或连接中无流量时累计字节数
+            // 不变，tick 不该驱动本卡（改前每秒重排整卡并重新起一次圆环动画）。
+            final total = ref.watch(
+              totalTrafficProvider.select((t) => (t.up.value, t.down.value)),
+            );
+            final upTotalTrafficValue = TrafficValue(value: total.$1);
+            final downTotalTrafficValue = TrafficValue(value: total.$2);
+            return Padding(
+              padding: baseInfoEdgeInsets.copyWith(top: 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.max,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          AspectRatio(
+                            aspectRatio: 1,
+                            child: DonutChart(
+                              data: [
+                                DonutChartData(
+                                  value: upTotalTrafficValue.value.toDouble(),
+                                  color: primaryColor,
                                 ),
-                              ),
-                              SizedBox(width: 8),
-                              Flexible(
-                                child: LayoutBuilder(
-                                  builder: (_, container) {
-                                    final uploadTextSize = _getUploadTextSize(
-                                      context,
-                                    );
-                                    final downloadTextSize =
-                                        _getDownloadTextSize(context);
-                                    final maxTextWidth = max(
-                                      uploadTextSize.width,
-                                      downloadTextSize.width,
-                                    );
-                                    if (maxTextWidth + 24 > container.maxWidth) {
-                                      return Container();
-                                    }
-                                    return Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                DonutChartData(
+                                  value: downTotalTrafficValue.value.toDouble(),
+                                  color: secondaryColor,
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Flexible(
+                            child: LayoutBuilder(
+                              builder: (_, container) {
+                                final uploadTextSize = _getUploadTextSize(
+                                  context,
+                                );
+                                final downloadTextSize = _getDownloadTextSize(
+                                  context,
+                                );
+                                final maxTextWidth = max(
+                                  uploadTextSize.width,
+                                  downloadTextSize.width,
+                                );
+                                if (maxTextWidth + 24 > container.maxWidth) {
+                                  return Container();
+                                }
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              width: 20,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: primaryColor,
-                                                borderRadius:
-                                                    BorderRadius.circular(3),
-                                              ),
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              maxLines: 1,
-                                              appLocalizations.upload,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: context.textTheme.bodySmall,
-                                            ),
-                                          ],
+                                        Container(
+                                          width: 20,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: primaryColor,
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                          ),
                                         ),
-                                        SizedBox(height: 4),
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              width: 20,
-                                              height: 8,
-                                              decoration: BoxDecoration(
-                                                color: secondaryColor,
-                                                borderRadius:
-                                                    BorderRadius.circular(3),
-                                              ),
-                                            ),
-                                            SizedBox(width: 4),
-                                            Text(
-                                              maxLines: 1,
-                                              appLocalizations.download,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: context.textTheme.bodySmall,
-                                            ),
-                                          ],
+                                        SizedBox(width: 4),
+                                        Text(
+                                          maxLines: 1,
+                                          appLocalizations.upload,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: context.textTheme.bodySmall,
                                         ),
                                       ],
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
+                                    ),
+                                    SizedBox(height: 4),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          width: 20,
+                                          height: 8,
+                                          decoration: BoxDecoration(
+                                            color: secondaryColor,
+                                            borderRadius:
+                                                BorderRadius.circular(3),
+                                          ),
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          maxLines: 1,
+                                          appLocalizations.download,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: context.textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      _buildTrafficDataItem(
-                        context,
-                        Icon(Icons.arrow_upward, color: primaryColor, size: 14),
-                        upTotalTrafficValue,
-                      ),
-                      const SizedBox(height: 8),
-                      _buildTrafficDataItem(
-                        context,
-                        Icon(
-                          Icons.arrow_downward,
-                          color: secondaryColor,
-                          size: 14,
-                        ),
-                        downTotalTrafficValue,
-                      ),
-                    ],
+                    ),
                   ),
-                );
-              },
+                  _buildTrafficDataItem(
+                    context,
+                    Icon(Icons.arrow_upward, color: primaryColor, size: 14),
+                    upTotalTrafficValue,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildTrafficDataItem(
+                    context,
+                    Icon(
+                      Icons.arrow_downward,
+                      color: secondaryColor,
+                      size: 14,
+                    ),
+                    downTotalTrafficValue,
+                  ),
+                ],
+              ),
             );
           },
         ),

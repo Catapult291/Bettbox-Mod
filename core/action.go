@@ -123,8 +123,17 @@ func handleAction(action *Action, result ActionResult) {
 			result.success(value)
 		})
 		return
+	case asyncTestDelayBatchMethod:
+		data := action.Data.(string)
+		handleAsyncTestDelayBatch(data, func(value string) {
+			result.success(value)
+		})
+		return
 	case getConnectionsMethod:
 		result.success(handleGetConnections())
+		return
+	case getConnectionsCountMethod:
+		result.success(handleGetConnectionsCount())
 		return
 	case closeConnectionsMethod:
 		result.success(handleCloseConnections())
