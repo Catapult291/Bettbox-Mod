@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.26`（tag `v1.19.26` 随本提交推送发布）
+- 本仓库当前版本：`1.19.27`（tag `v1.19.27` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -89,9 +89,10 @@
 | 74 | 界面 | 配置卡片「上次更新时间」随 5 秒刷新节拍重算 | v1.19.26 |
 | 75 | 平台 | 安卓访问控制固定白名单模式：移除黑名单与全选，新增已选/未选筛选，退出页面时统一生效 | v1.19.26 |
 | 76 | 默认值 | 允许绕过 VPN 默认开启（含缺少该字段的旧配置） | v1.19.26 |
-| 77 | 界面/工程 | 删除 UWP 回环豁免（「回环解锁」入口与 `WindowsLoopbackManager.exe`） | 随下一版 |
-| 78 | 工程 | helper 增加 `service query` / `task query`（非提权）；应用侧只读查询改走 helper，写路径仍提权 | 随下一版 |
-| 79 | 工程 | `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI（`cargo bench`，不进 CI） | 随下一版 |
+| 77 | 界面/工程 | 删除 UWP 回环豁免（「回环解锁」入口与 `WindowsLoopbackManager.exe`） | v1.19.27 |
+| 78 | 工程 | helper 增加 `service query` / `task query`（非提权）；应用侧只读查询改走 helper，写路径仍提权 | v1.19.27 |
+| 79 | 工程 | `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI（`cargo bench`，不进 CI） | v1.19.27 |
+| 80 | 性能 | 首页/代理/连接/日志/配置整批性能优化（IPC 瘦身、合帧、分片落盘、批量测速） | v1.19.27 |
 
 ---
 
@@ -3540,3 +3541,42 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 **验证**：`cargo bench --bench process_profile` 本机跑完并打印三路径对比与加速比；`cargo fmt --all --check`、`cargo clippy --all-targets -- -D warnings` 干净；`cargo test --workspace` 通过（bench 只被编译、不被 CI 运行）。`rust.yml` 未改——CI 不跑 bench。
 
 **未决**：单机实测，桌面抖动使 p50 轮间浮动约 2–15%（min 更稳）；跨机复现或发布说明级引用前可换机器再跑一轮，命令见上。
+
+---
+
+## 80. 首页/代理/连接/日志/配置整批性能优化 (2026-10-27)
+
+**文件**：`core/hub.go`、`core/action.go`、`core/constant.go`、`core/proxies_json.go`、`core/connections_json.go`、`core/Clash.Meta/tunnel/statistic/manager.go`、`lib/state.dart`、`lib/controller.dart`、`lib/clash/*`、`lib/common/{batch,config_blob,fixed,preferences}.dart`、`lib/providers/*`、`lib/views/dashboard/widgets/*`、`lib/views/proxies/common.dart`、`lib/widgets/line_chart.dart` 及对应测试（提交 `c1d3c203`，51 文件）。调研与逐项收益记录见工作区 `docs/performance-review-2026-10-26.md`（本机文档，`*.md` 忽略规则不入库）。
+
+**问题**：首页每秒 3 次 IPC（流量两连 + 计数拉全表）、有载计数单次序列化 803 KB；`getProxies` 走 `Proxy.MarshalJSON` 双重序列化；日志/连接事件逐条写 provider；`configState` 常驻 watch 18 个子 provider 且每次设置改动整包重编码（本机配置 83% 字节是脚本）；组测速每节点一次 action；仪表盘 `tick1s` 无条件整卡重建。
+
+**改动**（按优先级）：
+
+- **P0 traffic 合并**：`handleGetTraffic` 单包返回现速与累计（`up/down/totalUp/totalDown`），UI 每秒流量往返 2→1；内核侧 `TotalTraffic` 复用既有计数器。
+- **P0 代理表 IPC 瘦身**：新增 `marshalProxiesIPC` / `marshalProvidersIPC`（`core/proxies_json.go`），叶子只回 `name/type`，分组补 `now/all/hidden/icon/testUrl`；去掉 `history/extra/alive` 等 UI 无读取方字段。HTTP `/proxies` 仍走原 `MarshalJSON`。
+- **P0 连接计数/列表分离**：新增 `getConnectionsCount` action（`Manager.Count()` O(1)）；`handleGetConnections` 改走 `marshalConnectionsIPC` 瘦身出口并退出 `runLock`（连接表由 `statistic.Manager` 自并发安全）。计数卡片不再拉整表；HTTP `/connections` 不变。
+- **P1 构组未变跳过**：`groupsSourceDigest`（FNV-1a 内容指纹）+ `GroupsBuildCache`；命中返回同一 `List` 实例，`updateShouldNotify` 按 identical 不再通知界面。
+- **P1 仪表盘条件重建**：`networkSpeedPointsProvider` / `networkSpeedTextProvider` 按内容返回旧实例；流量环按累计字节 `select`；`LineChart` 按 `listEquals` 重绘；`tick1s` 只驱动 `updateRunTime`。
+- **P1 批量延迟测速**：内核 `asyncTestDelayBatch`（并发上限 50，与改前 `mBatch` 一致）；Dart 按 `min(concurrencyLimit, 50)` 切片，一轮只写一次 `delayMap`；单卡片点测仍走原单节点路径与去重池。
+- **P2 日志/连接合帧**：`BatchBuffer` 100ms 窗口 + `FixedListBatchMixin`；导出前 `flushBatch`，清空/换配置 `discard`；`logsProvider`/`requestsProvider` 改常驻。
+- **P2 configState 拆分与分片落盘**：删除 `configState`；`ConfigSlice` 21 片 + `encodeConfigBlob` 只重编码脏分片；`updateConfig(next, slice)` 拨 `configRevision`，`app_manager` 监听版本号起原 600ms 防抖；无脏分片不写盘；保存串行化、写失败回滚编码缓存。存储格式不变（单 `config` 键整包 JSON）。
+
+**收益**（合成负载场景基准，1000 节点 / 1000 连接，AMD Ryzen 5 7640HS，改前 `814c0eb2` 导出树 vs 改后工作区；装机体验未验收）：
+
+| 场景 | 改前 | 改后 |
+| --- | --- | --- |
+| 首页每秒 IPC（空载） | 3.0 | 2.0（-33%） |
+| 有载计数 payload（1000 连接，2s） | 803,050 B / 10.1 ms p50 | 74 B / 0.24 ms（约 42×，-99.99%） |
+| 有载每秒回包 | 401.7 KB/s | 184 B/s（-99.95%） |
+| `getProxies` p50 / payload（1000+1000） | 8.67 ms / 285 KB | 0.96 ms / 57.5 KB（9.0×，-80%） |
+| `getConnections` p50 / payload（1000 条） | 20.24 ms / 803 KB | 2.84 ms / 397 KB（约 7.1×，-51%） |
+| 组测速 IPC（250 节点/轮） | 250 次 / 34.3 KB | 5 次 / 18.4 KB（-98% 次数） |
+| 日志突发 2000 条写入（JIT） | 14–16 ms / 2000 次 | 0.5–0.6 ms / 1 次（约 25×） |
+| 设置落盘编码（改 windowProps） | 187–231 μs 整包 | 66–97 μs 分片（约 2.5×） |
+| 仪表盘内核停止每秒整帧 | 约 7.7–8.0 ms | 落入 floor 噪声（约 47 μs） |
+
+**行为变化**：组测速结果按批（50）到达；日志/连接事件最多延迟 100ms 出现；无脏分片时退出/最小化不再空写偏好；设置保存触发改由 `configRevision` 驱动。
+
+**验证**：`CGO_ENABLED=0 go build/test -tags=with_gvisor` 干净（含新增 proxies/connections/delay_batch 单测与 bench）；`flutter analyze` 干净；`flutter test` 279 通过 / 6 跳过 / 0 失败；功能回归脚本 33/33（启停/切节点/切模式/订阅更新等）；场景基准与微基准数字见上表与报告 §9.7–§9.13。
+
+**未决**：装机后真机验收清单（报告 §10）已决定不执行，结论口径为「脚本回归 + 场景基准已验证，装机体验未验收」；系统代理、TUN、真实订阅、DevTools 帧、Android 真机未覆盖；Windows `PinnedPreferencesStore` 整文件重写（约 0.5 ms/键）未动；连接列表在大连接数下仍有 GC 尾。
