@@ -554,7 +554,7 @@ class _AppSidebarContainerState extends ConsumerState<AppSidebarContainer> {
   }
 }
 
-/// 右侧快捷控制栏：宽度与左侧导航栏一致，承载总开关 / 系统代理 / 虚拟网卡 / 出站模式。
+/// 右侧快捷控制栏：宽度与左侧导航栏一致，承载总开关 / 系统代理 / 虚拟网卡 / 脚本。
 ///
 /// 只在桌面平台（Windows / macOS / Linux）的桌面布局（非移动布局）下渲染——
 /// 平板尺寸的 Android 设备同样是非移动布局，但那里不该出现这条栏。

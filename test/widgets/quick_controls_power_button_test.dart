@@ -91,7 +91,7 @@ void main() {
     );
   });
 
-  testWidgets('右栏控件自上而下是 总开关 / 系统代理 / 虚拟网卡 / 出站模式', (tester) async {
+  testWidgets('右栏控件自上而下是 总开关 / 系统代理 / 虚拟网卡 / 脚本', (tester) async {
     await _pumpControls(tester, brightness: Brightness.light);
 
     double topOf(IconData icon) =>
@@ -99,7 +99,7 @@ void main() {
 
     expect(topOf(Icons.power_settings_new), lessThan(topOf(Icons.shuffle)));
     expect(topOf(Icons.shuffle), lessThan(topOf(Icons.stacked_line_chart)));
-    expect(topOf(Icons.stacked_line_chart), lessThan(topOf(Icons.swap_horiz)));
+    expect(topOf(Icons.stacked_line_chart), lessThan(topOf(Icons.functions)));
   });
 
   testWidgets('总开关是 44px 方块且贴着栏内容顶部（右栏按它的中心对齐左栏「首页」）', (
@@ -196,7 +196,7 @@ void main() {
         Icons.power_settings_new,
         Icons.shuffle,
         Icons.stacked_line_chart,
-        Icons.swap_horiz,
+        Icons.functions,
       ]) {
         expect(find.byIcon(icon), findsOneWidget);
       }

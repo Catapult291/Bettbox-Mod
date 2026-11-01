@@ -1,7 +1,8 @@
 import 'package:bett_box/common/common.dart';
-import 'package:bett_box/enum/enum.dart';
 import 'package:bett_box/providers/providers.dart';
 import 'package:bett_box/state.dart';
+import 'package:bett_box/views/profiles/scripts.dart';
+import 'package:bett_box/widgets/sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
@@ -13,15 +14,15 @@ const quickRailWidth = 72.0;
 /// 单个控件（图标方块）的边长。
 const quickControlSize = 44.0;
 
-/// 快捷控制：总开关、系统代理、虚拟网卡、出站模式。
+/// 快捷控制：总开关、系统代理、虚拟网卡、脚本。
 ///
 /// [showCaption] 为 true 时每个控件下方带一行小字标签（右侧栏用，右栏宽度有限，
 /// 标签固定四字，故用比正文更小的字号）；为 false 时只有图标方块。
 ///
-/// 与首页的 [OutboundModeV2] 共用模式配色，与托盘菜单共用核心状态判断
-/// （核心未启动时系统代理与虚拟网卡不可切换）。首个控件是总开关，它也是右栏
-/// 唯一能启动核心的入口——核心没跑时下面三个控件都不可用；右栏的上边距就是
-/// 按它（44px 方块）的中心对到左栏「首页」的图标中心算出来的。
+/// 与托盘菜单共用核心状态判断（核心未启动时系统代理与虚拟网卡不可切换）。
+/// 首个控件是总开关，它也是右栏唯一能启动核心的入口——核心没跑时下面三个
+/// 控件都不可用；右栏的上边距就是按它（44px 方块）的中心对到左栏「首页」的
+/// 图标中心算出来的。
 ///
 /// 注意：侧栏位于 `MaterialApp.builder`（Navigator 之上），此位置没有 Overlay，
 /// 不能用 [Tooltip]，否则抛 “No Overlay widget found” 并让整个界面变成错误屏；
@@ -69,7 +70,7 @@ class QuickControls extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 16),
-        _ModeButton(showCaption: showCaption),
+        _ScriptButton(showCaption: showCaption),
       ],
     );
   }
@@ -168,69 +169,56 @@ class _PowerButtonState extends ConsumerState<_PowerButton> {
   }
 }
 
-class _ModeButton extends ConsumerWidget {
+/// 脚本按钮：开关式入口——点一下弹出脚本页，再点一下收回。
+///
+/// 与配置页右上角的脚本按钮同一个入口（把 [ScriptsView] 推到根导航；右栏位于
+/// `MaterialApp.builder` 之上、自身没有 Navigator 祖先，必须显式取根导航操作）。
+/// 不随「脚本覆写生效」高亮：右栏管的是「弹出/收回脚本页」这个动作，覆写状态
+/// 在配置页与弹层内部自有反馈，这里常亮反而会被当成另一个常开的开关。
+class _ScriptButton extends StatefulWidget {
   final bool showCaption;
 
-  const _ModeButton({required this.showCaption});
+  const _ScriptButton({required this.showCaption});
 
-  String _modeLabel(Mode mode) {
-    return switch (mode) {
-      Mode.rule => appLocalizations.rule,
-      Mode.global => appLocalizations.global,
-      Mode.direct => appLocalizations.direct,
-    };
-  }
+  @override
+  State<_ScriptButton> createState() => _ScriptButtonState();
+}
 
-  /// 模式名在侧栏底色上的文字色。
-  ///
-  /// 图标方块的前景色（`on*Container`）是配方块自身 `*Container` 底色挑的：
-  /// `content` 配色下 `onPrimaryContainer` / `onTertiaryContainer` 接近白色，
-  /// 直接当侧栏底色上的小字用对比度只有约 1.2:1（几乎看不见）。同色族的
-  /// `primary` / `secondary` / `tertiary` 才是给底色上的强调文字用的，各配色
-  /// （含深浅两套）相对侧栏底色 `surfaceContainerHigh` 都在 5:1 以上。
-  Color _captionColor(BuildContext context, Mode mode) {
-    final colorScheme = context.colorScheme;
-    return switch (mode) {
-      Mode.rule => colorScheme.secondary,
-      Mode.global => colorScheme.primary,
-      Mode.direct => colorScheme.tertiary,
-    };
+class _ScriptButtonState extends State<_ScriptButton> {
+  /// 脚本页是否已由本按钮弹出；弹层无论以何种方式关闭（遮罩、关闭钮、返回键）
+  /// 都会经 [Future] 把它复位，下一次点击重新弹出。
+  bool _scriptsOpen = false;
+
+  void _toggleScripts() {
+    final navigator = globalState.navigatorKey.currentState;
+    if (navigator == null) return;
+    if (_scriptsOpen) {
+      // 已弹出：收一层。用 maybePop 让编辑器这类带返回拦截的页面先走自己的流程
+      // （如保存提示）；脚本页回到栈顶后，下一次点击就直接收回它。
+      navigator.maybePop();
+      return;
+    }
+    final context = navigator.context;
+    if (!context.mounted) return;
+    final closed = showExtend(
+      context,
+      builder: (_, type) {
+        return AdaptiveSheetScaffold(type: type, body: const ScriptsView(), title: appLocalizations.script);
+      },
+    );
+    _scriptsOpen = true;
+    closed.whenComplete(() => _scriptsOpen = false);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final mode = ref.watch(
-      patchClashConfigProvider.select((state) => state.mode),
-    );
-    final colorScheme = context.colorScheme;
-    final Color background;
-    final Color foreground;
-    switch (mode) {
-      case Mode.rule:
-        background = colorScheme.secondaryContainer;
-        foreground = colorScheme.onSecondaryContainer;
-      case Mode.global:
-        background = globalState.theme.darken3PrimaryContainer;
-        foreground = colorScheme.onPrimaryContainer;
-      case Mode.direct:
-        background = colorScheme.tertiaryContainer;
-        foreground = colorScheme.onTertiaryContainer;
-    }
-    final modeName = _modeLabel(mode);
+  Widget build(BuildContext context) {
     return _QuickButton(
-      label: '${appLocalizations.outboundMode} · $modeName',
-      icon: Icons.swap_horiz,
-      background: background,
-      foreground: foreground,
-      onPressed: () => globalState.appController.updateMode(),
-      // 模式名单独一行显示，只靠方块颜色不易记
-      under: showCaption
-          ? _Caption(
-              title: appLocalizations.outboundMode,
-              value: modeName,
-              valueColor: _captionColor(context, mode),
-            )
-          : null,
+      label: appLocalizations.script,
+      icon: Icons.functions,
+      background: Colors.transparent,
+      foreground: context.colorScheme.onSurfaceVariant,
+      onPressed: _toggleScripts,
+      under: widget.showCaption ? _Caption(title: appLocalizations.script) : null,
     );
   }
 }
@@ -275,13 +263,11 @@ class _ToggleButton extends StatelessWidget {
 }
 
 /// 控件下方的小字标签。栏宽有限（与左栏一致），中文四字用 labelSmall 字号正好排下，
-/// 其它语言（如 `Outbound Mode`）允许折成两行。
+/// 其它语言（如 `System Proxy`）允许折成两行。
 class _Caption extends StatelessWidget {
   final String title;
-  final String? value;
-  final Color? valueColor;
 
-  const _Caption({required this.title, this.value, this.valueColor});
+  const _Caption({required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -289,22 +275,7 @@ class _Caption extends StatelessWidget {
       color: context.colorScheme.onSurfaceVariant,
       height: 1.1,
     );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(title, textAlign: TextAlign.center, maxLines: 2, style: style),
-        if (value != null)
-          Text(
-            value!,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            style: style?.copyWith(
-              color: valueColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-      ],
-    );
+    return Text(title, textAlign: TextAlign.center, maxLines: 2, style: style);
   }
 }
 
