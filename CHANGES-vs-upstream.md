@@ -3,7 +3,7 @@
 - 基线：`appshubcc/Bettbox` `main` @ `70b6077`（2026-09-10）；上游补丁跟进至 `31893466`（2026-09-28）
 - 范围：导入提交 `19d5e118` 之后的全部本地提交（含文档与构建配置类提交，归入第 9 节）
 - 查看完整差异：`git diff 19d5e118 HEAD`
-- 本仓库当前版本：`1.19.27`（tag `v1.19.27` 随本提交推送发布）
+- 本仓库当前版本：`1.19.28`（tag `v1.19.28` 随本提交推送发布）
 
 各节「验证」里的 `flutter test` 计数为编写当时的实测值，随用例增加依次变大（34 → 65 → 72 → 85 → 138，删掉
 差分套件后为 115）。
@@ -17,7 +17,7 @@
 | 2 | 界面 | 脚本页「规则」区块（UI 添加规则） | v1.19.1 |
 | 3 | 界面 | 「添加规则」的目标分组与代理页一致 | v1.19.1 |
 | 4 | 界面 | 配置「跟随更新」开关与编辑页单配置更新 | v1.19.2 |
-| 5 | 界面 | 右侧快捷控制栏（总开关 / 系统代理 / 虚拟网卡 / 出站模式） | v1.19.2 |
+| 5 | 界面 | 右侧快捷控制栏（总开关 / 系统代理 / 虚拟网卡 / 脚本入口） | v1.19.2 |
 | 6 | 导入 | 从 URL 导入：不填名称时自动获取配置名称 | v1.19.2 |
 | 7 | 导入 | 二维码导入：桌面端补上图片解码 | v1.19.2（解码改引擎优先：v1.19.3） |
 | 8 | 导入 | 扫码成功后的转场 | v1.19.2 |
@@ -93,6 +93,7 @@
 | 78 | 工程 | helper 增加 `service query` / `task query`（非提权）；应用侧只读查询改走 helper，写路径仍提权 | v1.19.27 |
 | 79 | 工程 | `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI（`cargo bench`，不进 CI） | v1.19.27 |
 | 80 | 性能 | 首页/代理/连接/日志/配置整批性能优化（IPC 瘦身、合帧、分片落盘、批量测速） | v1.19.27 |
+| 81 | 分流 | 进程分流改为代理设置的例外层：白名单不再把名单外进程改判直连，三种出站模式下都生效 | v1.19.28 |
 
 ---
 
@@ -195,7 +196,7 @@
 
 ---
 
-## 5. 右侧快捷控制栏（总开关 / 系统代理 / 虚拟网卡 / 出站模式）
+## 5. 右侧快捷控制栏（总开关 / 系统代理 / 虚拟网卡 / 脚本入口）
 
 **文件**：`lib/widgets/quick_controls.dart`（新增）、`lib/manager/app_manager.dart`、`lib/widgets/widgets.dart`
 
@@ -277,6 +278,22 @@ y=135.5，左栏「首页」图标墨迹中心 y=135.5，**差 0.0 px**；右栏
 （改动前后各保留一张截图核对）。`flutter test` 72/72、
 `flutter analyze lib test` 仅剩 `lib/clash/core.dart:197` 基线告警（新包构建命令：
 `flutter build apk --debug --target-platform android-x64 --android-skip-build-dependency-validation`）。
+
+**第四控件换为脚本入口（2026-10-31）**：右栏第四控件由「出站模式」改为「脚本」——与配置页右上角的脚本按钮同款
+（`Icons.functions`），点击经 `globalState.navigatorKey` 打开 `ScriptsView`。出站模式的切换仍由首页卡片与托盘菜单承担，
+右栏不再重复。`_Caption` 随之退化为单行标题（模式名那行 `value` / `valueColor` 没有调用方了）。
+
+**脚本按钮改为开关式、去掉常驻高亮（2026-10-31）**：右栏脚本按钮不随「脚本覆写生效」保持 primary 高亮——
+它管的是「弹出/收回脚本页」这个动作，覆写状态在配置页与弹层内部自有反馈，常亮会被当成另一个常开的开关。
+行为改为开关式：点一下弹出脚本页，再点一下收回；弹层无论以何种方式关闭（遮罩、关闭钮、返回键），
+按钮的开合状态都会随弹层关闭复位，下一次点击重新弹出。收回走 `Navigator.maybePop`，弹层内再压入的
+编辑器等带返回拦截的页面会先走自己的流程。右栏位于 `MaterialApp.builder`（Navigator 之上），模态遮罩
+盖不住它，弹层开着时按钮仍可点，这是「再点收回」的物理前提。
+
+**验证**：`flutter analyze lib test` 干净；`flutter test` 291 通过。
+`test/widgets/quick_controls_caption_test.dart` 由「模式名可读」改为守住四个控件标签相对侧栏底色的 4.5:1 对比度；
+`test/widgets/quick_controls_script_button_test.dart` 覆盖开→收→再开、遮罩关闭后重开、覆写生效时保持普通态；
+`quick_controls_power_button_test.dart` 的图标断言同步换成 `Icons.functions`。
 
 ---
 
@@ -3580,3 +3597,27 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 **验证**：`CGO_ENABLED=0 go build/test -tags=with_gvisor` 干净（含新增 proxies/connections/delay_batch 单测与 bench）；`flutter analyze` 干净；`flutter test` 279 通过 / 6 跳过 / 0 失败；功能回归脚本 33/33（启停/切节点/切模式/订阅更新等）；场景基准与微基准数字见上表与报告 §9.7–§9.13。
 
 **未决**：装机后真机验收清单（报告 §10）已决定不执行，结论口径为「脚本回归 + 场景基准已验证，装机体验未验收」；系统代理、TUN、真实订阅、DevTools 帧、Android 真机未覆盖；Windows `PinnedPreferencesStore` 整文件重写（约 0.5 ms/键）未动；连接列表在大连接数下仍有 GC 尾。
+
+---
+
+## 81. 进程分流改为代理设置的例外层 (2026-10-31)
+
+**文件**：`rust/bettbox-native/src/patch_config.rs`、`lib/providers/state.dart`、`lib/controller.dart`、`lib/views/process_access.dart`、`lib/views/config/general.dart`、`arb/intl_*.arb`（7 语言）、`README.md`；测试为 `patch_config.rs` 单测、`test/providers/update_params_process_access_test.dart`、`test/views/process_access_view_test.dart`。方案见工作区 `docs/process-access-fix-plan-2026-10-31.md`（本机文档，不入库）。
+
+**问题**：白名单不是「只约束名单内进程」的例外，而是把名单外进程整体改判 `DIRECT` 的兜底规则（`NOT,((PROCESS-PATH-REGEX,…)),DIRECT` 插在规则链最前），实测只剩白名单内的应用能用代理。两个名单在「全局 / 直连」模式下整体空转——内核在这两种模式下不执行规则链。运行期 `UpdateParams` 还会把 `mode`、`find-process-mode` 改回用户选的值，静默废掉进程规则。
+
+**改动**：
+
+- **规则形态**：白名单改为逐路径 `PROCESS-PATH,<path>,<P>`（路径含逗号时用 `PROCESS-PATH-REGEX` 且逗号写成 `\x2c`）；黑名单不变。两个名单都只约束名单内进程，名单外回到「出站模式 + 规则链」，与关闭进程分流时一致。
+- **出口 `P`**：在分组开关之后取最终规则链第一条 `MATCH` 的目标；目标为 DIRECT / REJECT / REJECT-DROP / PASS 时回退 `GLOBAL`；配置没有任何代理时不生成白名单规则。
+- **模式翻译**：启用且名单非空时，全局 → `mode: rule` + 末条 `MATCH,GLOBAL`，直连 → `mode: rule` + 末条 `MATCH,DIRECT`；规则模式只前置进程规则。关闭时模式与规则链原样不动。
+- **路径规范化**：trim、丢空串、大小写不敏感去重、稳定排序。`\x2c` 用于规避内核 `trimArr` 把路径中间的「, 」压成「,」。
+- **运行期参数**：`updateParams` 派生有效值（进程分流启用 → `mode=rule`、`find-process-mode=always`）；`changeMode` / `updateMode` 在启用时改走全量 setup（规则要按新出站模式重写）；内核上报的运行模式在翻译期间不再反写用户选择；「查找进程」开关在启用时置灰并标注「已由进程分流强制开启」。
+- **文案**：7 个语言的设置入口简介改为「按进程指定直连或代理」；白名单模式显示代理出口的解析说明，模式副标题与「需 TUN 或系统代理」提示按精简后的页面移除。
+
+**行为变化**：旧白名单用户升级后，名单外应用从「直连」回到「按代理设置」——这是本次修复的目标。进程分流启用期间内核以规则模式运行（连接页的规则列随之有意义），`GET /configs` 的 `mode` 与应用里选择的出站模式不同。
+
+**验证**：`cargo test --workspace` 通过（新增进程规则用例覆盖逐路径生成、出口回退、三种模式翻译、逗号路径解析往返、去重排序、空名单不注入、无代理不生成）；`flutter analyze lib test` 干净；`flutter test` 291 通过。真机出口 IP 矩阵待验收。
+
+**未决**：白名单出口只能自动解析（未做手动选代理组）；强制代理会绕过 `REJECT` 广告规则；系统代理模式下不经过内核的应用无法被强制代理。
+
