@@ -1436,11 +1436,15 @@ class AppController {
 
     if (isAutoCheck || forceCheck) {
       final res = await request.checkForUpdate();
-      if (res != null) {
-        _lastNotifiedUpdateTag = res['tag_name']?.toString();
-        unawaited(checkUpdateResultHandle(data: res));
+      final data = res.data;
+      if (data != null) {
+        _lastNotifiedUpdateTag = data['tag_name']?.toString();
+        unawaited(checkUpdateResultHandle(data: data));
       }
-      await prefs?.setInt('last_check_update_time', now);
+      // 探测失败时保留旧时间戳，让下一次启动仍会重试（否则 28 天强检被白白消耗）。
+      if (!res.isFailed) {
+        await prefs?.setInt('last_check_update_time', now);
+      }
     }
 
     startUpdateCheckTimer();
@@ -1461,17 +1465,19 @@ class AppController {
   Future<void> _periodicCheckUpdate() async {
     if (!_ref.read(appSettingProvider).autoCheckUpdate) return;
     final res = await request.checkForUpdate();
-    if (res == null) return;
-    final tag = res['tag_name']?.toString();
+    final data = res.data;
+    if (data == null) return;
+    final tag = data['tag_name']?.toString();
     // 同一版本只提示一次，避免每轮检测都弹窗打扰。
     if (tag == null || tag == _lastNotifiedUpdateTag) return;
     _lastNotifiedUpdateTag = tag;
-    await checkUpdateResultHandle(data: res);
+    await checkUpdateResultHandle(data: data);
   }
 
   Future<void> checkUpdateResultHandle({
     Map<String, dynamic>? data,
     bool handleError = false,
+    bool checkFailed = false,
   }) async {
     if (globalState.isPre && !handleError) {
       return;
@@ -1509,6 +1515,13 @@ class AppController {
       }
 
       globalState.openUrl(downloadUrl);
+    } else if (checkFailed) {
+      // 探测失败不等于「已是最新」，两者必须给用户不同的结论。
+      globalState.showMessage(
+        title: appLocalizations.checkUpdate,
+        message: TextSpan(text: appLocalizations.checkUpdateFailed),
+        cancelable: false,
+      );
     } else if (handleError) {
       globalState.showMessage(
         title: appLocalizations.checkUpdate,

@@ -168,6 +168,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "checkOrAddProfile": MessageLookupByLibrary.simpleMessage("請先新增配置"),
     "checkUpdate": MessageLookupByLibrary.simpleMessage("檢查更新"),
     "checkUpdateError": MessageLookupByLibrary.simpleMessage("目前的應用程式已經是最新版了"),
+    "checkUpdateFailed": MessageLookupByLibrary.simpleMessage(
+      "檢查更新失敗，請檢查網路或代理設定後重試",
+    ),
     "checking": MessageLookupByLibrary.simpleMessage("檢測中..."),
     "circle": MessageLookupByLibrary.simpleMessage("圓環流轉"),
     "clear": MessageLookupByLibrary.simpleMessage("清空"),

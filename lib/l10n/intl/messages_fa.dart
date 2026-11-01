@@ -235,6 +235,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "checkUpdateError": MessageLookupByLibrary.simpleMessage(
       "شما از آخرین نسخه استفاده می‌کنید",
     ),
+    "checkUpdateFailed": MessageLookupByLibrary.simpleMessage(
+      "بررسی به‌روزرسانی ناموفق بود. شبکه یا تنظیمات پراکسی را بررسی کنید و دوباره تلاش کنید",
+    ),
     "checking": MessageLookupByLibrary.simpleMessage("در حال بررسی..."),
     "circle": MessageLookupByLibrary.simpleMessage("حلقه"),
     "clear": MessageLookupByLibrary.simpleMessage("پاک کردن"),

@@ -11,13 +11,56 @@ import 'package:bett_box/models/models.dart';
 import 'package:bett_box/state.dart';
 import 'package:flutter/cupertino.dart';
 
+enum UpdateCheckStatus {
+  /// 已是最新版本。
+  upToDate,
+
+  /// 发现更新，[UpdateCheckResult.data] 带 release 信息。
+  updateAvailable,
+
+  /// 两条探测路径都没拿到可信结果（断网、限速、代理异常等）。
+  failed,
+}
+
+/// 一次更新检查的结论。
+///
+/// 必须把「已是最新」与「没能拿到结果」分开：探测失败时若当作「已是最新」，
+/// 用户会被误导成没有新版本（手动检查尤其明显）。
+class UpdateCheckResult {
+  const UpdateCheckResult._(this.status, [this.data]);
+
+  const UpdateCheckResult.upToDate() : this._(UpdateCheckStatus.upToDate);
+
+  const UpdateCheckResult.failed() : this._(UpdateCheckStatus.failed);
+
+  const UpdateCheckResult.update(Map<String, dynamic> data)
+    : this._(UpdateCheckStatus.updateAvailable, data);
+
+  final UpdateCheckStatus status;
+
+  /// 仅 [UpdateCheckStatus.updateAvailable] 时非空。
+  final Map<String, dynamic>? data;
+
+  bool get hasUpdate => status == UpdateCheckStatus.updateAvailable;
+
+  bool get isFailed => status == UpdateCheckStatus.failed;
+}
+
 class Request {
   late final Dio _dio;
   late final Dio _clashDio;
   late final Dio _directDio;
   String? userAgent;
 
-  Request() {
+  /// 更新探测的两个端点。测试可指向本地服务，生产用默认值。
+  final String _updateApiBaseUrl;
+  final String _updateWebBaseUrl;
+
+  Request({
+    String updateApiBaseUrl = 'https://api.github.com',
+    String updateWebBaseUrl = 'https://github.com',
+  }) : _updateApiBaseUrl = updateApiBaseUrl,
+       _updateWebBaseUrl = updateWebBaseUrl {
     _dio = Dio(BaseOptions(headers: {'User-Agent': browserUa}));
     _dio.httpClientAdapter = IOHttpClientAdapter(
       createHttpClient: () {
@@ -208,7 +251,13 @@ class Request {
   /// 保证「已发现但未安装」在会话内可重复查询（关于页手动检查）。
   Map<String, dynamic>? _lastUpdateResult;
 
-  Future<Map<String, dynamic>?> checkForUpdate() async {
+  /// [_updateEtag] 是否对应一次已成功解析的 200 响应。
+  ///
+  /// 只有拿到并解析完响应体后才记录 ETag：否则后续 304 会把「没有缓存结果」
+  /// 当成「没有新版本」返回（响应体解压失败时就踩过这个坑）。
+  bool _hasUpdateSnapshot = false;
+
+  Future<UpdateCheckResult> checkForUpdate() async {
     try {
       return await _checkUpdateViaApi();
     } catch (e) {
@@ -218,47 +267,58 @@ class Request {
     return _checkUpdateViaWeb();
   }
 
-  Future<Map<String, dynamic>?> _checkUpdateViaApi() async {
+  Future<UpdateCheckResult> _checkUpdateViaApi() async {
+    final etag = _hasUpdateSnapshot ? _updateEtag : null;
     final headers = <String, dynamic>{
       'Accept': 'application/vnd.github+json',
     };
-    final etag = _updateEtag;
     if (etag != null) headers['If-None-Match'] = etag;
     final response = await _dio
         .get(
-          'https://api.github.com/repos/$repository/releases/latest',
+          '$_updateApiBaseUrl/repos/$repository/releases/latest',
           options: Options(
             headers: headers,
-            // 304 空响应体按 plain 读取，避开 JSON 解析对空 body 的报错。
-            responseType: ResponseType.plain,
+            // GitHub 会返回 gzip；本类的 HttpClient 关闭了自动解压，
+            // 必须按字节收下再手动解压，否则 JSON 解析必然失败。
+            responseType: ResponseType.bytes,
             validateStatus: (status) =>
                 status == HttpStatus.ok || status == HttpStatus.notModified,
           ),
         )
         .timeout(const Duration(seconds: 15));
     if (response.statusCode == HttpStatus.notModified) {
-      return _lastUpdateResult;
+      if (etag == null) {
+        // 没带 If-None-Match 却收到 304：服务端行为异常，交给网页回退。
+        throw const HttpException('Unexpected 304 without a cached snapshot');
+      }
+      final cached = _lastUpdateResult;
+      return cached == null
+          ? const UpdateCheckResult.upToDate()
+          : UpdateCheckResult.update(cached);
     }
-    final newEtag = response.headers.value('etag');
-    if (newEtag != null && newEtag.isNotEmpty) {
-      _updateEtag = newEtag;
-    }
-    final raw = response.data;
-    final dynamic data = (raw is String && raw.isNotEmpty)
-        ? json.decode(raw)
-        : raw;
+    final bytes = _bytesFromResponse(response);
+    final decoded = utf8.decode(
+      _decompressIfNeeded(bytes, response.headers),
+      allowMalformed: true,
+    );
+    final dynamic data = decoded.isEmpty ? null : json.decode(decoded);
     if (data is! Map<String, dynamic>) {
-      _lastUpdateResult = null;
-      return null;
+      throw const FormatException('Unexpected update payload');
     }
     final remoteVersion = data['tag_name']?.toString() ?? '';
+    if (remoteVersion.isEmpty) {
+      throw const FormatException('Update payload without tag_name');
+    }
     final version = globalState.packageInfo.version;
     final hasUpdate =
-        remoteVersion.isNotEmpty &&
         utils.compareVersions(remoteVersion.replaceAll('v', ''), version) > 0;
+    // 判定完成后再落 ETag：中途任何一步失败都不留下「有 ETag、无结论」的状态。
+    final newEtag = response.headers.value('etag');
+    _updateEtag = (newEtag != null && newEtag.isNotEmpty) ? newEtag : null;
+    _hasUpdateSnapshot = _updateEtag != null;
     if (!hasUpdate) {
       _lastUpdateResult = null;
-      return null;
+      return const UpdateCheckResult.upToDate();
     }
     _lastUpdateResult = {
       'tag_name': remoteVersion,
@@ -267,15 +327,15 @@ class Request {
       // 真实 Release 说明，关于页弹窗可直接展示更新内容。
       'body': data['body']?.toString() ?? '',
     };
-    return _lastUpdateResult;
+    return UpdateCheckResult.update(_lastUpdateResult!);
   }
 
-  Future<Map<String, dynamic>?> _checkUpdateViaWeb() async {
+  Future<UpdateCheckResult> _checkUpdateViaWeb() async {
     try {
       final t = DateTime.now().millisecondsSinceEpoch;
       final response = await _dio
           .get(
-            'https://github.com/$repository/releases/latest?t=$t',
+            '$_updateWebBaseUrl/$repository/releases/latest?t=$t',
             options: Options(
               followRedirects: false,
               validateStatus: (status) =>
@@ -284,28 +344,27 @@ class Request {
           )
           .timeout(const Duration(seconds: 15));
       final location = response.headers['location']?.firstOrNull;
-      if (location != null && location.contains('/releases/tag/')) {
-        final remoteVersion = location.split('/').last.trim();
-        if (remoteVersion.isNotEmpty) {
-          final version = globalState.packageInfo.version;
-          final hasUpdate =
-              utils.compareVersions(
-                remoteVersion.replaceAll('v', ''),
-                version,
-              ) >
-              0;
-          if (!hasUpdate) return null;
-          return {
-            'tag_name': remoteVersion,
-            'html_url': 'https://github.com/$repository/releases/latest',
-            'body': 'New version available. Please visit GitHub to download.',
-          };
-        }
+      if (location == null || !location.contains('/releases/tag/')) {
+        commonPrint.log('Check update via web: unexpected response $location');
+        return const UpdateCheckResult.failed();
       }
+      final remoteVersion = location.split('/').last.trim();
+      if (remoteVersion.isEmpty) {
+        return const UpdateCheckResult.failed();
+      }
+      final version = globalState.packageInfo.version;
+      final hasUpdate =
+          utils.compareVersions(remoteVersion.replaceAll('v', ''), version) > 0;
+      if (!hasUpdate) return const UpdateCheckResult.upToDate();
+      return UpdateCheckResult.update({
+        'tag_name': remoteVersion,
+        'html_url': 'https://github.com/$repository/releases/latest',
+        'body': 'New version available. Please visit GitHub to download.',
+      });
     } catch (e) {
       commonPrint.log('Check update failed: ${e.formatErrorLog}');
+      return const UpdateCheckResult.failed();
     }
-    return null;
   }
 
   // 国外检测源（无需 token）：请求经本地代理端口出站时能反映真实出口 IP。

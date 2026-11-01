@@ -194,6 +194,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "checkUpdateError": MessageLookupByLibrary.simpleMessage(
       "현재 최신 버전을 사용 중입니다",
     ),
+    "checkUpdateFailed": MessageLookupByLibrary.simpleMessage(
+      "업데이트 확인에 실패했습니다. 네트워크 또는 프록시 설정을 확인한 후 다시 시도하세요",
+    ),
     "checking": MessageLookupByLibrary.simpleMessage("확인 중..."),
     "circle": MessageLookupByLibrary.simpleMessage("서클"),
     "clear": MessageLookupByLibrary.simpleMessage("지우기"),

@@ -94,6 +94,7 @@
 | 79 | 工程 | `bb_process_profile` 性能基准：三路径量化合并入口 vs 两次 FFI（`cargo bench`，不进 CI） | v1.19.27 |
 | 80 | 性能 | 首页/代理/连接/日志/配置整批性能优化（IPC 瘦身、合帧、分片落盘、批量测速） | v1.19.27 |
 | 81 | 分流 | 进程分流改为代理设置的例外层：白名单不再把名单外进程改判直连，三种出站模式下都生效 | v1.19.28 |
+| 82 | 更新 | 修更新检查：gzip 响应体导致 ETag 中毒，手动检查误报「已是最新」 | v1.19.29（待发） |
 
 ---
 
@@ -3621,3 +3622,27 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 
 **未决**：白名单出口只能自动解析（未做手动选代理组）；强制代理会绕过 `REJECT` 广告规则；系统代理模式下不经过内核的应用无法被强制代理。
 
+
+---
+
+## 82. 修更新检查：gzip 响应体导致 ETag 中毒，手动检查误报「已是最新」 (2026-11-02)
+
+**文件**：`lib/common/request.dart`、`lib/controller.dart`、`lib/views/about.dart`、`arb/intl_*.arb`（7 语言）；测试 `test/common/update_check_test.dart`。
+
+**问题**：自动弹出的新版本提示被关闭后，同一进程内再点「检查更新」会提示「当前应用已经是最新版了」，运行期的 2 分钟轮询也随之失效。根因是条件请求与响应体解压的顺序：
+
+- `Request` 的 HttpClient 关闭了自动解压（`autoUncompress = false`），而 GitHub 的 API 响应是 gzip；`_checkUpdateViaApi` 此前按 `ResponseType.plain` 直接读成字符串，JSON 解析必然失败，于是每次检查都回退网页端点（302 解析）——弹窗本身仍能出现。
+- ETag 在解析响应体**之前**就已写入。下一次请求带上 `If-None-Match`，GitHub 返回 304，而 304 分支返回的 `_lastUpdateResult` 仍是 null（成功路径从未走到），「没有缓存结果」因此被当成「没有新版本」：手动检查显示已是最新，2 分钟轮询也拿不到更新，直到重启应用。
+- API 与网页回退都失败时同样返回 null，界面也会说「已是最新」，把网络故障说成了版本结论。
+
+**改动**：
+
+- API 响应改为按字节读取、手动解压（复用 `_decompressIfNeeded`）后再解析 JSON，GitHub 的 gzip 不再导致解析失败。
+- ETag 与本次判定结果一起、在响应体解析并完成版本比较之后才提交；中途失败不留「有 ETag、无结论」的状态。
+- 新增 `_hasUpdateSnapshot`：只有存在对应判定时才走 304 复用；无条件请求收到 304（服务端异常）直接抛错回退网页端点，不再当成「无更新」。
+- `checkForUpdate` 返回 `UpdateCheckResult`（`upToDate` / `updateAvailable` / `failed`），探测失败与「已是最新」分开；手动检查失败时提示「检查更新失败，请检查网络或代理设置后重试」（新增 `checkUpdateFailed`，7 个语言）。
+- 启动探测失败时不再写 `last_check_update_time`，保留 28 天强检机会。
+
+**验证**：`flutter test test/common/update_check_test.dart` 5 项通过（gzip 解析、304 复用、解析失败不落 ETag 的回归、无快照 304 回退、双路径失败的 failed 结论）；`test/common` + `test/views` 157 项通过；`flutter analyze` 干净。真实 GitHub 实测：以 1.19.27 连续两次调用均返回 `updateAvailable` / `v1.19.28`（第二次命中 304）。
+
+**未决**：无。

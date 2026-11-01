@@ -1949,6 +1949,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Failed to check for updates. Please check your network or proxy settings and try again.`
+  String get checkUpdateFailed {
+    return Intl.message(
+      'Failed to check for updates. Please check your network or proxy settings and try again.',
+      name: 'checkUpdateFailed',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Download Now`
   String get goDownload {
     return Intl.message('Download Now', name: 'goDownload', desc: '', args: []);

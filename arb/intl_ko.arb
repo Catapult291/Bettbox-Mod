@@ -229,6 +229,7 @@
   "checkUpdate": "업데이트 확인",
   "discoverNewVersion": "새로운 버전을 발견했습니다",
   "checkUpdateError": "현재 최신 버전을 사용 중입니다",
+  "checkUpdateFailed": "업데이트 확인에 실패했습니다. 네트워크 또는 프록시 설정을 확인한 후 다시 시도하세요",
   "goDownload": "다운로드 이동",
   "unknown": "알 수 없음",
   "geoData": "Geo 데이터",

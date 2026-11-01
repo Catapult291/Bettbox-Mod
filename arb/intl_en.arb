@@ -229,6 +229,7 @@
   "checkUpdate": "Check for Updates",
   "discoverNewVersion": "New Version Available",
   "checkUpdateError": "Already on the latest version",
+  "checkUpdateFailed": "Failed to check for updates. Please check your network or proxy settings and try again.",
   "goDownload": "Download Now",
   "unknown": "Unknown",
   "geoData": "GeoData",

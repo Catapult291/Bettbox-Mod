@@ -186,6 +186,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "checkUpdate": MessageLookupByLibrary.simpleMessage("更新の確認"),
     "checkUpdateError": MessageLookupByLibrary.simpleMessage("最新バージョンを使用中です"),
+    "checkUpdateFailed": MessageLookupByLibrary.simpleMessage(
+      "更新の確認に失敗しました。ネットワークまたはプロキシ設定を確認して再試行してください",
+    ),
     "checking": MessageLookupByLibrary.simpleMessage("確認中..."),
     "circle": MessageLookupByLibrary.simpleMessage("サークル"),
     "clear": MessageLookupByLibrary.simpleMessage("消去"),

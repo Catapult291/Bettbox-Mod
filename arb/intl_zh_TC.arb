@@ -229,6 +229,7 @@
   "checkUpdate": "檢查更新",
   "discoverNewVersion": "發現新版本",
   "checkUpdateError": "目前的應用程式已經是最新版了",
+  "checkUpdateFailed": "檢查更新失敗，請檢查網路或代理設定後重試",
   "goDownload": "前往下載",
   "unknown": "未知",
   "geoData": "地理資料",

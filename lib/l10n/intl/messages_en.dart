@@ -237,6 +237,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "checkUpdateError": MessageLookupByLibrary.simpleMessage(
       "Already on the latest version",
     ),
+    "checkUpdateFailed": MessageLookupByLibrary.simpleMessage(
+      "Failed to check for updates. Please check your network or proxy settings and try again.",
+    ),
     "checking": MessageLookupByLibrary.simpleMessage("Checking..."),
     "circle": MessageLookupByLibrary.simpleMessage("Circle"),
     "clear": MessageLookupByLibrary.simpleMessage("Clear"),

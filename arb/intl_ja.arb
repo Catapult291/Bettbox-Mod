@@ -229,6 +229,7 @@
   "checkUpdate": "更新の確認",
   "discoverNewVersion": "新しいバージョンが見つかりました",
   "checkUpdateError": "最新バージョンを使用中です",
+  "checkUpdateFailed": "更新の確認に失敗しました。ネットワークまたはプロキシ設定を確認して再試行してください",
   "goDownload": "ダウンロードへ",
   "unknown": "不明",
   "geoData": "Geoデータ",
