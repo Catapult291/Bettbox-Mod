@@ -20,6 +20,7 @@ use serde_json::{json, Map, Value};
 use crate::dns_override::apply_dns_node_override;
 use crate::group_switch::apply_group_switches;
 use crate::regex_matcher::RegexMatcher;
+use crate::rule::{ParsedRule, RuleAction};
 
 const EXTERNAL_UI_URL: &str =
     "https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip";
@@ -31,13 +32,15 @@ const QUIC_RULE_EXCLUDE_CHINA: &str = "AND,((NETWORK,UDP),(DST-PORT,443),(NOT,((
 ///
 /// 逻辑规则（`NOT`/`OR`/`AND`）的解析器按裸 `(` `)` 切分子规则，而
 /// `Program Files (x86)` 一类路径必含括号——所以括号一律写成 `\x28`/`\x29`，
-/// 不留任何裸括号给 `logic.format`。其余正则元字符照常转义。
+/// 不留任何裸括号给 `logic.format`。逗号同理写成 `\x2c`：内核先按逗号切段再
+/// `Trim(" ")`，路径里的「, 」会被压成「,」而与真实路径不等。其余正则元字符照常转义。
 fn process_path_regex(path: &str) -> String {
     let mut escaped = String::with_capacity(path.len() * 2);
     for c in path.chars() {
         match c {
             '(' => escaped.push_str("\\x28"),
             ')' => escaped.push_str("\\x29"),
+            ',' => escaped.push_str("\\x2c"),
             '\\' => escaped.push_str("\\\\"),
             '.' | '+' | '*' | '?' | '^' | '$' | '[' | ']' | '|' | '{' | '}' => {
                 escaped.push('\\');
@@ -368,54 +371,28 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
         rules.insert(0, Value::String(quic_rule.to_string()));
     }
 
-    // 桌面进程分流（§22 轻量档）。规则插在最前：黑名单先于 QUIC/其余规则命中；
-    // 白名单的「名单外→DIRECT」也必须最先命中，名单内才继续走原规则链。
-    // 路径含逗号时 PROCESS-PATH 的顶层解析会截断 payload，一律改用
-    // PROCESS-PATH-REGEX（逗号在 REGEX 类型里会 join 回去）。
-    {
-        let access_mode = env_str(env, "processAccessMode");
-        let access_paths: Vec<String> = env
-            .get("processAccessPaths")
-            .and_then(Value::as_array)
-            .map(|list| {
-                list.iter()
-                    .filter_map(Value::as_str)
-                    .filter(|p| !p.is_empty())
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default();
-        if !access_paths.is_empty() {
-            let mut access_rules: Vec<Value> = Vec::new();
-            match access_mode.as_str() {
-                "blacklist" => {
-                    for path in &access_paths {
-                        let rule = if path.contains(',') {
-                            format!("PROCESS-PATH-REGEX,{},DIRECT", process_path_regex(path))
-                        } else {
-                            format!("PROCESS-PATH,{},DIRECT", path)
-                        };
-                        access_rules.push(Value::String(rule));
-                    }
-                }
-                "whitelist" => {
-                    let alts: Vec<String> =
-                        access_paths.iter().map(|p| process_path_regex(p)).collect();
-                    // 各段自带 ^…$ 锚定，用 | 拼成单条 REGEX；不套 (?:…)
-                    // 分组——逻辑规则解析器会把裸括号当结构切开。
-                    let joined = alts.join("|");
-                    access_rules.push(Value::String(format!(
-                        "NOT,((PROCESS-PATH-REGEX,{})),DIRECT",
-                        joined
-                    )));
-                }
-                _ => {}
+    // 桌面进程分流（§22 轻量档）。进程规则是代理设置的例外层，插在规则链最前：
+    // 黑名单把名单内进程强制判 DIRECT，白名单把名单内进程强制送到代理出口；
+    // 名单外进程一律回到「出站模式 + 规则链」的判定，与关闭进程分流时一致。
+    //
+    // 全局 / 直连模式不走规则链，进程例外会整体失效。因此启用时让内核以 rule
+    // 模式运行，并用末条 MATCH 复现用户选择的模式；关闭时模式原样不动。
+    let access_mode = env_str(env, "processAccessMode");
+    let access_paths = normalized_process_paths(env);
+    let access_enabled =
+        !access_paths.is_empty() && matches!(access_mode.as_str(), "blacklist" | "whitelist");
+    let access_has_proxy = access_enabled && has_proxy_outbound(&config);
+    if access_enabled {
+        match config.get("mode").and_then(Value::as_str) {
+            Some("global") if access_has_proxy => {
+                rules = vec![Value::String("MATCH,GLOBAL".to_string())];
+                config.insert("mode".to_string(), json!("rule"));
             }
-            for (i, rule) in access_rules.into_iter().enumerate() {
-                rules.insert(i, rule);
+            Some("direct") => {
+                rules = vec![Value::String("MATCH,DIRECT".to_string())];
+                config.insert("mode".to_string(), json!("rule"));
             }
-            // 进程规则生效的前提是内核能解析进程路径；桌面默认 off，这里强制打开。
-            config.insert("find-process-mode".to_string(), json!("always"));
+            _ => {}
         }
     }
 
@@ -431,7 +408,7 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
         .get("groupSwitches")
         .cloned()
         .unwrap_or_else(|| Value::Object(Map::new()));
-    let (groups, rules) = apply_group_switches(
+    let (groups, mut rules) = apply_group_switches(
         config.get("proxy-groups").unwrap_or(&Value::Null),
         &Value::Array(rules),
         &switches,
@@ -440,10 +417,105 @@ pub fn patch_config(input: &Value) -> Result<Value, String> {
     if !groups.is_null() {
         config.insert("proxy-groups".to_string(), groups);
     }
+
+    // 白名单出口必须在分组开关之后解析：被禁用分组的目标已被改写成 PASS。
+    if access_enabled {
+        let target = match access_mode.as_str() {
+            "blacklist" => Some("DIRECT".to_string()),
+            _ => whitelist_target(&rules, access_has_proxy),
+        };
+        if let Some(target) = target {
+            let access_rules = process_access_rules(&access_paths, &target);
+            for (i, rule) in access_rules.into_iter().enumerate() {
+                if let Some(list) = rules.as_array_mut() {
+                    list.insert(i, rule);
+                }
+            }
+            // 进程规则生效的前提是内核能解析进程路径；桌面默认 off，这里强制打开。
+            config.insert("find-process-mode".to_string(), json!("always"));
+        }
+    }
+
     config.remove("rule");
     config.insert("rules".to_string(), rules);
 
     Ok(Value::Object(config))
+}
+
+/// 名单路径规范化：trim、丢空串、按 Windows 语义（大小写不敏感）去重并稳定排序，
+/// 保证同一名单生成同一规则串。
+fn normalized_process_paths(env: &Map<String, Value>) -> Vec<String> {
+    let Some(list) = env.get("processAccessPaths").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut seen = HashSet::new();
+    let mut paths: Vec<String> = Vec::new();
+    for path in list.iter().filter_map(Value::as_str) {
+        let path = path.trim();
+        if path.is_empty() {
+            continue;
+        }
+        if seen.insert(path.to_lowercase()) {
+            paths.push(path.to_string());
+        }
+    }
+    paths.sort_by_key(|path| path.to_lowercase());
+    paths
+}
+
+/// 配置里是否存在可用的代理出口（`proxies` 或 `proxy-groups` 非空）。
+fn has_proxy_outbound(config: &Map<String, Value>) -> bool {
+    let non_empty = |key: &str| {
+        config
+            .get(key)
+            .and_then(Value::as_array)
+            .is_some_and(|list| !list.is_empty())
+    };
+    non_empty("proxies") || non_empty("proxy-groups")
+}
+
+/// 白名单出口 `P`：最终规则链里第一条 `MATCH` 的目标；目标为直连 / 拒绝一类的
+/// 非代理出口时回退 `GLOBAL`（内核在有任何代理时一定创建该保留分组）。
+/// 配置没有任何代理时返回 `None`，调用方不生成白名单规则。
+fn whitelist_target(rules: &Value, has_proxy: bool) -> Option<String> {
+    if !has_proxy {
+        return None;
+    }
+    let target = rules
+        .as_array()
+        .and_then(|list| {
+            list.iter().find_map(|rule| {
+                let parsed = ParsedRule::parse(rule.as_str()?);
+                (parsed.action == RuleAction::Match).then_some(parsed.target)
+            })
+        })
+        .flatten();
+    match target {
+        Some(name) if !name.is_empty() && !is_non_proxy_target(&name) => Some(name),
+        _ => Some("GLOBAL".to_string()),
+    }
+}
+
+fn is_non_proxy_target(name: &str) -> bool {
+    ["DIRECT", "REJECT", "REJECT-DROP", "PASS", "COMPATIBLE"]
+        .iter()
+        .any(|reserved| reserved.eq_ignore_ascii_case(name))
+}
+
+/// 逐路径生成进程例外规则。路径含逗号时必须用 `PROCESS-PATH-REGEX` 并写成 `\x2c`：
+/// 内核解析规则会按逗号切段再 `Trim(" ")`，路径中间的「, 」会被压成「,」。
+fn process_access_rules(paths: &[String], target: &str) -> Vec<Value> {
+    paths
+        .iter()
+        .map(|path| {
+            let rule = if path.contains(',') {
+                format!("PROCESS-PATH-REGEX,{},{}", process_path_regex(path), target)
+            } else {
+                format!("PROCESS-PATH,{},{}", path, target)
+            };
+            Value::String(rule)
+        })
+        .collect()
 }
 
 /// 节点过滤：把匹配 `nodeExcludeFilter` 的节点从分组里剔除，并按需补 `timeout`。
@@ -931,35 +1003,174 @@ mod tests {
         assert_eq!(output["find-process-mode"], "always");
     }
 
-    #[test]
-    fn process_access_blacklist_uses_regex_when_path_has_comma() {
+    /// 进程分流用例的输入：默认分组保持启用，保证 `MATCH` 目标不被改成 `PASS`。
+    fn process_access_input(mode: &str, paths: Value) -> Value {
         let mut input = minimal_input();
-        input["env"]["processAccessMode"] = json!("blacklist");
-        input["env"]["processAccessPaths"] = json!(["C:\\App, Inc\\a.exe"]);
-        let output = patch_config(&input).unwrap();
-        let rules = output["rules"].as_array().unwrap();
-        let rule = rules[0].as_str().unwrap();
-        assert!(
-            rule.starts_with("PROCESS-PATH-REGEX,^C:\\\\App, Inc\\\\a\\.exe$"),
-            "{rule}"
-        );
-        assert!(rule.ends_with(",DIRECT"));
+        input["env"]["processAccessMode"] = json!(mode);
+        input["env"]["processAccessPaths"] = paths;
+        input["profile"]["groupSwitches"] = json!({});
+        input
+    }
+
+    /// 模拟内核 `ParseRulePayload` 对 `PROCESS-PATH-REGEX` 的处理：按逗号切段、
+    /// 逐段 `Trim(" ")`，最后一段是目标，其余逗号 join 回 payload。
+    fn kernel_regex_payload(rule: &str) -> (String, String) {
+        let items: Vec<&str> = rule.split(',').map(|item| item.trim_matches(' ')).collect();
+        let (target, rest) = items.split_last().expect("规则不能为空");
+        (rest[1..].join(","), (*target).to_string())
     }
 
     #[test]
-    fn process_access_whitelist_escapes_parens_for_logic_parser() {
-        let mut input = minimal_input();
-        input["env"]["processAccessMode"] = json!("whitelist");
-        input["env"]["processAccessPaths"] =
-            json!(["C:\\Program Files (x86)\\B\\b.exe", "C:\\App\\a.exe"]);
+    fn process_access_blacklist_uses_regex_when_path_has_comma() {
+        let input = process_access_input("blacklist", json!(["C:\\App, Inc\\a.exe"]));
         let output = patch_config(&input).unwrap();
         let rules = output["rules"].as_array().unwrap();
-        // 白名单 = 单条 NOT+REGEX：名单外直连；括号写成 \x28\x29 避开逻辑规则切分。
+        let rule = rules[0].as_str().unwrap();
         assert_eq!(
-            rules[0],
-            "NOT,((PROCESS-PATH-REGEX,^C:\\\\Program Files \\x28x86\\x29\\\\B\\\\b\\.exe$|^C:\\\\App\\\\a\\.exe$)),DIRECT"
+            rule,
+            "PROCESS-PATH-REGEX,^C:\\\\App\\x2c Inc\\\\a\\.exe$,DIRECT"
+        );
+        // 内核切段后 payload 与真实路径一一对应：\x2c 不会被 Trim 破坏。
+        let (payload, target) = kernel_regex_payload(rule);
+        assert_eq!(target, "DIRECT");
+        assert_eq!(payload, process_path_regex("C:\\App, Inc\\a.exe"));
+        assert!(!payload.contains(','));
+        let matcher = RegexMatcher::compile(&payload).unwrap();
+        assert!(matcher.is_match("C:\\App, Inc\\a.exe"));
+        assert!(!matcher.is_match("C:\\App,Inc\\a.exe"));
+    }
+
+    #[test]
+    fn process_access_whitelist_forces_proxy_per_path() {
+        let input = process_access_input(
+            "whitelist",
+            json!(["C:\\Program Files (x86)\\B\\b.exe", "C:\\App\\a.exe"]),
+        );
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        // 名单内进程强制走代理出口（默认 MATCH 目标），名单外仍走原规则链。
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\App\\a.exe,自动选择");
+        assert_eq!(
+            rules[1],
+            "PROCESS-PATH,C:\\Program Files (x86)\\B\\b.exe,自动选择"
+        );
+        assert_eq!(rules[2], "DOMAIN,a.example.com,自动选择");
+        assert_eq!(rules[3], "MATCH,自动选择");
+        assert_eq!(output["find-process-mode"], "always");
+        assert_eq!(output["mode"], "rule");
+    }
+
+    #[test]
+    fn process_access_whitelist_falls_back_to_global_when_default_is_direct() {
+        let mut input = process_access_input("whitelist", json!(["C:\\App\\a.exe"]));
+        input["rawConfig"]["rules"] = json!(["DOMAIN,a.example.com,DIRECT", "MATCH,DIRECT"]);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\App\\a.exe,GLOBAL");
+    }
+
+    #[test]
+    fn process_access_whitelist_falls_back_to_global_when_group_is_disabled() {
+        let mut input = process_access_input("whitelist", json!(["C:\\App\\a.exe"]));
+        // 关闭默认出口分组：MATCH 目标被分组开关改写成 PASS，必须回退 GLOBAL。
+        input["profile"]["groupSwitches"] = json!({"自动选择": false});
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\App\\a.exe,GLOBAL");
+    }
+
+    #[test]
+    fn process_access_whitelist_without_any_proxy_injects_nothing() {
+        let mut input = process_access_input("whitelist", json!(["C:\\App\\a.exe"]));
+        input["patch"]["mode"] = json!("global");
+        input["rawConfig"]["proxies"] = json!([]);
+        input["rawConfig"]["proxy-groups"] = json!([]);
+        input["rawConfig"]["rules"] = json!(["MATCH,DIRECT"]);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert!(rules.iter().all(|rule| {
+            let text = rule.as_str().unwrap();
+            !text.contains("PROCESS-PATH")
+        }));
+        assert_ne!(output["find-process-mode"], "always");
+        // 没有代理可走时不改模式，避免生成指向不存在 GLOBAL 的配置。
+        assert_eq!(output["mode"], "global");
+    }
+
+    #[test]
+    fn process_access_global_mode_runs_as_rule_with_match_global() {
+        let mut input = process_access_input("blacklist", json!(["C:\\App\\a.exe"]));
+        input["patch"]["mode"] = json!("global");
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(output["mode"], "rule");
+        // 全局模式本来不看规则链，原规则整体丢弃。
+        assert_eq!(
+            rules.as_slice(),
+            [
+                json!("PROCESS-PATH,C:\\App\\a.exe,DIRECT"),
+                json!("MATCH,GLOBAL"),
+            ]
         );
         assert_eq!(output["find-process-mode"], "always");
+    }
+
+    #[test]
+    fn process_access_direct_mode_keeps_whitelist_alive() {
+        let mut input = process_access_input("whitelist", json!(["C:\\App\\a.exe"]));
+        input["patch"]["mode"] = json!("direct");
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(output["mode"], "rule");
+        // 直连模式下唯一的代理出口是 GLOBAL，名单外继续直连。
+        assert_eq!(
+            rules.as_slice(),
+            [
+                json!("PROCESS-PATH,C:\\App\\a.exe,GLOBAL"),
+                json!("MATCH,DIRECT"),
+            ]
+        );
+    }
+
+    #[test]
+    fn process_access_rules_precede_quic_and_script_rules() {
+        let mut input = process_access_input("blacklist", json!(["C:\\App\\a.exe"]));
+        input["env"]["disableQuic"] = json!(true);
+        input["profile"]["useScriptOverride"] = json!(true);
+        input["env"]["scriptAddedRules"] = json!(["DOMAIN,script.example.com,DIRECT"]);
+        input["env"]["hasCurrentScript"] = json!(true);
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\App\\a.exe,DIRECT");
+        assert_eq!(rules[1], QUIC_RULE);
+        assert_eq!(rules[2], "DOMAIN,script.example.com,DIRECT");
+    }
+
+    #[test]
+    fn process_access_paths_are_trimmed_deduped_and_sorted() {
+        let input = process_access_input(
+            "blacklist",
+            json!([" C:\\B\\b.exe ", "c:\\b\\B.EXE", "C:\\A\\a.exe"]),
+        );
+        let output = patch_config(&input).unwrap();
+        let rules = output["rules"].as_array().unwrap();
+        assert_eq!(rules[0], "PROCESS-PATH,C:\\A\\a.exe,DIRECT");
+        assert_eq!(rules[1], "PROCESS-PATH,C:\\B\\b.exe,DIRECT");
+        assert_eq!(rules.len(), 4);
+    }
+
+    #[test]
+    fn process_access_empty_paths_leave_mode_and_find_process_alone() {
+        let mut input = process_access_input("whitelist", json!([]));
+        input["patch"]["mode"] = json!("global");
+        let output = patch_config(&input).unwrap();
+        assert_eq!(output["mode"], "global");
+        assert_ne!(output["find-process-mode"], "always");
+        assert!(output["rules"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|rule| !rule.as_str().unwrap().contains("PROCESS-PATH")));
     }
 
     #[test]
@@ -971,6 +1182,7 @@ mod tests {
             !s.contains("PROCESS-PATH") && !s.starts_with("NOT,")
         }));
         assert_ne!(output["find-process-mode"], "always");
+        assert_eq!(output["mode"], "rule");
     }
 
     #[test]
@@ -978,6 +1190,7 @@ mod tests {
         assert_eq!(process_path_regex("a(b)c"), "^a\\x28b\\x29c$");
         assert_eq!(process_path_regex("a+b"), "^a\\+b$");
         assert_eq!(process_path_regex("a\\b"), "^a\\\\b$");
+        assert_eq!(process_path_regex("a, b"), "^a\\x2c b$");
     }
 
     fn process_profile_via_ffi(input: &Value, script: &str) -> Value {

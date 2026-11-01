@@ -566,6 +566,7 @@
   "saveChanges": "是否保存更改？",
   "generalDesc": "修改全局通用设置",
   "findProcessModeDesc": "开启后可以匹配查找进程",
+  "findProcessModeForcedDesc": "已由进程分流强制开启",
   "navBarHapticFeedback": "触感反馈",
   "navBarHapticFeedbackDesc": "底部导航栏切换震动反馈",
   "saveTip": "确定要保存吗？",
@@ -703,7 +704,8 @@
   "updateTime": "更新时间",
   "autoGetNameTip": "留空则自动获取名称",
   "processAccess": "进程分流",
-  "processAccessDesc": "将选中的进程路径分流到直连，或仅放行选中的进程",
+  "processAccessDesc": "按进程指定直连或代理",
+  "processAccessWhitelistTarget": "代理出口取最终规则的首个 MATCH；目标为直连或不可用时回退 GLOBAL。",
   "processAccessMode": "模式",
   "processAccessBlacklist": "黑名单",
   "processAccessWhitelist": "白名单",
@@ -714,6 +716,5 @@
   "processAccessEmpty": "没有可选进程",
   "processAccessHideSystem": "隐藏系统进程",
   "processAccessNoPath": "无法读取路径",
-  "processAccessFindProcessHint": "依赖「查找进程」开关；保存时会自动打开。",
   "processAccessOff": "关闭"
 }

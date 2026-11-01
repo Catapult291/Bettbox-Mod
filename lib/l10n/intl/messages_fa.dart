@@ -509,6 +509,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "امکان جستجو و تطبیق پردازش‌ها",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "توسط دسترسی بر اساس فرآیند اجباری روشن شده است",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("پیروی از بروزرسانی"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("فونت"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("نگاشت اجباری DNS"),
@@ -905,13 +908,10 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("لیست سیاه"),
     "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "هدایت مسیر فرآیندهای انتخاب‌شده به DIRECT یا فقط مجاز کردن آن‌ها",
+      "تعیین اتصال مستقیم یا پروکسی برای هر فرآیند",
     ),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
       "فرآیند قابل انتخابی وجود ندارد",
-    ),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "به «یافتن فرآیند» نیاز دارد؛ هنگام ذخیره به‌صورت خودکار فعال می‌شود.",
     ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
       "پنهان کردن فرآیندهای سیستمی",
@@ -932,6 +932,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("لیست سفید"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "خروجی پروکسی از نخستین MATCH در قواعد نهایی گرفته می‌شود؛ در حالت مستقیم یا ناموجود به GLOBAL برمی‌گردد.",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("پروفایل"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage(

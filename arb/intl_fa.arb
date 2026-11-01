@@ -566,6 +566,7 @@
   "saveChanges": "آیا تغییرات ذخیره شوند؟",
   "generalDesc": "تغییر تنظیمات عمومی",
   "findProcessModeDesc": "امکان جستجو و تطبیق پردازش‌ها",
+  "findProcessModeForcedDesc": "توسط دسترسی بر اساس فرآیند اجباری روشن شده است",
   "navBarHapticFeedback": "بازخورد لمسی",
   "navBarHapticFeedbackDesc": "لرزش هنگام تغییر زبانه‌های نوار پایین",
   "saveTip": "آیا از ذخیره تغییرات اطمینان دارید؟",
@@ -703,7 +704,8 @@
   "updateTime": "زمان به‌روزرسانی",
   "autoGetNameTip": "خالی بگذارید تا نام به‌طور خودکار دریافت شود",
   "processAccess": "دسترسی بر اساس فرآیند",
-  "processAccessDesc": "هدایت مسیر فرآیندهای انتخاب‌شده به DIRECT یا فقط مجاز کردن آن‌ها",
+  "processAccessDesc": "تعیین اتصال مستقیم یا پروکسی برای هر فرآیند",
+  "processAccessWhitelistTarget": "خروجی پروکسی از نخستین MATCH در قواعد نهایی گرفته می‌شود؛ در حالت مستقیم یا ناموجود به GLOBAL برمی‌گردد.",
   "processAccessMode": "حالت",
   "processAccessBlacklist": "لیست سیاه",
   "processAccessWhitelist": "لیست سفید",
@@ -714,6 +716,5 @@
   "processAccessEmpty": "فرآیند قابل انتخابی وجود ندارد",
   "processAccessHideSystem": "پنهان کردن فرآیندهای سیستمی",
   "processAccessNoPath": "مسیر در دسترس نیست",
-  "processAccessFindProcessHint": "به «یافتن فرآیند» نیاز دارد؛ هنگام ذخیره به‌صورت خودکار فعال می‌شود.",
   "processAccessOff": "خاموش"
 }

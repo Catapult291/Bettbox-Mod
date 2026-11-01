@@ -116,6 +116,12 @@ UpdateParams updateParams(Ref ref) {
       ),
     ),
   );
+  // 进程分流启用时内核必须跑在规则模式：全局 / 直连模式不执行规则，
+  // 进程例外会整体失效。规则链里的末条 MATCH 已经复现用户选的出站模式。
+  final processAccess = ref.watch(processAccessStateProvider);
+  final processAccessActive =
+      processAccess.mode != ProcessAccessMode.off &&
+      processAccess.paths.isNotEmpty;
   return ref.watch(
     patchClashConfigProvider.select(
       (state) => UpdateParams(
@@ -128,8 +134,10 @@ UpdateParams updateParams(Ref ref) {
           bypassPrivateRouteAddress: realBypassPrivateRouteAddress,
         ),
         allowLan: state.allowLan,
-        findProcessMode: state.findProcessMode,
-        mode: state.mode,
+        findProcessMode: processAccessActive
+            ? FindProcessMode.always
+            : state.findProcessMode,
+        mode: processAccessActive ? Mode.rule : state.mode,
         logLevel: state.logLevel,
         ipv6: state.ipv6,
         tcpConcurrent: state.tcpConcurrent,

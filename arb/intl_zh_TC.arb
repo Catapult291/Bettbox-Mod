@@ -566,6 +566,7 @@
   "saveChanges": "是否儲存更改？",
   "generalDesc": "修改全域一般設定",
   "findProcessModeDesc": "開啟後可以匹配尋找處理程序",
+  "findProcessModeForcedDesc": "已由進程分流強制開啟",
   "navBarHapticFeedback": "觸覺回饋",
   "navBarHapticFeedbackDesc": "底部導覽列切換震動回饋",
   "saveTip": "確定要儲存嗎？",
@@ -703,7 +704,8 @@
   "updateTime": "更新時間",
   "autoGetNameTip": "留空則自動取得名稱",
   "processAccess": "進程分流",
-  "processAccessDesc": "將選中的進程路徑分流到直連，或僅放行選中的進程",
+  "processAccessDesc": "按進程指定直連或代理",
+  "processAccessWhitelistTarget": "代理出口取最終規則的第一個 MATCH；目標為直連或不可用時回退 GLOBAL。",
   "processAccessMode": "模式",
   "processAccessBlacklist": "黑名單",
   "processAccessWhitelist": "白名單",
@@ -714,6 +716,5 @@
   "processAccessEmpty": "沒有可選進程",
   "processAccessHideSystem": "隱藏系統進程",
   "processAccessNoPath": "無法讀取路徑",
-  "processAccessFindProcessHint": "依賴「查找進程」開關；儲存時會自動打開。",
   "processAccessOff": "關閉"
 }

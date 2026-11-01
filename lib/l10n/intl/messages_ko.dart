@@ -422,6 +422,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "활성화 시 프로세스 매칭 검색 가능",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "프로세스 분기에 의해 강제 켜짐",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("업데이트 따르기"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("글꼴"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("강제 DNS 매핑"),
@@ -726,13 +729,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "processAccess": MessageLookupByLibrary.simpleMessage("프로세스 분기"),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("블랙리스트"),
     "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "선택한 프로세스 경로를 DIRECT로 분기하거나 선택만 허용",
+      "프로세스별로 DIRECT 또는 프록시를 지정합니다",
     ),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
       "선택 가능한 프로세스가 없습니다",
-    ),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "\'프로세스 찾기\'가 필요합니다. 저장 시 자동으로 켜집니다.",
     ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
       "시스템 프로세스 숨기기",
@@ -751,6 +751,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("화이트리스트"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "프록시 출구는 최종 규칙의 첫 MATCH를 따르며, DIRECT이거나 사용할 수 없으면 GLOBAL로 대체합니다.",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("프로필"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("올바른 시간 형식을 입력하세요"),

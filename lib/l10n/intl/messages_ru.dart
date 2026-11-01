@@ -530,6 +530,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "Включить определение процессов",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "Принудительно включено разделением по процессам",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage(
       "Следовать обновлению",
     ),
@@ -928,13 +931,10 @@ class MessageLookup extends MessageLookupByLibrary {
       "Чёрный список",
     ),
     "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "Направлять выбранные процессы напрямую или разрешать только выбранные",
+      "Настройка прямого соединения или прокси для каждого процесса",
     ),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
       "Нет доступных процессов",
-    ),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "Требуется «Поиск процессов»; при сохранении он будет включён автоматически.",
     ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
       "Скрыть системные процессы",
@@ -956,6 +956,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage(
       "Белый список",
+    ),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "Выход прокси берётся из первого MATCH итоговых правил; при DIRECT или недоступности используется GLOBAL.",
     ),
     "profile": MessageLookupByLibrary.simpleMessage("Профиль"),
     "profileAutoUpdateIntervalInvalidValidationDesc":

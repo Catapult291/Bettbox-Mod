@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bett_box/common/common.dart';
+import 'package:bett_box/enum/enum.dart';
 import 'package:bett_box/l10n/l10n.dart';
 import 'package:bett_box/models/models.dart';
 import 'package:bett_box/rust/bettbox_config.dart';
@@ -123,6 +124,49 @@ void main() {
 
       expect(result['mergedMarker'], isNull, reason: '未启用覆写时脚本不该被执行');
       expect(result['rules'], isNotNull);
+    });
+
+    test('进程分流白名单：名单内强制走代理，名单外仍走原规则链', () async {
+      state.config = _config(null).copyWith(
+        patchClashConfig: defaultClashConfig.copyWith(mode: Mode.rule),
+        processAccess: const ProcessAccessProps(
+          mode: ProcessAccessMode.whitelist,
+          paths: [r'C:\apps\a.exe'],
+        ),
+      );
+
+      final result = await state.patchRawConfig(
+        patchConfig: state.config.patchClashConfig,
+        profile: _profile(useScriptOverride: false).copyWith(groupSwitches: {}),
+      );
+
+      expect(result['mode'], 'rule');
+      expect(result['find-process-mode'], 'always');
+      expect(result['rules'], [
+        r'PROCESS-PATH,C:\apps\a.exe,自动选择',
+        'MATCH,自动选择',
+      ]);
+    });
+
+    test('进程分流 + 全局出站模式：内核改跑规则模式，末条 MATCH 复现全局', () async {
+      state.config = _config(null).copyWith(
+        patchClashConfig: defaultClashConfig.copyWith(mode: Mode.global),
+        processAccess: const ProcessAccessProps(
+          mode: ProcessAccessMode.blacklist,
+          paths: [r'C:\apps\a.exe'],
+        ),
+      );
+
+      final result = await state.patchRawConfig(
+        patchConfig: state.config.patchClashConfig,
+        profile: _profile(useScriptOverride: false),
+      );
+
+      expect(result['mode'], 'rule');
+      expect(result['rules'], [
+        r'PROCESS-PATH,C:\apps\a.exe,DIRECT',
+        'MATCH,GLOBAL',
+      ]);
     });
   }, skip: skipReason);
 }

@@ -515,6 +515,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "Enable process matching",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "Forced on by Process Access",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("Follow Update"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("Font"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage(
@@ -893,13 +896,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "processAccess": MessageLookupByLibrary.simpleMessage("Process Access"),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("Blacklist"),
     "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "Route selected process paths to DIRECT or only allow selected ones",
+      "Specify direct or proxy access per process",
     ),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
       "No selectable processes",
-    ),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "Requires \"Find Process\" to stay enabled; it will be turned on automatically when saving.",
     ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
       "Hide system processes",
@@ -920,6 +920,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("Whitelist"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "Proxy exit follows the first MATCH of the final rules; falls back to GLOBAL when the target is direct or unusable.",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("Profile"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("Please enter a valid interval"),

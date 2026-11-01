@@ -364,6 +364,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "filterSystemApp": MessageLookupByLibrary.simpleMessage("过滤系统应用"),
     "findProcessMode": MessageLookupByLibrary.simpleMessage("查找进程"),
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage("开启后可以匹配查找进程"),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "已由进程分流强制开启",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("跟随更新"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("字体"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("强制 DNS 映射"),
@@ -633,13 +636,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "privateIp": MessageLookupByLibrary.simpleMessage("私有 / 局域网 IP 地址"),
     "processAccess": MessageLookupByLibrary.simpleMessage("进程分流"),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("黑名单"),
-    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "将选中的进程路径分流到直连，或仅放行选中的进程",
-    ),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage("按进程指定直连或代理"),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage("没有可选进程"),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "依赖「查找进程」开关；保存时会自动打开。",
-    ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage("隐藏系统进程"),
     "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
       "进程列表加载失败，请确认 helper 服务在运行。",
@@ -653,6 +651,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("白名单"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "代理出口取最终规则的首个 MATCH；目标为直连或不可用时回退 GLOBAL。",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("配置"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("请输入有效间隔时间格式"),

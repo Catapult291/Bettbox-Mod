@@ -38,6 +38,26 @@ class _QuietAppController extends AppController {
   void setupClashConfigDebounce() {}
 }
 
+/// 记录切换出站模式时走的是全量 setup 还是运行期 PATCH。
+class _TrackingAppController extends AppController {
+  _TrackingAppController(super.context, super.ref);
+
+  int setupCalls = 0;
+  int updateCalls = 0;
+
+  @override
+  void setupClashConfigDebounce() => setupCalls++;
+
+  @override
+  void updateClashConfigDebounce() => updateCalls++;
+
+  @override
+  void updateGroupsDebounce() {}
+
+  @override
+  void addCheckIpNumDebounce() {}
+}
+
 Config _config({ProcessAccessProps access = const ProcessAccessProps()}) {
   return Config(
     themeProps: defaultThemeProps,
@@ -97,10 +117,6 @@ void main() {
     expect(find.text(appLocalizations.processAccessEmpty), findsOneWidget);
     expect(
       find.text(appLocalizations.processAccessSelectedCount(0)),
-      findsOneWidget,
-    );
-    expect(
-      find.text(appLocalizations.processAccessFindProcessHint),
       findsOneWidget,
     );
   });
@@ -189,5 +205,100 @@ void main() {
       find.text(appLocalizations.processAccessSelectedCount(1)),
       findsOneWidget,
     );
+  });
+
+  testWidgets('三种模式行渲染：黑名单标题、选中态与已选计数', (tester) async {
+    await _pumpPage(
+      tester,
+      _config(
+        access: const ProcessAccessProps(
+          mode: ProcessAccessMode.whitelist,
+          paths: [r'C:\apps\a.exe'],
+        ),
+      ),
+    );
+
+    expect(find.text(appLocalizations.processAccessOff), findsOneWidget);
+    expect(find.text(appLocalizations.processAccessBlacklist), findsOneWidget);
+    expect(find.text(appLocalizations.processAccessWhitelist), findsOneWidget);
+    expect(
+      find.text(appLocalizations.processAccessSelectedCount(1)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('白名单 + 非空名单显示代理出口说明，其他模式不显示', (tester) async {
+    await _pumpPage(
+      tester,
+      _config(
+        access: const ProcessAccessProps(
+          mode: ProcessAccessMode.whitelist,
+          paths: [r'C:\apps\a.exe'],
+        ),
+      ),
+    );
+    expect(
+      find.text(appLocalizations.processAccessWhitelistTarget),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text(appLocalizations.processAccessBlacklist));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(appLocalizations.processAccessWhitelistTarget),
+      findsNothing,
+    );
+  });
+
+  testWidgets('进程分流启用时切换出站模式走全量 setup', (tester) async {
+    globalState.config = _config(
+      access: const ProcessAccessProps(
+        mode: ProcessAccessMode.whitelist,
+        paths: [r'C:\apps\a.exe'],
+      ),
+    );
+    late _TrackingAppController controller;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) {
+              controller = _TrackingAppController(context, ref);
+              globalState.appController = controller;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+
+    controller.changeMode(Mode.direct);
+
+    expect(controller.setupCalls, 1);
+    expect(controller.updateCalls, 0);
+    expect(globalState.config.patchClashConfig.mode, Mode.direct);
+  });
+
+  testWidgets('进程分流关闭时切换出站模式走运行期 PATCH', (tester) async {
+    globalState.config = _config();
+    late _TrackingAppController controller;
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) {
+              controller = _TrackingAppController(context, ref);
+              globalState.appController = controller;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
+
+    controller.changeMode(Mode.global);
+
+    expect(controller.setupCalls, 0);
+    expect(controller.updateCalls, 1);
   });
 }

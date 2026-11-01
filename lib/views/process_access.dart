@@ -105,6 +105,13 @@ class ProcessAccessView extends ConsumerWidget {
             ],
           ),
         ),
+        if (mode == ProcessAccessMode.whitelist && paths.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _HintRow(
+            icon: Icons.alt_route,
+            text: appLocalizations.processAccessWhitelistTarget,
+          ),
+        ],
         const SizedBox(height: 20),
         _ElevatedPanel(
           child: Column(
@@ -174,28 +181,6 @@ class ProcessAccessView extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: Icon(
-                Icons.rule_outlined,
-                size: 15,
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                appLocalizations.processAccessFindProcessHint,
-                style: context.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
       ],
     );
   }
@@ -244,7 +229,38 @@ class ProcessAccessView extends ConsumerWidget {
   }
 }
 
-/// 模式行：图标字形 + 名称 + 选中对勾，纯色高亮，无描边。
+/// 页面底部 / 白名单出口的说明行：小图标 + 次要正文。
+class _HintRow extends StatelessWidget {
+  const _HintRow({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 15, color: scheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: context.textTheme.bodySmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 模式行：图标字形 + 名称 + 语义副标题 + 选中对勾，纯色高亮，无描边。
 class _ModeRow extends StatelessWidget {
   const _ModeRow({
     required this.mode,
@@ -300,8 +316,14 @@ class _ModeRow extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(label, style: context.textTheme.bodyMedium),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: context.textTheme.bodyMedium),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Icon(
                 selected ? Icons.check_circle : Icons.circle_outlined,
                 size: 22,

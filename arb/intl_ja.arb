@@ -566,6 +566,7 @@
   "saveChanges": "変更を保存しますか？",
   "generalDesc": "全般設定を変更",
   "findProcessModeDesc": "プロセス名をマッチングして検索",
+  "findProcessModeForcedDesc": "プロセス分岐により強制オン",
   "navBarHapticFeedback": "触覚フィードバック",
   "navBarHapticFeedbackDesc": "ボトムナビゲーション切り替え時の振動フィードバック",
   "saveTip": "保存してもよろしいですか？",
@@ -703,7 +704,8 @@
   "updateTime": "更新日時",
   "autoGetNameTip": "空欄の場合は名前を自動取得します",
   "processAccess": "プロセス分岐",
-  "processAccessDesc": "選択したプロセスパスを DIRECT に誘導、または選択のみ許可",
+  "processAccessDesc": "プロセスごとに DIRECT またはプロキシを指定します",
+  "processAccessWhitelistTarget": "プロキシ出口は最終ルールの最初の MATCH に従います。DIRECT や利用不可の場合は GLOBAL にフォールバックします。",
   "processAccessMode": "モード",
   "processAccessBlacklist": "ブラックリスト",
   "processAccessWhitelist": "ホワイトリスト",
@@ -714,6 +716,5 @@
   "processAccessEmpty": "選択可能なプロセスがありません",
   "processAccessHideSystem": "システムプロセスを非表示",
   "processAccessNoPath": "パスを取得できません",
-  "processAccessFindProcessHint": "「プロセス検索」が必要です。保存時に自動で有効になります。",
   "processAccessOff": "オフ"
 }

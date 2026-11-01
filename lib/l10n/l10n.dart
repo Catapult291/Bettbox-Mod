@@ -4654,6 +4654,16 @@ class AppLocalizations {
     );
   }
 
+  /// `Forced on by Process Access`
+  String get findProcessModeForcedDesc {
+    return Intl.message(
+      'Forced on by Process Access',
+      name: 'findProcessModeForcedDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
   /// `Haptic Feedback`
   String get navBarHapticFeedback {
     return Intl.message(
@@ -5734,11 +5744,21 @@ class AppLocalizations {
     );
   }
 
-  /// `Route selected process paths to DIRECT or only allow selected ones`
+  /// `Specify direct or proxy access per process`
   String get processAccessDesc {
     return Intl.message(
-      'Route selected process paths to DIRECT or only allow selected ones',
+      'Specify direct or proxy access per process',
       name: 'processAccessDesc',
+      desc: '',
+      args: [],
+    );
+  }
+
+  /// `Proxy exit follows the first MATCH of the final rules; falls back to GLOBAL when the target is direct or unusable.`
+  String get processAccessWhitelistTarget {
+    return Intl.message(
+      'Proxy exit follows the first MATCH of the final rules; falls back to GLOBAL when the target is direct or unusable.',
+      name: 'processAccessWhitelistTarget',
       desc: '',
       args: [],
     );
@@ -5834,16 +5854,6 @@ class AppLocalizations {
     return Intl.message(
       'Path unavailable',
       name: 'processAccessNoPath',
-      desc: '',
-      args: [],
-    );
-  }
-
-  /// `Requires "Find Process" to stay enabled; it will be turned on automatically when saving.`
-  String get processAccessFindProcessHint {
-    return Intl.message(
-      'Requires "Find Process" to stay enabled; it will be turned on automatically when saving.',
-      name: 'processAccessFindProcessHint',
       desc: '',
       args: [],
     );

@@ -566,6 +566,7 @@
   "saveChanges": "Сохранить изменения?",
   "generalDesc": "Изменить глобальные настройки",
   "findProcessModeDesc": "Включить определение процессов",
+  "findProcessModeForcedDesc": "Принудительно включено разделением по процессам",
   "ua": "User-Agent",
   "navBarHapticFeedback": "Тактильная отдача",
   "navBarHapticFeedbackDesc": "Вибрация при переключении нижней панели навигации",
@@ -707,7 +708,8 @@
   "lightIconDesc": "Вручную переключить на светлую иконку приложения",
   "autoGetNameTip": "Оставьте пустым — имя определится автоматически",
   "processAccess": "Маршрутизация по процессам",
-  "processAccessDesc": "Направлять выбранные процессы напрямую или разрешать только выбранные",
+  "processAccessDesc": "Настройка прямого соединения или прокси для каждого процесса",
+  "processAccessWhitelistTarget": "Выход прокси берётся из первого MATCH итоговых правил; при DIRECT или недоступности используется GLOBAL.",
   "processAccessMode": "Режим",
   "processAccessBlacklist": "Чёрный список",
   "processAccessWhitelist": "Белый список",
@@ -718,6 +720,5 @@
   "processAccessEmpty": "Нет доступных процессов",
   "processAccessHideSystem": "Скрыть системные процессы",
   "processAccessNoPath": "Путь недоступен",
-  "processAccessFindProcessHint": "Требуется «Поиск процессов»; при сохранении он будет включён автоматически.",
   "processAccessOff": "Выкл"
 }

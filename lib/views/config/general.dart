@@ -519,24 +519,35 @@ class FindProcessItem extends ConsumerWidget {
         (state) => state.findProcessMode == FindProcessMode.always,
       ),
     );
+    // 进程规则依赖内核解析进程路径；进程分流启用时这个开关由它接管，
+    // 关掉会让规则静默失效。
+    final access = ref.watch(processAccessStateProvider);
+    final forced =
+        access.mode != ProcessAccessMode.off && access.paths.isNotEmpty;
 
     return ListItem.switchItem(
       leading: const Icon(Icons.polymer_outlined),
       title: Text(appLocalizations.findProcessMode),
-      subtitle: Text(appLocalizations.findProcessModeDesc),
+      subtitle: Text(
+        forced
+            ? appLocalizations.findProcessModeForcedDesc
+            : appLocalizations.findProcessModeDesc,
+      ),
       delegate: SwitchDelegate(
-        value: findProcess,
-        onChanged: (bool value) async {
-          ref
-              .read(patchClashConfigProvider.notifier)
-              .updateState(
-                (state) => state.copyWith(
-                  findProcessMode: value
-                      ? FindProcessMode.always
-                      : FindProcessMode.off,
-                ),
-              );
-        },
+        value: forced || findProcess,
+        onChanged: forced
+            ? null
+            : (bool value) async {
+                ref
+                    .read(patchClashConfigProvider.notifier)
+                    .updateState(
+                      (state) => state.copyWith(
+                        findProcessMode: value
+                            ? FindProcessMode.always
+                            : FindProcessMode.off,
+                      ),
+                    );
+              },
       ),
     );
   }

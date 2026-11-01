@@ -566,6 +566,7 @@
   "saveChanges": "Save changes?",
   "generalDesc": "Modify global settings",
   "findProcessModeDesc": "Enable process matching",
+  "findProcessModeForcedDesc": "Forced on by Process Access",
   "navBarHapticFeedback": "Haptic Feedback",
   "navBarHapticFeedbackDesc": "Vibrate on navigation tab switch",
   "saveTip": "Are you sure you want to save?",
@@ -702,7 +703,8 @@
   "updateTime": "Update Time",
   "autoGetNameTip": "Leave blank to get the name automatically",
   "processAccess": "Process Access",
-  "processAccessDesc": "Route selected process paths to DIRECT or only allow selected ones",
+  "processAccessDesc": "Specify direct or proxy access per process",
+  "processAccessWhitelistTarget": "Proxy exit follows the first MATCH of the final rules; falls back to GLOBAL when the target is direct or unusable.",
   "processAccessMode": "Mode",
   "processAccessBlacklist": "Blacklist",
   "processAccessWhitelist": "Whitelist",
@@ -713,6 +715,5 @@
   "processAccessEmpty": "No selectable processes",
   "processAccessHideSystem": "Hide system processes",
   "processAccessNoPath": "Path unavailable",
-  "processAccessFindProcessHint": "Requires \"Find Process\" to stay enabled; it will be turned on automatically when saving.",
   "processAccessOff": "Off"
 }

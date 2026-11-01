@@ -368,6 +368,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "開啟後可以匹配尋找處理程序",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "已由進程分流強制開啟",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("跟隨更新"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("字體"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("強制 DNS 映射"),
@@ -643,13 +646,8 @@ class MessageLookup extends MessageLookupByLibrary {
     "privateIp": MessageLookupByLibrary.simpleMessage("私有 / 區域網路 IP 位址"),
     "processAccess": MessageLookupByLibrary.simpleMessage("進程分流"),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("黑名單"),
-    "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "將選中的進程路徑分流到直連，或僅放行選中的進程",
-    ),
+    "processAccessDesc": MessageLookupByLibrary.simpleMessage("按進程指定直連或代理"),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage("沒有可選進程"),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "依賴「查找進程」開關；儲存時會自動打開。",
-    ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage("隱藏系統進程"),
     "processAccessLoadFailed": MessageLookupByLibrary.simpleMessage(
       "進程列表載入失敗，請確認 helper 服務在運行。",
@@ -663,6 +661,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("白名單"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "代理出口取最終規則的第一個 MATCH；目標為直連或不可用時回退 GLOBAL。",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("配置"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("請輸入有效間隔時間格式"),

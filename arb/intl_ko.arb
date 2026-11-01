@@ -566,6 +566,7 @@
   "saveChanges": "변경사항을 저장하시겠습니까?",
   "generalDesc": "글로벌 일반 설정 변경",
   "findProcessModeDesc": "활성화 시 프로세스 매칭 검색 가능",
+  "findProcessModeForcedDesc": "프로세스 분기에 의해 강제 켜짐",
   "navBarHapticFeedback": "진동 피드백",
   "navBarHapticFeedbackDesc": "하단 탭 전환 시 진동 피드백",
   "saveTip": "저장하시겠습니까?",
@@ -703,7 +704,8 @@
   "updateTime": "업데이트 시간",
   "autoGetNameTip": "비워 두면 이름을 자동으로 가져옵니다",
   "processAccess": "프로세스 분기",
-  "processAccessDesc": "선택한 프로세스 경로를 DIRECT로 분기하거나 선택만 허용",
+  "processAccessDesc": "프로세스별로 DIRECT 또는 프록시를 지정합니다",
+  "processAccessWhitelistTarget": "프록시 출구는 최종 규칙의 첫 MATCH를 따르며, DIRECT이거나 사용할 수 없으면 GLOBAL로 대체합니다.",
   "processAccessMode": "모드",
   "processAccessBlacklist": "블랙리스트",
   "processAccessWhitelist": "화이트리스트",
@@ -714,6 +716,5 @@
   "processAccessEmpty": "선택 가능한 프로세스가 없습니다",
   "processAccessHideSystem": "시스템 프로세스 숨기기",
   "processAccessNoPath": "경로를 읽을 수 없음",
-  "processAccessFindProcessHint": "'프로세스 찾기'가 필요합니다. 저장 시 자동으로 켜집니다.",
   "processAccessOff": "꺼짐"
 }

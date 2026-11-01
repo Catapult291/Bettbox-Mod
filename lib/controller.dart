@@ -1171,7 +1171,14 @@ class AppController {
       }
 
       try {
-        final activeMode = await clashCore.getMode();
+        final access = _ref.read(processAccessStateProvider);
+        final processAccessActive =
+            access.mode != ProcessAccessMode.off && access.paths.isNotEmpty;
+        // 进程分流启用时内核实际跑在规则模式，模式同步会把用户选的
+        // 全局 / 直连改写成规则，这里不参与同步。
+        final activeMode = processAccessActive
+            ? _ref.read(patchClashConfigProvider).mode
+            : await clashCore.getMode();
         final currentMode = _ref.read(patchClashConfigProvider).mode;
         if (activeMode != currentMode) {
           if (DateTime.now().difference(_lastModeChangeTime) >
@@ -2088,7 +2095,14 @@ class AppController {
     if (mode == Mode.global) {
       updateCurrentGroupName(GroupName.GLOBAL.name);
     }
-    if (system.isLinux && globalState.backgroundMode.value) {
+    final access = _ref.read(processAccessStateProvider);
+    final processAccessActive =
+        access.mode != ProcessAccessMode.off && access.paths.isNotEmpty;
+    if (processAccessActive) {
+      // 进程规则按出站模式生成（全局 / 直连翻译成末条 MATCH），切模式必须重写
+      // 运行配置；只推 UpdateParams 带不动规则。
+      setupClashConfigDebounce();
+    } else if (system.isLinux && globalState.backgroundMode.value) {
       unawaited(updateClashConfig());
     } else {
       updateClashConfigDebounce();
@@ -2122,6 +2136,11 @@ class AppController {
       final nextIndex = index + 1 > Mode.values.length - 1 ? 0 : index + 1;
       return state.copyWith(mode: Mode.values[nextIndex]);
     });
+    final access = _ref.read(processAccessStateProvider);
+    if (access.mode != ProcessAccessMode.off && access.paths.isNotEmpty) {
+      // 与 changeMode 同理：进程规则要按新出站模式重写。
+      setupClashConfigDebounce();
+    }
   }
 
   Future<void> handleAddOrUpdate(WidgetRef ref, [Rule? rule]) async {

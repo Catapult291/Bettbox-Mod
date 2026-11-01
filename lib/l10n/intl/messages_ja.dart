@@ -410,6 +410,9 @@ class MessageLookup extends MessageLookupByLibrary {
     "findProcessModeDesc": MessageLookupByLibrary.simpleMessage(
       "プロセス名をマッチングして検索",
     ),
+    "findProcessModeForcedDesc": MessageLookupByLibrary.simpleMessage(
+      "プロセス分岐により強制オン",
+    ),
     "followUpdate": MessageLookupByLibrary.simpleMessage("更新に追従"),
     "fontFamily": MessageLookupByLibrary.simpleMessage("フォント"),
     "forceDnsMapping": MessageLookupByLibrary.simpleMessage("強制DNSマッピング"),
@@ -714,13 +717,10 @@ class MessageLookup extends MessageLookupByLibrary {
     "processAccess": MessageLookupByLibrary.simpleMessage("プロセス分岐"),
     "processAccessBlacklist": MessageLookupByLibrary.simpleMessage("ブラックリスト"),
     "processAccessDesc": MessageLookupByLibrary.simpleMessage(
-      "選択したプロセスパスを DIRECT に誘導、または選択のみ許可",
+      "プロセスごとに DIRECT またはプロキシを指定します",
     ),
     "processAccessEmpty": MessageLookupByLibrary.simpleMessage(
       "選択可能なプロセスがありません",
-    ),
-    "processAccessFindProcessHint": MessageLookupByLibrary.simpleMessage(
-      "「プロセス検索」が必要です。保存時に自動で有効になります。",
     ),
     "processAccessHideSystem": MessageLookupByLibrary.simpleMessage(
       "システムプロセスを非表示",
@@ -737,6 +737,9 @@ class MessageLookup extends MessageLookupByLibrary {
     ),
     "processAccessSelectedCount": m11,
     "processAccessWhitelist": MessageLookupByLibrary.simpleMessage("ホワイトリスト"),
+    "processAccessWhitelistTarget": MessageLookupByLibrary.simpleMessage(
+      "プロキシ出口は最終ルールの最初の MATCH に従います。DIRECT や利用不可の場合は GLOBAL にフォールバックします。",
+    ),
     "profile": MessageLookupByLibrary.simpleMessage("プロファイル"),
     "profileAutoUpdateIntervalInvalidValidationDesc":
         MessageLookupByLibrary.simpleMessage("有効な時間を指定してください"),
