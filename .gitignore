@@ -102,6 +102,12 @@ app.*.map.json
 /Bettbox-*-setup.exe
 /Bettbox-*-windows-*/
 /BettboxHelperService.exe
+# 根目录的 Windows 整包目录与零散构建产物，不入库
+/Bettbox-win64*/
+/local-build/
 
 # 截图工具在本机留下的图片（可能含订阅链接等隐私内容），不入库
 /PixPin_*.png
+
+# 本地会话记录（阶段日志、计划、规则），不入库
+/.grok/
