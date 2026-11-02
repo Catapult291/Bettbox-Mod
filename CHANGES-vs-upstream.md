@@ -95,6 +95,7 @@
 | 80 | 性能 | 首页/代理/连接/日志/配置整批性能优化（IPC 瘦身、合帧、分片落盘、批量测速） | v1.19.27 |
 | 81 | 分流 | 进程分流改为代理设置的例外层：白名单不再把名单外进程改判直连，三种出站模式下都生效 | v1.19.28 |
 | 82 | 更新 | 修更新检查：gzip 响应体导致 ETag 中毒，手动检查误报「已是最新」 | v1.19.29（待发） |
+| 83 | 稳定性 | Windows 开机自启动计划任务改为普通完整性运行：提权窗口不再挡住 EcoPaste 等低权限剪贴板工具的 Win+V | v1.19.29（待发） |
 
 ---
 
@@ -3644,5 +3645,21 @@ rust 工作区与 helper 均为 advisories ok），本轮按「用升级后的�
 - 启动探测失败时不再写 `last_check_update_time`，保留 28 天强检机会。
 
 **验证**：`flutter test test/common/update_check_test.dart` 5 项通过（gzip 解析、304 复用、解析失败不落 ETag 的回归、无快照 304 回退、双路径失败的 failed 结论）；`test/common` + `test/views` 157 项通过；`flutter analyze` 干净。真实 GitHub 实测：以 1.19.27 连续两次调用均返回 `updateAvailable` / `v1.19.28`（第二次命中 304）。
+
+**未决**：无。
+
+---
+
+## 83. 开机自启动计划任务改为普通完整性运行 (2026-11-02)
+
+**文件**：`services/helper/src/ops/task.rs`、`lib/common/launch.dart`。
+
+**问题**：在应用输入框里按 `Win+V` 弹出的是 Windows 自带剪贴板历史，EcoPaste 的剪贴板窗口唤不出来；其他窗口里正常。EcoPaste 在 Windows 上接管 `Win+V` 靠 `WH_KEYBOARD_LL` 低级键盘钩子（`RegisterHotKey(MOD_WIN, V)` 拦不住系统保留热键），而 UIPI 规定提权窗口持有焦点时，低完整性进程装的键盘钩子收不到按键。
+
+**根因（本机实测）**：Windows 自启动用的计划任务 XML 写死了 `<RunLevel>HighestAvailable</RunLevel>`，管理员用户登录时应用直接以提权令牌运行（实测 PID 1784 `elevated`，EcoPaste `not elevated`）——焦点一进本应用，EcoPaste 的钩子就被 UIPI 挡住，`Win+V` 落回系统剪贴板历史。
+
+**改动**：任务 XML 的 RunLevel 改为 `LeastPrivilege`，主进程以登录用户的普通完整性运行。特权操作（TUN、内核拉起、服务/任务注册等）本就由 SYSTEM 权限的 `BettboxHelperService` 承担，主进程提权没有收益，只有 UIPI 这一整类副作用（剪贴板工具、自动化、输入增强全部被挡）。
+
+**验证**：`cargo test -p helper task` 4 项通过（含 RunLevel 断言更新）；现场已用新 XML 重注册 `\Bettbox` 任务（`schtasks /Query /XML` 回读 RunLevel=LeastPrivilege），并以普通权限重启应用（实测令牌 `not elevated`），输入框里 `Win+V` 正常唤出 EcoPaste。已注册过旧任务的存量用户需重开一次「开机自启动」开关（或升级安装时由新 helper 重注册）才会生效。
 
 **未决**：无。

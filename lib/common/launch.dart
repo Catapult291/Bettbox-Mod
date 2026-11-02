@@ -37,7 +37,8 @@ class AutoLaunch {
 
   Future<bool> enable() async {
     if (system.isWindows) {
-      // 使用任务计划实现 Windows 开机自启动（管理员模式）
+      // 使用任务计划实现 Windows 开机自启动；任务以普通完整性运行
+      // （RunLevel=LeastPrivilege，见 helper 的 task.rs），特权操作走 helper 服务。
       return await windows?.registerTask(appName) ?? false;
     }
     return await launchAtStartup.enable();

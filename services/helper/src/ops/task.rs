@@ -102,6 +102,14 @@ fn task_folder() -> Result<ITaskFolder, CliError> {
     }
 }
 
+/// 任务以普通完整性运行（`LeastPrivilege`）。
+///
+/// 不能用 `HighestAvailable`：管理员的登录令牌会让应用直接提权，而提权窗口持有焦点时
+/// UIPI 会让低完整性进程装的 `WH_KEYBOARD_LL` 钩子收不到按键（EcoPaste 接管 Win+V、
+/// 输入法工具等全部失灵），系统剪贴板等保留快捷键则绕过钩子直接触发。特权操作由
+/// SYSTEM 权限的 helper 服务承担，主进程保持普通权限即可。
+const TASK_RUN_LEVEL: &str = "LeastPrivilege";
+
 fn build_task_xml(request: &TaskRegisterRequest) -> Result<String, CliError> {
     if !Path::new(&request.executable_path).is_absolute() {
         return Err(CliError::new(
@@ -142,7 +150,7 @@ fn build_task_xml(request: &TaskRegisterRequest) -> Result<String, CliError> {
   <Principals>
     <Principal id="Author">
       <LogonType>InteractiveToken</LogonType>
-      <RunLevel>HighestAvailable</RunLevel>
+      <RunLevel>{TASK_RUN_LEVEL}</RunLevel>
     </Principal>
   </Principals>
   <Triggers>
@@ -217,7 +225,7 @@ mod tests {
         assert!(xml.contains("<URI>\\Bettbox</URI>"));
         assert!(xml.contains("<LogonTrigger>"));
         assert!(xml.contains("<LogonType>InteractiveToken</LogonType>"));
-        assert!(xml.contains("<RunLevel>HighestAvailable</RunLevel>"));
+        assert!(xml.contains("<RunLevel>LeastPrivilege</RunLevel>"));
         assert!(xml.contains("<Command>\"C:\\Program Files\\Bettbox\\Bettbox.exe\"</Command>"));
         assert!(xml.contains("<WorkingDirectory>C:\\Program Files\\Bettbox</WorkingDirectory>"));
         assert!(xml.contains("<Description>开机自动启动代理服务</Description>"));
