@@ -5,6 +5,7 @@ go 1.20
 replace github.com/metacubex/mihomo => ./Clash.Meta
 
 require (
+	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/metacubex/mihomo v0.0.0-00010101000000-000000000000
 	golang.org/x/sync v0.11.0
 )
@@ -35,7 +36,6 @@ require (
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.4.0 // indirect
-	github.com/gofrs/uuid/v5 v5.4.0 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
