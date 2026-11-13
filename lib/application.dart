@@ -99,12 +99,11 @@ class ApplicationState extends ConsumerState<Application>
   void _syncAutoUpdateTasks() {
     final shouldRun = _isForeground && !globalState.backgroundMode.value;
     if (!shouldRun) {
+      // 只有代理组刷新（60s 高频）随后台暂停；机场配置的自动更新保留：
+      // 对账只是按时间戳判断，进程存活（如代理前台服务）时到点仍会更新，
+      // 回到前台的漏更新由 AppStateManager.checkAndUpdateMissedProfiles 兜底。
       _autoUpdateGroupTaskTimer?.cancel();
       _autoUpdateGroupTaskTimer = null;
-      if (!system.isDesktop) {
-        _autoUpdateProfilesTaskTimer?.cancel();
-        _autoUpdateProfilesTaskTimer = null;
-      }
       return;
     }
     if (_autoUpdateGroupTaskTimer == null) {
@@ -131,8 +130,11 @@ class ApplicationState extends ConsumerState<Application>
   }
 
   void _autoUpdateProfilesTask() {
+    // 对账周期固定 30 分钟：每个 profile 的 autoUpdateDuration（如 12h）由
+    // AppController._isProfileUpdateNeeded 按各自间隔判断，到点才发起网络更新。
+    // 之前写死 24h，会让 12h 的间隔也要等满 24h 才被检查一次。
     _autoUpdateProfilesTaskTimer = Timer.periodic(
-      const Duration(hours: 24),
+      const Duration(minutes: 30),
       (_) => unawaited(globalState.appController.autoUpdateProfiles()),
     );
   }
